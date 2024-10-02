@@ -54,3 +54,6 @@ Die Hauptziele, Aufgabenpakete und Meilensteine des QuantumMiniLabs-Projekts, an
 4. **Produktion und Distribution**: Die Kleinserienproduktion muss nach erfolgreichen Prototypentests geplant und umgesetzt werden.
 
 Durch diese Struktur wird das Projekt auf technische Innovation, Community-Aufbau und wirtschaftliche Nachhaltigkeit ausgerichtet【4†source】.
+
+
+![](./IMAGES/Fig.-10.-Revised-and-enhanced-ODMR-setup-scaled.jpg)
