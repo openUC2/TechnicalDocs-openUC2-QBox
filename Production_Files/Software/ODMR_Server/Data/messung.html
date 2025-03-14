@@ -1,0 +1,586 @@
+<!DOCTYPE HTML>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1"> 
+    <title>NV Experimente - Messung durchführen</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script> 
+        var Frequenzen=[];
+        var Messreihe=[]; 
+        var MessreihenHerunterladen=[];
+        var AngezeigteDatenpunkte=[];
+        var fBegin=2820, fEnd=2920, fStep=2, N_freq=0; 
+        var _fBegin=2820, _fEnd=2920, _fStep=2; 
+        var YMax=0, YMin=0;      
+        var _YMax=0, _YMin=36000;
+        const fMin=2200, fMax=3600, stepMin=0.2, stepMax=5; 
+        const IntMin=0, IntMax=36000, IntRangeMin=200;  
+        const XPlotSize=1600, YPlotSize=800; 
+        var AutoMessung=0;  
+        const PlotViewBox="-200 -" + (YPlotSize+75) + " " + (XPlotSize+200+150) + " " + (YPlotSize+75+150);
+        const CircSize="5";
+        const MinSkaleneinteilungY=50;                  
+        var XSkalierfaktor=1, XVerschiebung=0;
+        var YSkalierfaktor=1, YVerschiebung=0;
+
+        const ns="http://www.w3.org/2000/svg";
+        var setAttrs=(e,a)=>Object.entries(a).forEach(([k,v])=>e.setAttribute(k,v));
+        var scaleV=(x,a,b)=>a*x+b;    
+        var ById=(ID)=>document.getElementById(ID); 
+        function addValue(by,id){ById(id).value=parseFloat(by)+parseFloat(ById(id).value);unlockSendData()}
+        function uncheck(id){ById(id).checked=false} 
+
+    </script>
+    
+    <script> 
+        async function MessungStarten(){ 
+            ToggleStart(0);      
+            deleteScaleGroup("DataGroupID");    
+            AngezeigteDatenpunkte=[];
+            _YMax=0, _YMin=36000;
+            prepareFreqs();             
+            prepareXSkala(fBegin,fEnd);
+            while(Frequenzen.length!=0){   
+                var response=await freqMessung(Frequenzen.shift()); 
+                Messreihe.push(response);  
+                _YMin=Math.min(_YMin,response[1]-100);
+                _YMax=Math.max(_YMax,response[1]+100);
+                autoScale();
+                drawCircle(response,+200,"black");  
+            }
+            addDataGroup(); 
+            Messreihe=[];   
+            if(AutoMessung){setTimeout(MessungStarten, 600);}
+            else{ToggleStart(1);}  
+        }
+        function autoScale(){
+            if(ById("YMidAuto").checked){
+                ymid=ById("YMid1");
+                ymid.value=Math.floor((+_YMax+_YMin)/2);
+                YMidContr(ymid);
+            }
+            if(ById("YRangeAuto").checked){   
+                yrange=ById("YRange1");
+                yrange.value=Math.abs(_YMax-_YMin);
+                YRangeContr(yrange);
+            }
+            if(ById("YMidAuto").checked||ById("YRangeAuto").checked){adaptYScale();}
+        }
+        function MessreiheAnzeigen(id,row){
+            for(let i=0;i < MessreihenHerunterladen[id].length;i++){
+                drawCircle(MessreihenHerunterladen[id][i],+200,ById(row).lastChild.lastChild.value);  
+            }
+        }
+        function randbedingungenUebernehmen(){ 
+            ById("sendData").disabled=true;
+            _fBegin=parseFloat(ById("f_begin").value);
+            _fEnd=parseFloat(ById("f_end").value);
+            _fStep=parseFloat(ById("f_step").value);
+        }
+        function unlockSendData(){
+            [["f_begin",fMin,fMax-5],["f_end",5+parseFloat(ById("f_begin").value),fMax],["f_step",stepMin,stepMax]].forEach(element=>ById(element[0]).value=Math.min(element[2],Math.max(element[1],ById(element[0]).value)));
+            ById("f_step").value=parseFloat(ById("f_step").value).toFixed(1);
+            ById("sendData").disabled=false;
+        }
+        function AutoToggle(){
+            const Autobutton=ById("AutoMessung");
+            if (AutoMessung){ Autobutton.value="Einzelmessung"; AutoMessung=0;}
+            else{ Autobutton.value="Dauermessung";AutoMessung=1;}
+        }
+        function fReset(){
+            ById("f_begin").value=2820;
+            ById("f_end").value=2920;
+            ById("f_step").value=2;
+            randbedingungenUebernehmen();
+        }
+        function LaserOn(){
+            if(confirm("Laserdiode wirklich einschalten?")){
+                var xhr=new XMLHttpRequest();
+                xhr.open("POST","/Laser_An",true);
+                xhr.send();
+                let Laser=ById("Laser");
+                Laser.value="Laserdiode ausschalten";
+                Laser.removeEventListener("click", LaserOn);
+                Laser.addEventListener("click", LaserOff);
+            }
+        }
+        function LaserOff(){
+            var xhr=new XMLHttpRequest();
+            xhr.open("POST","/Laser_Aus",true);
+            xhr.send();
+            let Laser=ById("Laser");
+            Laser.value="Laserdiode einschalten";
+            Laser.removeEventListener("click", LaserOff);
+            Laser.addEventListener("click", LaserOn);
+        
+        }
+        function ToggleStart(OnOff){
+            let StartButton=ById("StartStop");
+            if(OnOff){StartButton.disabled=false;StartButton.value="Messung starten";}
+            else{StartButton.disabled=true;StartButton.value="Messung läuft";}
+        }
+        function DownloadCSV(){
+            var csv_data = [];
+            var mostValues=0;
+            if (MessreihenHerunterladen.length==0){
+                alert("Es sind keine Messungen vorhanden,\n die heruntergeladen werden können.");
+                return;
+            }
+            var csv_header=[];
+            for (var i=0;i<MessreihenHerunterladen.length;i++){
+                csv_header.push("Messreihe " + i + ";;");
+            }
+            csv_data.push(csv_header.join("; ;"));
+            var csv_columnTitle=[];
+            for (var i=0;i<MessreihenHerunterladen.length;i++){
+                csv_columnTitle.push("Frequenz;Intensitaet;Magnetfeld");
+            }
+            csv_data.push(csv_columnTitle.join("; ;"));
+            for (var i=0;i< MessreihenHerunterladen.length;i++){
+                mostValues=Math.max(mostValues,MessreihenHerunterladen[i].length);
+            }
+            for (var i=0;i<mostValues;i++){
+                var csv_row =[];
+                for (var j=0; j < MessreihenHerunterladen.length;j++){
+                    
+                    var csv_tripel=[];
+                    if (MessreihenHerunterladen[j].length<=i){
+                        csv_row.push(" ; ; ")
+                    }
+                    else{
+                        for (var k=0; k<3;k++){
+                            csv_tripel.push(MessreihenHerunterladen[j][i][k]);
+                        }
+                        csv_row.push(csv_tripel.join(";"));
+                    }
+                }
+                csv_data.push(csv_row.join("; ;"));
+            }
+            csv_data=csv_data.join("\n");
+            CSVFile = new Blob([csv_data], { type: "text/csv" });
+            var temp_link = document.createElement('a');
+            temp_link.download = "Messungen.csv";
+            var url = window.URL.createObjectURL(CSVFile);
+            temp_link.href = url; 
+            temp_link.style.display = "none";
+            document.body.appendChild(temp_link);
+            temp_link.click();
+            document.body.removeChild(temp_link);
+        }
+
+    </script>
+    <script>
+        function prepareFreqs(){
+            Frequenzen=[];                        
+            fBegin=_fBegin;fEnd=_fEnd;fStep=_fStep; 
+            for (let j=fBegin; j<=fEnd; j+=fStep ){ 
+                Frequenzen.push(j);
+            }
+            N_freq=Frequenzen.length;         
+            while (Messreihe.length>N_freq){       
+                Messreihe.shift();              
+            }
+        }
+        async function freqMessung(f){
+            return new Promise(function(resolve){
+                var xhr =new XMLHttpRequest();
+                xhr.onreadystatechange=function() {if (this.readyState==4 && this.status ==200){resolve(this.responseText.split(" ").map(Number));}}
+                xhr.open("GET", "/measure?frequenz=" + f, true);
+                xhr.send();
+            });
+        }
+        function getScalesteps(R){
+            for(Step=1;R>Step;Step*=10){}                       
+            if(R<Step/2){Step/=2;} 
+            return(Step);
+        }
+        function prepareXSkala(_XMin,_XMax){
+            deleteScaleGroup("XScaleGroupID");       
+            XSkalierfaktor=XPlotSize/(_XMax-_XMin); 
+            XVerschiebung=(0-_XMin)*XSkalierfaktor;   
+            let XScaleSteps=getScalesteps((fEnd-fBegin)/12);
+            for(let i=Math.ceil(fBegin/XScaleSteps)*XScaleSteps;i<=fEnd;i+=XScaleSteps){SkalaXStrich(i);}
+        }
+        
+  
+        
+        function adaptYScale(){ 
+            let YMinNew=+ById("YMid1").value-ById("YRange1").value/2;  
+            let YMaxNew=+ById("YMid1").value+ById("YRange1").value/2; 
+            let _YSkalierfaktor=YSkalierfaktor; YSkalierfaktor=YPlotSize/(YMinNew-YMaxNew); 
+            let _YVerschiebung=YVerschiebung; YVerschiebung=(0-YMinNew)*YSkalierfaktor;
+            deleteScaleGroup("YScaleGroupID");
+            deleteScaleGroup("DataGroupID");
+            let YScalesteps=getScalesteps((YMaxNew-YMinNew)/12);
+            for (let i=Math.ceil(YMinNew/YScalesteps)*YScalesteps; i<YMaxNew; i=i+YScalesteps){
+                SkalaYStrich(scaleV(i, _YSkalierfaktor, _YVerschiebung),scaleV(i, YSkalierfaktor, YVerschiebung),i);
+            }
+            for(let i=0; i<AngezeigteDatenpunkte.length;i++){
+                let data=AngezeigteDatenpunkte.shift();
+                drawCircle(data[0],data[1],data[2]);
+            }
+
+        }
+
+    </script>   
+    <script>
+        function createTable(tableData) {
+            var table=document.createElement('table');
+            var tableBody=document.createElement('tbody');
+
+            tableData.forEach(function(rowData) {
+                var row=document.createElement('tr');
+                rowData.forEach(function(cellData) {
+                    var cell=document.createElement('td');
+                    cell.appendChild(document.createTextNode(cellData));
+                    row.appendChild(cell);
+                });
+                tableBody.appendChild(row);
+            })
+            table.appendChild(tableBody);
+            document.body.appendChild(table);
+        }
+
+        function SkalaXStrich(f){
+            const XScaleGroup=ById("XScaleGroupID");
+            var XLine=document.createElementNS(ns,"line");
+            var xWert=scaleV(f,XSkalierfaktor,XVerschiebung); 
+            setAttrs(XLine, { x1: xWert, x2:xWert, y1: "50", y2: "100", stroke: "#000000", "stroke-width": "3"});
+            
+            XScaleGroup.appendChild(XLine);
+            var Beschriftung=document.createElementNS(ns,"text");
+            setAttrs(Beschriftung, { x: xWert,  y: "125", style: "font:  30px Calibri ", "text-anchor": "middle", "alignment-baseline": "Central"});
+            Beschriftung.textContent=f;
+            XScaleGroup.appendChild(Beschriftung);
+        }
+        
+        function SkalaYStrich(_scaleY,scaleY,Y){
+            const YScaleGroup=ById("YScaleGroupID");
+            var YLine=document.createElementNS(ns,"line");
+            setAttrs(YLine, { x1: "-80", x2:"-50", y1: _scaleY, y2: _scaleY, stroke: "#000000", "stroke-width": "3"});
+            YScaleGroup.appendChild(YLine);
+            var Beschriftung=document.createElementNS(ns,"text");
+            setAttrs(Beschriftung, { x:"-85", y: _scaleY, style: "font:  30px Calibri ", "text-anchor": "end", "alignment-baseline": "Central"});
+            Beschriftung.textContent=Y;
+            YScaleGroup.appendChild(Beschriftung);
+            if(_scaleY!=scaleY){for(let i=0; i<3;i++){
+                let _Elements=[YLine,YLine,Beschriftung], attributeNames=["y1","y2","y"];
+                const animy=document.createElementNS(ns, "animate");
+                setAttrs(animy, {attributeName: attributeNames[i], begin: "indefinite", dur: "0.1", to: scaleY, fill: "freeze"});
+                _Elements[i].appendChild(animy);
+                animy.beginElement();
+            }}
+        }
+
+        function drawCircle(_Mess,yAnimStart,col) {
+            let XY=[scaleV(_Mess[0],XSkalierfaktor,XVerschiebung),scaleV(_Mess[1], YSkalierfaktor, YVerschiebung)];
+            AngezeigteDatenpunkte.push([_Mess,XY[1],col]);
+            const DataGroup=ById("DataGroupID");
+            var point =document.createElementNS(ns, "circle");
+            setAttrs(point, {cx: scaleV(_Mess[0],XSkalierfaktor,XVerschiebung), cy: yAnimStart, r: CircSize, fill: col, stroke:"black", strokewidth:"2"});
+            DataGroup.appendChild(point);
+            point.addEventListener("mouseover",function(){showcoordinates(point,XY,_Mess);});
+            point.addEventListener("mouseleave",function(){hidecoordinates(point,CircSize);});
+            point.addEventListener("touchstart",function(){showcoordinates(point,XY,_Mess);});
+            point.addEventListener("touchend",function(){hidecoordinates(point,CircSize);});
+            const animY=document.createElementNS(ns, "animate");
+            setAttrs(animY, {attributeName: "cy", begin: "indefinite", dur: "0.1", to: XY[1], fill: "freeze"});
+            point.appendChild(animY);
+            animY.beginElement();
+        }
+
+        function showcoordinates(point,XY,_Mess){
+            let Coordinates=document.createElementNS(ns, "text");
+            setAttrs(Coordinates, { id:"Coordinates", y: XY[1], style: "font: 30px Calibri", "text-anchor": "front", "alignment-baseline": "Hanging"});
+            ById("DataGroupID").appendChild(Coordinates);
+            let banner=document.createElementNS(ns, "rect");
+            setAttrs(banner, {id:"cBanner", x:XY[0]+20, y:XY[1], width:"210", height:"120", fill:"#C4A770df", stroke:"#000", "stroke-width":"2",rx:"15"});
+            if(XY[0]+30+240>=2150){setAttrs(banner, {x:XY[0]-230});}
+            ById("DataGroupID").insertBefore(banner,Coordinates);
+            let info=[];let infotext=["f = " + _Mess[0].toFixed(1) + " MHz","I = " + _Mess[1],"B = " + _Mess[2]]
+            for(let i=0; i<3;i++){
+                info[i]=document.createElementNS(ns, "tspan");
+                setAttrs(info[i], {x: (XY[0]+30),dy:"35px"});
+                if(XY[0]+30+240>=2150){setAttrs(info[i], {dx: "-250"});}
+                info[i].textContent=infotext[i];
+                Coordinates.appendChild(info[i]);
+            }
+            changeDatapointSize(point,10)
+        }
+
+        function hidecoordinates(point,r){
+            ById("DataGroupID").removeChild(ById("cBanner"));
+            ById("DataGroupID").removeChild(ById("Coordinates"));
+            let Coordinates=document.createElementNS(ns, "text");
+            changeDatapointSize(point,r)
+        }
+
+        function changeDatapointSize(point,r){
+            let animR=document.createElementNS(ns, "animate");
+            setAttrs(animR, {attributeName: "r", begin: "indefinite", dur: "0.1", to: r , fill: "freeze"});
+            point.appendChild(animR);
+            animR.beginElement();
+        }
+
+        function deleteScaleGroup(GroupID){
+            let plot=ById("PlotSVGID");
+            let ScaleGroup=ById(GroupID);
+            plot.removeChild(ScaleGroup);
+            ScaleGroup=document.createElementNS(ns, "g");
+            ScaleGroup.setAttribute("id", GroupID);
+            plot.appendChild(ScaleGroup);
+        }
+        
+
+        function addDataGroup(){
+            MessreihenHerunterladen.push(Messreihe);
+            const Eingabefeld=ById("Messungen");
+            let NR=MessreihenHerunterladen.length-1;
+            var row=Eingabefeld.insertRow(NR);
+            row.id='Messreihe'+String(NR);
+            var _Cells=[];
+            let b_av=0;
+            for(let i=0; i<7;i++){
+                _Cells[i]=row.insertCell(i);
+            }
+            for(let i=0; i<Messreihe.length;i++){b_av+=Messreihe[i][2];} b_av=Math.round(b_av/Messreihe.length);
+            var inhalt=[MessreihenHerunterladen.length,fBegin,fEnd,fStep,b_av]
+            var check=document.createElement('input');
+            check.type='checkbox';
+            check.class="TableCheckBox"
+            _Cells[0].appendChild(check);
+            for(let i=0; i<5;i++){
+                _Cells[i+1].innerHTML=String(inhalt[i]);
+            }
+            var BTN1=document.createElement('button');
+            BTN1.innerHTML='Messreihe Löschen';
+            BTN1.type='button';
+            _Cells[6].appendChild(BTN1);
+            BTN1.addEventListener("click",()=>{row.remove();MessreihenHerunterladen.splice(NR, 1)});
+            var BTN2=document.createElement('button');
+            BTN2.innerHTML='Anzeigen';
+            BTN2.type='button';
+            _Cells[6].appendChild(BTN2);
+            BTN2.addEventListener("click",()=>MessreiheAnzeigen(NR,row.id));
+            var BTN3=document.createElement('input');
+            BTN3.type='color';
+            BTN3.value='#ff0000';
+            _Cells[6].appendChild(BTN3);
+        }
+    </script>
+</head>
+
+
+
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="index.html" >Start</a></li>
+                <li><a href="messung.html" class="open">Messung</a></li>
+                <li><a href="justage.html">Justage (folgt)</a></li>
+                <li><a href="infos.html">Weitere Informationen</a></li>
+            </ul>
+        </nav>
+        <h1>Messung der Lichtintensität in Abhängigkeit von der Frequenz</h1>
+    </header>
+
+    
+    <main class="Block">
+    <div class="grid-container">
+        <div class="grid1" id="fullPlot">
+            <svg xmlns="http://www.w3.org/2000/svg" style="border: 1px solid rgb(255, 255, 255);  background-color: #ffffff"  id="PlotSVGID" class="svg" >
+                <line id="XAxisID" x1="-20" x2="1700" y1="50" y2="50" stroke="#000000" stroke-width="3"/>
+                <line  x1="-50" x2="-30" y1="50" y2="50" stroke="#000000" stroke-width="3"  />
+                <line  x1="-35" x2="-25" y1="65" y2="35" stroke="#000000" stroke-width="3"  />
+                <line  x1="-25" x2="-15" y1="65" y2="35" stroke="#000000" stroke-width="3"  />
+                <polyline points="1680,40 1700,50 1680,60" fill="none" stroke="black" stroke-width="3"/>
+                <text  x="1690" y="90" text-anchor="middle" alignment-baseline="Central" style="font:  35px Calibri"><tspan alignment-baseline="Central" style="font: italic  35px Calibri">f</tspan><tspan alignment-baseline="Central" style="font:  35px Calibri">/MHz</tspan></text>
+                
+                <line id="YAxisID" x1="-50" x2="-50" y1="10" y2="-855" stroke="#000000" stroke-width="3"/>
+                <line  x1="-50" x2="-50" y1="50" y2="20" stroke="#000000" stroke-width="3"  />
+                <line  x1="-35" x2="-65" y1="5" y2="15" stroke="#000000" stroke-width="3"  />
+                <line  x1="-35" x2="-65" y1="15" y2="25" stroke="#000000" stroke-width="3"  />
+                <polyline points="-60,-835 -50,-855 -40,-835" fill="none" stroke="black" stroke-width="3"/>
+                <text  x="-85" y="-845" text-anchor="middle" alignment-baseline="Central" style="font: italic 35px Calibri">I</text>
+                
+                <line  x1="-85" x2="-50" y1="85" y2="50" stroke="#000000" stroke-width="3" />
+                <text  x="-85" y="100" text-anchor="end" alignment-baseline="Central" style="font:  30px Calibri ">0</text>
+                <g id="DataGroupID"  />
+                <g id="XScaleGroupID" />
+                <g id="YScaleGroupID" />
+                <script>
+                    const plot=ById("PlotSVGID");
+                    plot.setAttribute("viewBox", PlotViewBox);
+                </script>
+            </svg>
+        </div>
+        <div class="grid2" >
+            <input type="button" class="Button Laserbutton" id="Laser"  value="Laserdiode einschalten">
+        </div>
+        <div class="grid3">
+            <div class="inputField inputFieldWide" id="Y-Controll" style="background-color: #fff;"> 
+                    <label for="YMid1" >Y-Abschnitt: </label>
+                    <input type="text"   id="YMid1" value=18000 onchange="YMidContr(this);adaptYScale();" />
+                    <input type="range"  class="slider" id="YMid2" min="9000" max="27000" step="100" value=18000 oninput="YMidContr(this);adaptYScale();"/>
+                    <input type="checkbox"  id="YMidAuto" checked=true onchange="autoScale()" style="display:block ">
+            </div>
+            <div class="inputField inputFieldWide" id="YR-Controll" style="background-color: #fff;">
+                    <label for="YRange2">Y-Bereich: </label>
+                    <input type="text"  id="YRange1" value="18000" onchange="YRangeContr(this);adaptYScale();"> 
+                    <input type="range" class="slider" id="YRange2" min="0" max="8.5" step="0.1" value=7 oninput="YRangeContr2(this);adaptYScale();"/>
+                    <input type="checkbox" id="YRangeAuto" checked=true onchange="autoScale()"style="display:flex">
+            </div>
+        </div>
+
+        <div class="grid4">
+            <input type="button" class="Button StartButton" id="StartStop" value="Messung starten">
+            <input type="button" class="Button Toggle"id="AutoMessung" value="Einzelmessung">   
+        </div>
+
+        <div class="gridb1"></div> 
+        </div>    
+
+            
+
+        <form>
+
+            <div>
+                <input type="button" class="Button setValue" id="fB-100" value="-100">
+                <input type="button" class="Button setValue" id="fB-10" value="-10">
+                <div class="inputField">
+                    <label for="f_begin">Startfrequenz: </label>
+                    <input type="number" name="Startfrequenz" id="f_begin" value=2820 min="2200" max="3600" step="0.1">
+                </div>
+                <input type="button" class="Button setValue" id="fB10" value="+10">
+                <input type="button" class="Button setValue" id="fB100" value="+100">
+            </div>
+            
+            <div>
+                <input type="button" class="Button setValue" id="fE-100" value="-100">
+                <input type="button" class="Button setValue" id="fE-10" value="-10">
+                <div class="inputField">
+                    <label for="f_end">Endfrequenz: </label>
+                    <input type="number" name="Endfrequenz" id="f_end" value="2920" min="2200" max="3600" step="0.1">
+                </div>
+                <input type="button" class="Button setValue" id="fE10" value="+10">
+                <input type="button" class="Button setValue" id="fE100" value="+100">
+            </div>
+            
+            <div>
+                <input type="button" class="Button setValue" id="fs-1" value="-1">
+               <div class="inputField">
+                    <label for="f_step">Schrittweite: </label>
+                    <input type="number" name="Schrittgroesse" id="f_step" value="2.0"min="0.1" max="5" step="0.1">
+                </div>
+                <input type="button" class="Button setValue" id="fs1" value="+1">
+                
+            </div>
+            <div> 
+                <input type="button" class="Button setValue SaveData" id="sendData" disabled="true" value="Daten übernehmen">
+                <input type="button" class="Button setValue SaveData" id="f_Reset" value="Daten zurücksetzen">
+            </div>
+            <div>
+                <input type="button" class="Button" id="MessreiheHerunterladen" value="Messungen herunterladen">
+                <input type="button" class="Button" id="Clear" value="Anzeige leeren">
+            </div>
+
+
+        </form>
+
+        <form>
+            <h2>Durchgeführte Messungen</h2>
+            <div>
+                <table>
+                    <tr>
+                        <th width=25> </th>
+                        <th width=50>#</th>
+                        <th width=100>f<sub>Begin</sub></th>
+                        <th width=100>f<sub>End</sub></th>
+                        <th width=100>&Delta;f</th>
+                        <th width=100>B</th>
+                        <th>Anzeigen</th> 
+                    </tr>
+                    <tbody id="Messungen">
+                    </tbody>    
+                </table>
+            </div>
+        </form>
+        <script>
+            function YMidContr(_this){ 
+                if(isNaN(_this.value)){_this.value=_this.nextElementSibling.value;} 
+                else if(_this.value<IntMin+ById("YRange1").value/2){_this.value=IntMin+ById("YRange1").value/2;}
+                else if(_this.value>IntMax-ById("YRange1").value/2){_this.value=IntMax-ById("YRange1").value/2;} 
+                if(_this.type=="text"){_this.nextElementSibling.value=_this.value;}
+                else{_this.previousElementSibling.value=_this.value;}
+                //autoScale();
+            }
+            
+            function YRangeContr(_this){
+                if(isNaN(_this.value)){_this.value=_this.nextElementSibling.value;}     
+                else if((ById("YMid1").value-IntMin)*2<_this.value){ById("YMid1").value=IntMin+_this.value/2;ById("YMid2").value=IntMin+_this.value/2;}
+                else if((IntMax-ById("YMid1").value)*2<_this.value){ById("YMid1").value=IntMax-_this.value/2;ById("YMid2").value=IntMax-_this.value/2;}
+                if(_this.type=="text"){_this.nextElementSibling.value=_this.value;} 
+                else{_this.previousElementSibling.value=_this.value;} 
+                ById("YMid2").max=IntMax-_this.value/2; 
+                ById("YMid2").min=IntMin+_this.value/2; 
+            }
+            function YRangeContr2(_this){
+                let IntensitätswertLogarithmisch=Math.min(100*Math.floor(Math.pow(2, _this.value)),36000);
+                if((ById("YMid1").value-IntMin)*2<IntensitätswertLogarithmisch){ById("YMid1").value=IntMin+IntensitätswertLogarithmisch/2;ById("YMid2").value=IntMin+IntensitätswertLogarithmisch/2;}
+                else if((IntMax-ById("YMid1").value)*2<IntensitätswertLogarithmisch){ById("YMid1").value=IntMax-IntensitätswertLogarithmisch/2;ById("YMid2").value=IntMax-IntensitätswertLogarithmisch/2;}
+                _this.previousElementSibling.value=IntensitätswertLogarithmisch; 
+                ById("YMid2").max=IntMax-IntensitätswertLogarithmisch/2;     
+                ById("YMid2").min=IntMin+IntensitätswertLogarithmisch/2;
+            }            
+            adaptYScale();
+
+            
+            let ChangeListeners=[
+                ["f_begin", unlockSendData ],
+                ["f_end", unlockSendData ],
+                ["f_step", unlockSendData ],
+            ];
+            let InputListeners=[
+                ["YMid1", ()=>uncheck("YMidAuto")],
+                ["YMid2", ()=>uncheck("YMidAuto")],
+                ["YRange1", ()=>uncheck("YRangeAuto")],
+                ["YRange2", ()=>uncheck("YRangeAuto")],
+            ];
+            let ClickListeners=[
+                ["sendData", randbedingungenUebernehmen],
+                ["f_Reset", fReset],
+                ["StartStop", MessungStarten],
+                ["AutoMessung", AutoToggle],
+                ["fB-100",()=>addValue("-100","f_begin")],
+                ["fB-10",()=>addValue("-10","f_begin")],
+                ["fB10",()=>addValue("10","f_begin")],
+                ["fB100",()=>addValue("100","f_begin")],
+                ["fE-100",()=>addValue("-100","f_end")],
+                ["fE-10",()=>addValue("-10","f_end")],
+                ["fE10",()=>addValue("10","f_end")],
+                ["fE100",()=>addValue("100","f_end")],
+                ["fs-1",()=>addValue("-1","f_step")],
+                ["fs1",()=>addValue("1","f_step")],
+                ["Laser", LaserOn],
+                ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=36000;}],
+                ["MessreiheHerunterladen",DownloadCSV],
+            ];
+            ChangeListeners.forEach(element => ById(element[0]).addEventListener("change", element[1]));
+            InputListeners.forEach(element => ById(element[0]).addEventListener("input", element[1]));
+            ClickListeners.forEach(element => ById(element[0]).addEventListener("click", element[1]));
+        </script>
+
+        </main>
+    <footer>
+        <address>
+           Uni Münster - info@o3q.de
+        </address>
+    </footer>
+   
+</body>
+</html>
+
+
