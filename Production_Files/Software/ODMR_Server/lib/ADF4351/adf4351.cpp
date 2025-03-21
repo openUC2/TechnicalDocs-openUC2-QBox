@@ -11,32 +11,57 @@
 
 #include "adf4351.h"
 
-ADF4351::ADF4351(byte pin, uint8_t mode, unsigned long speed, uint8_t order)
+
+ADF4351::ADF4351(byte pinLE, byte pinCE, byte pinLD, byte pinMOSI, byte pinMISO, byte pinSCK, uint8_t mode, unsigned long speed, uint8_t order)
 {
+
+  this->pinLE = pinLE;
+  this->pinCE = pinCE;
+  this->pinLD = pinLD;
+  this->pinMOSI = pinMOSI;
+  this->pinMISO = pinMISO;
+  this->pinSCK = pinSCK;
+
   spi_settings = SPISettings(speed, order, mode);
-  pinLE = pin;
   RCounter = 100;
   pwrlevel = 3;
 }
 
 void ADF4351::begin()
 {
-  pinMode(pinLE, OUTPUT);
-  digitalWrite(pinLE, LOW);
-  pinMode(PIN_CE, OUTPUT);
-  digitalWrite(PIN_CE, HIGH);
-  pinMode(PIN_LD, INPUT);
-  SPI.begin();
+  Serial.println("ADF4351 begin with pins: ");
+  Serial.print("LE: ");
+  Serial.println(this->pinLE);
+  Serial.print("CE: ");
+  Serial.println(this->pinCE);
+  Serial.print("LD: ");
+  Serial.println(this->pinLD);
+  Serial.print("MOSI: ");
+  Serial.println(this->pinMOSI);
+  Serial.print("MISO: ");
+  Serial.println(this->pinMISO);
+  Serial.print("SCK: ");
+  Serial.println(this->pinSCK);
+  
+  pinMode(this->pinLE, OUTPUT);
+  digitalWrite(this->pinLE, LOW);
+  pinMode(this->pinCE, OUTPUT);
+  digitalWrite(this->pinCE, HIGH);
+  // pinMode(this->pinLD, INPUT);
+  SPI.begin(this->pinSCK, this->pinMISO, this->pinMOSI);
 };
 
 int ADF4351::setf(float freq)
 {
+  Serial.println("ADF4351 setf");
   if (freq > 3600)
   {
+    Serial.println("Freq > 3600");
     return 1;
   }
   if (freq < 2200)
   {
+    Serial.println("Freq < 2200");
     return 1;
   }
   N_Int = (int)(freq * 10);
@@ -65,14 +90,17 @@ int ADF4351::setf(float freq)
 
 int ADF4351::changef(float freq)
 {
+  /*
   if (freq > 3600)
   {
+
     return 1;
   }
   if (freq < 2200)
   {
     return 1;
   }
+    */
   N_Int = (int)(freq * 10);
   if (N_Int < 23 || N_Int > 65535)
   {
@@ -84,16 +112,18 @@ int ADF4351::changef(float freq)
   R[0].set(0UL);
   R[0].setbf(15, 16, N_Int);
   writeDev(0, R[0]);
+  Serial.print("Changing frequency: ");
+  Serial.println(freq);
   return 0;
 }
 void ADF4351::enable()
 {
-  digitalWrite(PIN_CE, HIGH);
+  digitalWrite(this->pinCE, HIGH);
 }
 
 void ADF4351::disable()
 {
-  digitalWrite(PIN_CE, LOW);
+  digitalWrite(this->pinCE, HIGH);
 }
 
 void ADF4351::writeDev(int n, Reg r)
