@@ -28,12 +28,12 @@ D10	GPIO_09	SPI_PICO	TP306
 // D9 -> GPIO_08 -> SPI_POCI (PIN_MISO, unused if not reading back)
 // D10 -> GPIO_09 -> SPI_PICO (PIN_MOSI)
 
-#define PIN_CE 17  ///< Chip Enable remains on GPIO_17
+#define PIN_CE 0  ///< Chip Enable remains on GPIO_17
 #define PIN_LD 32  ///< Lock Detect remains on GPIO_32
-#define PIN_LE 44  ///< SPI Slave Select now on GPIO_44
-#define PIN_MOSI 9 ///< SPI MOSI now on GPIO_09
-#define PIN_MISO 8 ///< SPI MISO now on GPIO_08
-#define PIN_SCK 7  ///< SPI CLK now on GPIO_07
+#define PIN_LE 44  ///< D7 & SPI Slave Select now on GPIO_44
+#define PIN_MOSI 9 ///< D10 / SPI MOSI now on GPIO_09
+#define PIN_MISO 8 ///< D9 / SPI MISO now on GPIO_08
+#define PIN_SCK 7  ///< D8 / SPI CLK now on GPIO_07
 #define PIN_NEOPIXEL 43
 #define NUM_PIXELS 16 // Anzahl der LEDs im Streifen
 
@@ -162,7 +162,7 @@ void handleMeasure()
     server.send(400, "text/plain", "Error: no 'frequenz' param");
     return;
   }
-  float freqRequested = server.arg("frequenz").toFloat()/100;
+  float freqRequested = server.arg("frequenz").toFloat();
   // Make sure it's within ADF4351 range
   if (freqRequested < ADF_FREQ_MIN || freqRequested > ADF_FREQ_MAX)
   {
@@ -181,7 +181,7 @@ void handleMeasure()
 
   // Return space-separated: freq intensity magnetfield
   // or however your front-end expects it
-  String reply = String(freqRequested*100, 1) + " " + intensity + " " + exampleMagVal;
+  String reply = String(freqRequested, 1) + " " + intensity + " " + exampleMagVal;
   server.send(200, "text/plain", reply);
 }
 
@@ -290,6 +290,17 @@ void setup()
   server.on("/measure", HTTP_GET, handleMeasure);
 
   server.begin();
+
+  // sweep frequency from ADF 
+  while(1){
+    for(int iF=20; iF<=30; iF+=1){
+      Serial.print("Setting frequency: ");
+      Serial.println(iF);
+      adf.changef(iF);
+      delay(50);
+    }
+  }
+  
 }
 
 void loop()
