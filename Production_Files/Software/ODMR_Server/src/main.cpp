@@ -293,11 +293,11 @@ void setup()
 
   // sweep frequency from ADF 
   while(1){
-    for(int iF=20; iF<=30; iF+=1){
+    for(int iF=2200; iF<=3600; iF+=100){
       Serial.print("Setting frequency: ");
       Serial.println(iF);
       adf.changef(iF);
-      delay(50);
+      delay(1000);
     }
   }
   
