@@ -110,7 +110,7 @@ void updateFrequency(double frequency) {
 void calculateRegisterValues(double RFOUT, uint32_t *reg) {
   INT = (int)(RFOUT / PFD);
 
-  reg[0] = 0x390020; //INT << 15;
+  reg[0] = INT << 15;// 0x390020; //INT << 15;
   reg[1] = 0x8029; //11;
   reg[2] = 0x10E42;//0xC8E42;
   reg[3] = 0x4B3;
