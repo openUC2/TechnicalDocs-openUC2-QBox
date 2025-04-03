@@ -7,6 +7,9 @@ class ADF4351{
 	public:
     ADF4351(int SCLK, int DATA, int LE, int CE);
     void begin(void);
+    void calculateRegisterValues(double RFOUT, uint32_t *reg);
+    void updateFrequency(double frequency);
+  
 
     void WriteRegister(long regData);
 

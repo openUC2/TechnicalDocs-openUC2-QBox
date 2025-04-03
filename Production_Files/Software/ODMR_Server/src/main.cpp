@@ -3,10 +3,28 @@
 #include <WebServer.h>
 #include <SPIFFS.h>
 #include <SPI.h>
-#include "adf4351.h"           // Your ADF4351 library
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
 #include <Adafruit_NeoPixel.h> // Neopixel-Bibliothek einbinden
 
+#include "ADF4351.h"
+#include <SPI.h>
+
+#define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351
+#define ADF_FREQ_MAX 3600.0f // Max frequency for ADF4351
+
+// Photodetector setup
+//Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
+
+// D7 -> GPIO_44 -> SPI_CS (PIN_LE)
+// D8 -> GPIO_07 -> SPI_SCK (PIN_SCK)
+// D9 -> GPIO_08 -> SPI_POCI (PIN_MISO, unused if not reading back)
+// D10 -> GPIO_09 -> SPI_PICO (PIN_MOSI)
+
+// Frequency generator setup
+#define clock D8
+#define data D10
+#define LE D7
+#define CE 0
 /*
 XIAO pin	XIAO ESP32S3 pin	Board Function	Test Point
 D0	GPIO_01	Not used	TP310
@@ -52,9 +70,9 @@ const char *PASSWORD = "";
 static const int LASER_PIN = 10;
 bool laserState = false;
 
-// ADF4351 object (example SPI settings)
-// ADF4351::ADF4351(byte pinLE, byte pinCE, byte pinLD, byte pinMOSI, byte pinMISO, byte pinSCK, uint8_t mode, unsigned long speed, uint8_t order)
-ADF4351 adf(PIN_LE, PIN_CE, PIN_LD, PIN_MOSI, PIN_MISO, PIN_SCK, SPI_MODE0, 5000000UL, MSBFIRST);
+// canans ADF Library modified by bene
+ADF4351 adf(clock, data, LE, CE);
+
 
 // TSL2591 sensor
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
@@ -171,8 +189,12 @@ void handleMeasure()
     return;
   }
   // For demonstration, call changef
-  adf.changef(freqRequested);
+  
+  // Set the frequency on the ADF4351
+Serial.println("Setting frequency: " + String(freqRequested, 1));
+  adf.updateFrequency(freqRequested);
 
+  
   // Read intensity
   uint32_t intensity = readTSL2591();
 
@@ -280,7 +302,7 @@ void setup()
   // ADF4351 init
   Serial.println("ADF4351 init");
   adf.begin();
-  adf.setf(2800.0f); // Some initial frequency (example)
+  adf.updateFrequency(2800.0f);// Some initial frequency (example)
 
   // Setup routes
   server.onNotFound([]()
@@ -296,7 +318,7 @@ void setup()
     for(int iF=2200; iF<=3600; iF+=100){
       Serial.print("Setting frequency: ");
       Serial.println(iF);
-      adf.changef(iF);
+      adf.updateFrequency(iF);
       delay(1000);
     }
   }
