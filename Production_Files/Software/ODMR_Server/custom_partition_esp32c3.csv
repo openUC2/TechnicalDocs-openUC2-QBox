@@ -1,0 +1,10 @@
+# filepath: /path/to/custom_partition_esp32c3.csv
+# This file defines a custom partition scheme for the Seeed XIAO ESP32C3.
+# Make sure your board_build.partitions setting in platformio.ini points to this file.
+
+# Name,   Type,   SubType, Offset,  Size,    Flags
+nvs,      data,   nvs,     0x9000,   0x4000,
+otadata,  data,   ota,     0xD000,   0x2000,
+app0,     app,    ota_0,   0x10000,  0x150000,
+app1,     app,    ota_1,   0x160000, 0x150000,
+spiffs,   data,   spiffs,  0x2B0000, 0x150000,

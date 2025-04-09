@@ -25,6 +25,8 @@
 #define data D10
 #define LE D7
 #define CE 0
+#define PIN_NEOPIXEL D6
+
 /*
 XIAO pin	XIAO ESP32S3 pin	Board Function	Test Point
 D0	GPIO_01	Not used	TP310
@@ -46,21 +48,15 @@ D10	GPIO_09	SPI_PICO	TP306
 // D9 -> GPIO_08 -> SPI_POCI (PIN_MISO, unused if not reading back)
 // D10 -> GPIO_09 -> SPI_PICO (PIN_MOSI)
 
-#define PIN_CE 0  ///< Chip Enable remains on GPIO_17
-#define PIN_LD 32  ///< Lock Detect remains on GPIO_32
-#define PIN_LE 44  ///< D7 & SPI Slave Select now on GPIO_44
-#define PIN_MOSI 9 ///< D10 / SPI MOSI now on GPIO_09
-#define PIN_MISO 8 ///< D9 / SPI MISO now on GPIO_08
-#define PIN_SCK 7  ///< D8 / SPI CLK now on GPIO_07
-#define PIN_NEOPIXEL 43
+
 #define NUM_PIXELS 16 // Anzahl der LEDs im Streifen
 
 // Neopixel
 Adafruit_NeoPixel strip(NUM_PIXELS, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
 // I2C
-static const int SDA_PIN = 5; // GPIO_05
-static const int SCL_PIN = 6; // GPIO_06
+static const int SDA_PIN = D4; // GPIO_05
+static const int SCL_PIN = D5; // GPIO_06
 
 // Wi-Fi credentials
 const char *SSID = "openUC2_ODMR";
@@ -204,6 +200,8 @@ Serial.println("Setting frequency: " + String(freqRequested, 1));
   // Return space-separated: freq intensity magnetfield
   // or however your front-end expects it
   String reply = String(freqRequested, 1) + " " + intensity + " " + exampleMagVal;
+  Serial.println("Intensity: " + String(intensity) + " Mag: " + String(exampleMagVal));
+  Serial.println("Reply: " + reply);
   server.send(200, "text/plain", reply);
 }
 
@@ -242,8 +240,12 @@ void i2c_scan()
 
 void setup()
 {
-  disableCore1WDT(); // Deaktiviert den Watchdog für Core 1
-  disableLoopWDT();  // Deaktiviert den Watchdog für die loop()
+
+  // only for esp32s3
+  #ifdef ESP32S3
+  disableCore1WDT(); // Deactivate Watchdog for core 1
+  #endif
+  disableLoopWDT();  // Deactivate Watchdog for loop
   
   pinMode(LASER_PIN, OUTPUT);
   digitalWrite(LASER_PIN, LOW);
@@ -313,22 +315,20 @@ void setup()
 
   server.begin();
 
-  // sweep frequency from ADF 
-  while(1){
-    for(int iF=2200; iF<=3600; iF+=100){
-      Serial.print("Setting frequency: ");
-      Serial.println(iF);
-      adf.updateFrequency(iF);
-      delay(1000);
-    }
-  }
-  
 }
 
 void loop()
 {
+
+
   server.handleClient();
 
+  Serial.println("Handling client requests...");
+  // Read TSL2591 sensor (light intensity)
+  uint32_t lux = readTSL2591();
+  Serial.print("Lux: ");
+  Serial.println(lux);
+  // Read ADF4351 frequency
   if (firstPixelHue > 5 * 65536)
     firstPixelHue = 0;
   { // 5 Zyklen durch den Regenbogen
