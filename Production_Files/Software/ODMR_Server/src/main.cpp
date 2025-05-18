@@ -123,6 +123,13 @@ uint32_t readTSL2591()
   return lux;
 }
 
+// read IR from TSL2591
+uint16_t readIR()
+{
+  uint16_t x = tsl.getLuminosity(TSL2591_INFRARED);
+  return x;
+}
+
 // Example /laser_act handler for JSON:
 // {"task": "/laser_act", "LASERid":1, "LASERval": 0 or 1}
 void handleLaserAct()
@@ -159,7 +166,9 @@ void handleOdmrAct()
   }
   // In actual usage, parse measure instructions
   // For demonstration: just respond with a random value or TSL reading
-  uint32_t reading = readTSL2591();
+  //uint32_t reading = readTSL2591();
+  uint32_t reading = readIR(); // Read IR instead of light for demonstration
+
   String response = String("{\"status\":\"measurement ok\",\"light\":") + reading + "}";
   server.send(200, "application/json", response);
 }
@@ -192,7 +201,8 @@ Serial.println("Setting frequency: " + String(freqRequested, 1));
 
   
   // Read intensity
-  uint32_t intensity = readTSL2591();
+  //uint32_t intensity = readTSL2591();
+  uint32_t intensity = readIR(); // Read IR instead of light for demonstration
 
   // If you have a magnetometer or something, read that too
   float exampleMagVal = 123.0f; // Placeholder
@@ -297,7 +307,7 @@ void setup()
   }
   else
   {
-    tsl.setGain(TSL2591_GAIN_MED);
+    tsl.setGain(TSL2591_GAIN_MAX);
     tsl.setTiming(TSL2591_INTEGRATIONTIME_100MS);
   }
 
@@ -322,10 +332,9 @@ void loop()
 
 
   server.handleClient();
-
-  Serial.println("Handling client requests...");
   // Read TSL2591 sensor (light intensity)
-  uint32_t lux = readTSL2591();
+  // uint32_t lux = readTSL2591();
+  uint32_t lux = readIR(); // Read IR instead of light for demonstration
   Serial.print("Lux: ");
   Serial.println(lux);
   // Read ADF4351 frequency
