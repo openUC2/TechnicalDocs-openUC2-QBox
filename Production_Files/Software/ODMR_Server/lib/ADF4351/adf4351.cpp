@@ -27,13 +27,13 @@ void ADF4351::updateFrequency(double frequency) {
 	// the formular to compute the register values is:
 	// RFOUT = (INT + FRAC / MOD) * PFD
 	// where RFOUT is the output frequency, INT is the integer part of the frequency, FRAC is the fractional part of the frequency, MOD is the modulus value, and PFD is the phase frequency detector frequency.
-	INT = (int)(RFOUT / PFD);
+	INT = (int)(RFOUT / 10);
 	// display value as HEX 
 	Serial.print("INT: ");
 	Serial.println(INT, HEX);
 	reg[0] = INT << 15;// 0x390020; //INT << 15;
 	reg[1] = 0x8029; //11;
-	reg[2] = 0x10E42;//0xC8E42;
+	reg[2] = 0x258E42;//0xC8E42;
 	reg[3] = 0x4B3;
 	reg[4] = 0x8C803C; //1003C;
 	reg[5] = 0x580005;
