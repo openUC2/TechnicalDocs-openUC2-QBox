@@ -6,7 +6,7 @@
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
 #include <Adafruit_NeoPixel.h> // Neopixel-Bibliothek einbinden
 
-#include "ADF4351.h"
+#include "adf4351.h"
 #include <SPI.h>
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351
@@ -314,7 +314,7 @@ void setup()
   // ADF4351 init
   Serial.println("ADF4351 init");
   adf.begin();
-  adf.updateFrequency(2800.0f);// Some initial frequency (example)
+  adf.updateFrequency(1800.0f);// Some initial frequency (example)
 
   // Setup routes
   server.onNotFound([]()
