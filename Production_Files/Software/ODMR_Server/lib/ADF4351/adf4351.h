@@ -9,6 +9,10 @@ class ADF4351{
     void begin(void);
     void calculateRegisterValues(double RFOUT, uint32_t *reg);
     void updateFrequency(double frequency);
+    void stop(void) {
+        // Disable output by setting CE low
+        digitalWrite(_ce, LOW);
+    }
   
     //Register values
     float PFD = 15.0; //Mhz

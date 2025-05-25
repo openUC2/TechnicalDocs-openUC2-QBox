@@ -330,6 +330,8 @@ void setup()
   server.on("/measure", HTTP_GET, handleMeasure);
 
   server.begin();
+  // TODO: Need a function that disables the adf4351 output
+  adf.stop(); // Disable output initially
 }
 
 void loop()
