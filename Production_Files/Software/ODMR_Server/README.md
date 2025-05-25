@@ -5,6 +5,10 @@
 This project provides a small, self‑contained Python function, `adf4351_registers()`, that converts an arbitrary RF output frequency into the six 32‑bit control‑word values (R0 … R5) required by the Analog Devices **ADF4351** wideband PLL synthesizer.
 The calculator is tailored for a 30 MHz reference clock and a 100 kHz channel‑spacing grid—settings that match the typical demo‑board configuration.
 
+![](./IMAGES/registers.png)
+![](./IMAGES/analogdevice.png)
+
+From : https://chatgpt.com/canvas/shared/6832cc78ec308191b9f95f856cce4697
 ---
 
 ## Files
