@@ -13,7 +13,7 @@
 #define ADF_FREQ_MAX 3600.0f // Max frequency for ADF4351
 
 // Photodetector setup
-//Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
+// Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
 
 // D7 -> GPIO_44 -> SPI_CS (PIN_LE)
 // D8 -> GPIO_07 -> SPI_SCK (PIN_SCK)
@@ -48,7 +48,6 @@ D10	GPIO_09	SPI_PICO	TP306
 // D9 -> GPIO_08 -> SPI_POCI (PIN_MISO, unused if not reading back)
 // D10 -> GPIO_09 -> SPI_PICO (PIN_MOSI)
 
-
 #define NUM_PIXELS 16 // Anzahl der LEDs im Streifen
 
 // Neopixel
@@ -68,7 +67,6 @@ bool laserState = false;
 
 // canans ADF Library modified by bene
 ADF4351 adf(clock, data, LE, CE);
-
 
 // TSL2591 sensor
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
@@ -153,6 +151,14 @@ void handleLaserAct()
     digitalWrite(LASER_PIN, LOW);
   }
   server.send(200, "application/json", "{\"status\":\"ok\"}");
+
+  for(int iFrequencyRequested = 1800; iFrequencyRequested <= 3600; iFrequencyRequested += 100)
+  {
+    adf.updateFrequency(iFrequencyRequested*1e6); // Set frequency in Hz
+    delay(200); // Wait for the frequency to stabilize
+    Serial.println("Set frequency: " + String(iFrequencyRequested*1e6) + " Hz");
+  }
+
 }
 
 // Example /odmr_act handler for JSON:
@@ -166,7 +172,7 @@ void handleOdmrAct()
   }
   // In actual usage, parse measure instructions
   // For demonstration: just respond with a random value or TSL reading
-  //uint32_t reading = readTSL2591();
+  // uint32_t reading = readTSL2591();
   uint32_t reading = readIR(); // Read IR instead of light for demonstration
 
   String response = String("{\"status\":\"measurement ok\",\"light\":") + reading + "}";
@@ -194,14 +200,13 @@ void handleMeasure()
     return;
   }
   // For demonstration, call changef
-  
-  // Set the frequency on the ADF4351
-Serial.println("Setting frequency: " + String(freqRequested, 1));
-  adf.updateFrequency(freqRequested);
 
-  
+  // Set the frequency on the ADF4351
+  Serial.println("Setting frequency: " + String(freqRequested, 1));
+  adf.updateFrequency(freqRequested*1e6); // Set frequency in Hz
+
   // Read intensity
-  //uint32_t intensity = readTSL2591();
+  // uint32_t intensity = readTSL2591();
   uint32_t intensity = readIR(); // Read IR instead of light for demonstration
 
   // If you have a magnetometer or something, read that too
@@ -251,12 +256,12 @@ void i2c_scan()
 void setup()
 {
 
-  // only for esp32s3
-  #ifdef ESP32S3
+// only for esp32s3
+#ifdef ESP32S3
   disableCore1WDT(); // Deactivate Watchdog for core 1
-  #endif
-  disableLoopWDT();  // Deactivate Watchdog for loop
-  
+#endif
+  disableLoopWDT(); // Deactivate Watchdog for loop
+
   pinMode(LASER_PIN, OUTPUT);
   digitalWrite(LASER_PIN, LOW);
 
@@ -314,7 +319,8 @@ void setup()
   // ADF4351 init
   Serial.println("ADF4351 init");
   adf.begin();
-  adf.updateFrequency(1800.0f);// Some initial frequency (example)
+  //adf.updateFrequency(1800.0f); // Some initial frequency (example)
+    adf.updateFrequency(1.800e9);   // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
   server.onNotFound([]()
@@ -324,12 +330,10 @@ void setup()
   server.on("/measure", HTTP_GET, handleMeasure);
 
   server.begin();
-
 }
 
 void loop()
 {
-
 
   server.handleClient();
   // Read TSL2591 sensor (light intensity)

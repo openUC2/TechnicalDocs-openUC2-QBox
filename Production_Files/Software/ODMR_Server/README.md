@@ -1,0 +1,136 @@
+# ADF4351 Register Calculator (Python)
+
+## Overview
+
+This project provides a small, self‑contained Python function, `adf4351_registers()`, that converts an arbitrary RF output frequency into the six 32‑bit control‑word values (R0 … R5) required by the Analog Devices **ADF4351** wideband PLL synthesizer.
+The calculator is tailored for a 30 MHz reference clock and a 100 kHz channel‑spacing grid—settings that match the typical demo‑board configuration.
+
+---
+
+## Files
+
+| File                    | Purpose                                                      |
+| ----------------------- | ------------------------------------------------------------ |
+| `adf4351_registers.py`  | Core algorithm ‑ no external dependencies except `math`.     |
+
+*(The demo that appears in ChatGPT uses `pandas` and `ace_tools` only for pretty display—you can omit these in standalone code.)*
+
+---
+
+## Quick Start
+
+```bash
+python - <<'PY'
+from adf4351_registers import adf4351_registers
+regs = adf4351_registers(1_839_000_000)  # 1.839 GHz example
+print(regs)
+PY
+```
+
+Expected output (hex strings, MSB‑first):
+
+```
+['0x003D05A0', '0x08008961', '0x00004E42', '0x000004B3', '0x009F003C', '0x00580005']
+```
+
+Send the words to the part over SPI in the order **R5→R0** (ADF4351 latches the CTRL bits DB2\:DB0 on the falling edge of LE).
+
+---
+
+## How the Algorithm Works
+
+### Governing Formula
+
+```
+RFout = (INT + FRAC / MOD) × fPFD / RFdivider
+```
+
+* **fPFD** is the Phase‑Frequency Detector rate (30 MHz here).
+* **RFdivider** is set (\*/1 to \*/128) so the internal VCO remains within 2.2–4.4 GHz.
+* **INT** = ⌊VCO / fPFD⌋
+* **MOD** = fPFD / channel‑spacing (≤ 4095 for the ADF4351).
+  With 100 kHz step, **MOD = 300**.
+* **FRAC** = round((VCO − INT·fPFD) / channel‑spacing)
+* If *FRAC = 0* the code automatically enters integer‑N mode by forcing *MOD = 1*.
+
+### Fixed Register Bits
+
+| Register | Fixed bits in this implementation                          |
+| -------- | ---------------------------------------------------------- |
+| R2       | Low‑noise / spur‑optimised; charge‑pump 2.5 mA; LDF=FRAC‑N |
+| R3       | Clock‑divider off                                          |
+| R4       | RF‑output enabled, +5 dBm; AUX off                         |
+| R5       | Static per datasheet                                       |
+
+Adjust these constants if your hardware needs a different charge‑pump current, power‑down options, or AUX output.
+
+---
+
+## Function Signature
+
+```python
+def adf4351_registers(freq_hz: float,
+                      ref_hz: float = 30e6,
+                      chan_spacing: float = 100e3) -> list[str]:
+    """Return six 32‑bit register hex strings for the desired RF frequency."""
+```
+
+* **freq\_hz** – Desired RF frequency in Hz.
+* **ref\_hz** – Reference crystal/TCXO frequency.  (Change if not 30 MHz.)
+* **chan\_spacing** – Channel spacing (step size) in Hz.
+
+---
+
+## Hardware Integration Tips
+
+* Drive **LE**, **DATA**, **CLK** with standard 3‑wire SPI (MSB‑first on each 32‑bit word).
+* Program R5 → R0 sequentially on every frequency hop.
+* Allow ≥ 10 µs after the final LE rising edge before enabling the output switch or counting on lock detect.
+* For lower spurs, keep the reference clean; add a 10 MHz OCXO + doubler if ultra‑low phase noise is required.
+
+---
+
+## ESP32 / Arduino C++ Driver
+
+A ready‑to‑drop driver (`ADF4351.cpp / ADF4351.hpp`) mirrors the Python algorithm so you can call one line from your firmware:
+
+```cpp
+#include "ADF4351.hpp"
+
+ADF4351 synth(/*LE=*/ 5, /*DATA=*/ 18, /*CLK=*/ 19);   // GPIOs
+
+void setup()
+{
+    synth.begin();              // sets pin modes, defaults, etc.
+    synth.updateFrequency(1.800e9);   // 1.800 GHz ─ writes R5…R0
+}
+```
+
+### Public methods
+
+| Method                           | Description                                             |
+| -------------------------------- | ------------------------------------------------------- |
+| `begin()`                        | Configures GPIO, writes power‑up registers (mute)       |
+| `updateFrequency(double freqHz)` | Full re‑tune; handles RF‑divider and INT/FRAC/MOD maths |
+| `void powerDown(bool en)`        | Optional, drives the PD pin via register 2              |
+
+Internally `updateFrequency()` simply wraps `calculateRegisterValues()` then clocks the six words out MSB‑first:
+
+```cpp
+void ADF4351::updateFrequency(double fHz)
+{
+    uint32_t reg[6];
+    calculateRegisterValues(fHz, reg);
+    for (int i = 5; i >= 0; --i) WriteRegister(reg[i]);
+}
+```
+
+`calculateRegisterValues()` is identical to the Python reference: auto RF‑divider, reduced fraction, `MOD = 2` for integer‑N.
+
+> **Timing:** default `WriteRegister()` toggles LE high‑low at ≈ 1 µs intervals.  The ADF4351 needs only 10 ns min, so there is plenty of margin.
+
+---
+
+## License
+
+MIT License—see `LICENSE` file for details.
