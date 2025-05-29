@@ -1,4 +1,4 @@
-#include "ADF4351.h"
+#include "adf4351.h"
 
 #include <stdint.h>
 #include <math.h>

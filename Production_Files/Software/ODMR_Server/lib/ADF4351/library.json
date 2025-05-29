@@ -1,0 +1,6 @@
+{
+    "name": "ADF4351",
+    "description": "Library for ADF4351 on ESP32. Probably compatible with ADF4350.",
+    "frameworks": "*",
+    "platforms": "*"
+}
