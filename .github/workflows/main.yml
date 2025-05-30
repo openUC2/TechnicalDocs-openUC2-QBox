@@ -28,7 +28,6 @@ jobs:
       - name: Checkout code (private repo + submodules)
         uses: actions/checkout@v4
         with:
-          ref: betaBD
           submodules: recursive
           fetch-depth: 0                 # full history for tags / merges
           token: ${{ secrets.API_TOKEN_GITHUB }}  # PAT with at least "repo" + "read:packages" if submodules
