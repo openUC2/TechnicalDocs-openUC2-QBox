@@ -29,12 +29,21 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      # ---------------------------------------------------------
+      # Checkout (private repo + private submodules)
+      # ---------------------------------------------------------
+      - name: Checkout code (private repo)
+        uses: actions/checkout@v4
         with:
-          ref: betaBD
-          submodules: recursive
+          repository: openUC2/TechnicalDocs-openUC2-QBox      # explicit, optional
+          ref: betaBD                                         # branch or tag to build
+          submodules: recursive                               # pull nested submodules
+          fetch-depth: 0                                      # full history for tags/merges
+          token: ${{ secrets.API_TOKEN_GITHUB }}              
 
+      # ---------------------------------------------------------
+      # Tooling
+      # ---------------------------------------------------------
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
