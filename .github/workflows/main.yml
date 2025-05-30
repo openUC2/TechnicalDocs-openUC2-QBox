@@ -3,9 +3,6 @@ name: Compile ESP32 (QBox ODMR Firmware)
 on:
   workflow_dispatch:
 
-env:
-  PROJECT_DIR: ./Production_Files/Software/ODMR_Server  # Root of the PlatformIO project
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,101 +10,95 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ---------- ESP32‑S3 ----------
+          # ---------- ESP32-S3 ----------
           - env_name: seeed_xiao_esp32s3            # PIO environment name
             chip: esp32s3
             flash_size: 4MB
             partition_csv: custom_partition_esp32s3.csv
-          # ---------- ESP32‑C3 ----------
+          # ---------- ESP32-C3 ----------
           - env_name: seeed_xiao_esp32c3            # PIO environment name
             chip: esp32c3
             flash_size: 4MB
             partition_csv: custom_partition_esp32c3.csv
 
-    defaults:
-      run:
-        working-directory: ${{ env.PROJECT_DIR }}
-
+    # -----------------------------------------
+    # Checkout & working directory
+    # -----------------------------------------
     steps:
-      # ---------------------------------------------------------
-      # Checkout (private repo + private submodules)
-      # ---------------------------------------------------------
-      - name: Checkout code (private repo)
+      - name: Checkout code (private repo + submodules)
         uses: actions/checkout@v4
         with:
-          repository: openUC2/TechnicalDocs-openUC2-QBox      # explicit, optional
-          submodules: recursive                               # pull nested submodules
-          fetch-depth: 0                                      # full history for tags/merges
-          token: ${{ secrets.API_TOKEN_GITHUB }}              
+          ref: betaBD
+          submodules: recursive
+          fetch-depth: 0                 # full history for tags / merges
+          token: ${{ secrets.CHECKOUT_PAT }}  # PAT with at least "repo" + "read:packages" if submodules
 
-      # ---------------------------------------------------------
-      # Tooling
-      # ---------------------------------------------------------
+      - name: Set working-directory variable
+        id: paths
+        run: echo "PROJECT_DIR=${{ github.workspace }}/Production_Files/Software/ODMR_Server" >> "$GITHUB_ENV"
+
+      # All next steps run inside the PIO project
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
+      - name: Install dependencies (PlatformIO + esptool)
         run: |
           python -m pip install --upgrade pip
           pip install platformio esptool
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Install PlatformIO libraries (global cache)
         run: pio lib install
+        working-directory: ${{ env.PROJECT_DIR }}
 
-      # ---------------------------------------------------------
-      # Build firmware + filesystem image for the current matrix env
-      # ---------------------------------------------------------
+      # -----------------------------------------
+      # Build firmware + filesystem (if data/ exists)
+      # -----------------------------------------
       - name: Build FW ${{ matrix.env_name }}
         run: pio run -v --environment ${{ matrix.env_name }}
+        working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: Build FS ${{ matrix.env_name }} (data → SPIFFS/LittleFS)
+      - name: Build FS ${{ matrix.env_name }} when data folder exists
+        if: exists('${{ env.PROJECT_DIR }}/data')
         run: pio run --target buildfs --environment ${{ matrix.env_name }}
+        working-directory: ${{ env.PROJECT_DIR }}
 
-      # ---------------------------------------------------------
-      # Merge bootloader + partitions + app + FS into one .bin
-      # ---------------------------------------------------------
+      # -----------------------------------------
+      # Merge bootloader + partitions + app (+FS) into one .bin
+      # -----------------------------------------
       - name: Merge binary ${{ matrix.env_name }}
         shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
         run: |
           BUILD_DIR=.pio/build/${{ matrix.env_name }}
           PART_FILE="${{ matrix.partition_csv }}"
 
-          # Detect the FS image (spiffs.bin or littlefs.bin)
-          FS_BIN=$(ls "$BUILD_DIR" | grep -E '(spiffs|littlefs)\.bin' | head -n1)
-          if [[ -z "$FS_BIN" ]]; then
-            echo "Filesystem image not found!"
-            exit 1
+          # Detect filesystem image if it was built
+          FS_BIN=""
+          if [[ -f "$BUILD_DIR/spiffs.bin" ]]; then
+            FS_BIN="spiffs.bin"
+          elif [[ -f "$BUILD_DIR/littlefs.bin" ]]; then
+            FS_BIN="littlefs.bin"
           fi
 
-          # Extract the offset of the FS partition from the CSV (column 4)
-          FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "$PART_FILE")
-          if [[ -z "$FS_ADDR" ]]; then
-            echo "Unable to determine FS offset from $PART_FILE"
-            exit 1
-          fi
-
-          echo "Merging app + FS (address $FS_ADDR) into single binary"
           cd "$BUILD_DIR"
 
-          python -m esptool --chip ${{ matrix.chip }} merge_bin \
-            -o ${{ matrix.env_name }}.bin \
-            --flash_mode dio \
-            --flash_freq 40m \
-            --flash_size ${{ matrix.flash_size }} \
-            0x0000 bootloader.bin \
-            0x8000 partitions.bin \
-            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
-            0x10000 firmware.bin \
-            $FS_ADDR "$FS_BIN"
+          # Build base merge command
+          MERGE="python -m esptool --chip ${{ matrix.chip }} merge_bin -o ${{ matrix.env_name }}.bin --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} 0x0000 bootloader.bin 0x8000 partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 firmware.bin"
 
-      - name: Verify merged firmware
-        run: test -f .pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin
+          # Append FS if present
+          if [[ -n "$FS_BIN" ]]; then
+            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "../../${{ matrix.partition_csv }}")
+            MERGE+=" $FS_ADDR $FS_BIN"
+          fi
 
-      # ---------------------------------------------------------
+          eval $MERGE
+
+      # -----------------------------------------
       # Artifacts & Deployment
-      # ---------------------------------------------------------
+      # -----------------------------------------
       - name: Upload artifact ${{ matrix.env_name }}
         uses: actions/upload-artifact@v4
         with:
