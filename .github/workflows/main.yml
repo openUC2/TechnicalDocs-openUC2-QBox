@@ -36,7 +36,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: openUC2/TechnicalDocs-openUC2-QBox      # explicit, optional
-          ref: betaBD                                         # branch or tag to build
           submodules: recursive                               # pull nested submodules
           fetch-depth: 0                                      # full history for tags/merges
           token: ${{ secrets.API_TOKEN_GITHUB }}              
