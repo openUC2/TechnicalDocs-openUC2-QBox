@@ -31,7 +31,7 @@ jobs:
           ref: betaBD
           submodules: recursive
           fetch-depth: 0                 # full history for tags / merges
-          token: ${{ secrets.CHECKOUT_PAT }}  # PAT with at least "repo" + "read:packages" if submodules
+          token: ${{ secrets.API_TOKEN_GITHUB }}  # PAT with at least "repo" + "read:packages" if submodules
 
       - name: Set working-directory variable
         id: paths
