@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_DIR: ./TechnicalDocs-openUC2-QBox/Production_Files/Software/ODMR_Server  # Root of the PlatformIO project
+  PROJECT_DIR: TechnicalDocs-openUC2-QBox/Production_Files/Software/ODMR_Server  # Root of the PlatformIO project
 
 jobs:
   build:
