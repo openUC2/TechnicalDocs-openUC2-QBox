@@ -1,4 +1,4 @@
-name: Compile ESP32 (XIAO CAN MOTOR)
+name: Compile ESP32 (QBox ODMR Firmware)
 
 on:
   workflow_dispatch:
@@ -13,12 +13,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - env_name: seeed_xiao_esp32s3            # PlatformIO environment name for the S3 board
+          # ---------- ESP32‑S3 ----------
+          - env_name: seeed_xiao_esp32s3            # PIO environment name
             chip: esp32s3
             flash_size: 4MB
-          - env_name: seeed_xiao_esp32c3            # PlatformIO environment name for the C3 board
+            partition_csv: custom_partition_esp32s3.csv
+          # ---------- ESP32‑C3 ----------
+          - env_name: seeed_xiao_esp32c3            # PIO environment name
             chip: esp32c3
             flash_size: 4MB
+            partition_csv: custom_partition_esp32c3.csv
 
     defaults:
       run:
@@ -31,7 +35,7 @@ jobs:
           ref: betaBD
           submodules: recursive
 
-      - name: Set up Python
+      - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
@@ -44,13 +48,41 @@ jobs:
       - name: Install PlatformIO libraries (global cache)
         run: pio lib install
 
-      - name: Build ${{ matrix.env_name }}
-        run: pio run --environment ${{ matrix.env_name }} -v
+      # ---------------------------------------------------------
+      # Build firmware + filesystem image for the current matrix env
+      # ---------------------------------------------------------
+      - name: Build FW ${{ matrix.env_name }}
+        run: pio run -v --environment ${{ matrix.env_name }}
 
+      - name: Build FS ${{ matrix.env_name }} (data → SPIFFS/LittleFS)
+        run: pio run --target buildfs --environment ${{ matrix.env_name }}
+
+      # ---------------------------------------------------------
+      # Merge bootloader + partitions + app + FS into one .bin
+      # ---------------------------------------------------------
       - name: Merge binary ${{ matrix.env_name }}
+        shell: bash
         run: |
           BUILD_DIR=.pio/build/${{ matrix.env_name }}
-          cd $BUILD_DIR
+          PART_FILE="${{ matrix.partition_csv }}"
+
+          # Detect the FS image (spiffs.bin or littlefs.bin)
+          FS_BIN=$(ls "$BUILD_DIR" | grep -E '(spiffs|littlefs)\.bin' | head -n1)
+          if [[ -z "$FS_BIN" ]]; then
+            echo "Filesystem image not found!"
+            exit 1
+          fi
+
+          # Extract the offset of the FS partition from the CSV (column 4)
+          FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "$PART_FILE")
+          if [[ -z "$FS_ADDR" ]]; then
+            echo "Unable to determine FS offset from $PART_FILE"
+            exit 1
+          fi
+
+          echo "Merging app + FS (address $FS_ADDR) into single binary"
+          cd "$BUILD_DIR"
+
           python -m esptool --chip ${{ matrix.chip }} merge_bin \
             -o ${{ matrix.env_name }}.bin \
             --flash_mode dio \
@@ -59,15 +91,15 @@ jobs:
             0x0000 bootloader.bin \
             0x8000 partitions.bin \
             0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
-            0x10000 firmware.bin
+            0x10000 firmware.bin \
+            $FS_ADDR "$FS_BIN"
 
       - name: Verify merged firmware
-        run: |
-          if [ ! -f .pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin ]; then
-            echo "Merged firmware binary not found!"
-            exit 1
-          fi
+        run: test -f .pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin
 
+      # ---------------------------------------------------------
+      # Artifacts & Deployment
+      # ---------------------------------------------------------
       - name: Upload artifact ${{ matrix.env_name }}
         uses: actions/upload-artifact@v4
         with:
