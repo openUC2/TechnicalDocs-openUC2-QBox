@@ -72,7 +72,7 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           BUILD_DIR=.pio/build/${{ matrix.env_name }}
-          PART_FILE="${{ matrix.partition_csv }}"
+          PART_CSV_PATH="$PROJECT_DIR/${{ matrix.partition_csv }}"
 
           # Detect filesystem image if it was built
           FS_BIN=""
@@ -84,17 +84,25 @@ jobs:
 
           cd "$BUILD_DIR"
 
-          # Build base merge command
-          MERGE="python -m esptool --chip ${{ matrix.chip }} merge_bin -o ${{ matrix.env_name }}.bin --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} 0x0000 bootloader.bin 0x8000 partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 firmware.bin"
+          # Base merge command
+          MERGE=(python -m esptool --chip ${{ matrix.chip }} merge_bin \
+            -o ${{ matrix.env_name }}.bin \
+            --flash_mode dio \
+            --flash_freq 40m \
+            --flash_size ${{ matrix.flash_size }} \
+            0x0000 bootloader.bin \
+            0x8000 partitions.bin \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 firmware.bin)
 
-          # Append FS if present
+          # Append FS if an image is present
           if [[ -n "$FS_BIN" ]]; then
-            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "${{ matrix.partition_csv }}")
-            MERGE+=" $FS_ADDR $FS_BIN"
+            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "$PART_CSV_PATH")
+            MERGE+=("$FS_ADDR" "$FS_BIN")
           fi
 
-          eval $MERGE
-
+          echo "Running: ${MERGE[*]}"
+          "${MERGE[@]}"
       # -----------------------------------------
       # Artifacts & Deployment
       # -----------------------------------------
