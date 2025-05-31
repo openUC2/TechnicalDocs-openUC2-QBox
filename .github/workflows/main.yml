@@ -4,77 +4,74 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ==============================================================
+  # 1) BUILD — compile & package each environment in matrix
+  # ==============================================================
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ---------- ESP32-S3 ----------
-          - env_name: seeed_xiao_esp32s3            # PIO environment name
+          # ---------- ESP32‑S3 ----------
+          - env_name: seeed_xiao_esp32s3
             chip: esp32s3
             flash_size: 4MB
             partition_csv: custom_partition_esp32s3.csv
-          # ---------- ESP32-C3 ----------
-          - env_name: seeed_xiao_esp32c3            # PIO environment name
+          # ---------- ESP32‑C3 ----------
+          - env_name: seeed_xiao_esp32c3
             chip: esp32c3
             flash_size: 4MB
             partition_csv: custom_partition_esp32c3.csv
 
-    # -----------------------------------------
-    # Checkout & working directory
-    # -----------------------------------------
     steps:
-      - name: Checkout code (private repo + submodules)
+      # ---------------- CHECKOUT SOURCE ----------------
+      - name: Checkout firmware source (+submodules)
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: recursive
-          fetch-depth: 0                 # full history for tags / merges
-          token: ${{ secrets.API_TOKEN_GITHUB }}  # PAT with at least "repo" + "read:packages" if submodules
+          token: ${{ secrets.API_TOKEN_GITHUB }}
 
-      - name: Set working-directory variable
-        id: paths
+      # ---------------- SET WORKING DIR ----------------
+      - name: Export PIO project path
         run: echo "PROJECT_DIR=${{ github.workspace }}/Production_Files/Software/ODMR_Server" >> "$GITHUB_ENV"
 
-      # All next steps run inside the PIO project
+      # ---------------- PYTHON TOOLCHAIN ---------------
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
-      - name: Install dependencies (PlatformIO + esptool)
+      - name: Install PlatformIO & helpers
         run: |
           python -m pip install --upgrade pip
           pip install platformio esptool
         working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: Install PlatformIO libraries (global cache)
+      - name: Install PlatformIO libs
         run: pio lib install
         working-directory: ${{ env.PROJECT_DIR }}
 
-      # -----------------------------------------
-      # Build firmware + filesystem (if data/ exists)
-      # -----------------------------------------
-      - name: Build FW ${{ matrix.env_name }}
+      # ---------------- COMPILE APP --------------------
+      - name: Build firmware – ${{ matrix.env_name }}
         run: pio run -v --environment ${{ matrix.env_name }}
         working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: Build FS ${{ matrix.env_name }} when data folder exists
+      # ---------------- BUILD FILESYSTEM ---------------
+      - name: Build FS image when data/ exists
         if: exists('${{ env.PROJECT_DIR }}/data')
         run: pio run --target buildfs --environment ${{ matrix.env_name }}
         working-directory: ${{ env.PROJECT_DIR }}
 
-      # -----------------------------------------
-      # Merge bootloader + partitions + app (+FS) into one .bin
-      # -----------------------------------------
-      - name: Merge binary ${{ matrix.env_name }}
+      # ---------------- MERGE BIN ----------------------
+      - name: Merge binaries
         shell: bash
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           BUILD_DIR=.pio/build/${{ matrix.env_name }}
-          PART_CSV_PATH="$PROJECT_DIR/${{ matrix.partition_csv }}"
+          PART_CSV_PATH="${{ env.PROJECT_DIR }}/${{ matrix.partition_csv }}"
 
-          # Detect filesystem image if it was built
           FS_BIN=""
           if [[ -f "$BUILD_DIR/spiffs.bin" ]]; then
             FS_BIN="spiffs.bin"
@@ -84,42 +81,62 @@ jobs:
 
           cd "$BUILD_DIR"
 
-          # Base merge command
           MERGE=(python -m esptool --chip ${{ matrix.chip }} merge_bin \
             -o ${{ matrix.env_name }}.bin \
-            --flash_mode dio \
-            --flash_freq 40m \
-            --flash_size ${{ matrix.flash_size }} \
-            0x0000 bootloader.bin \
-            0x8000 partitions.bin \
+            --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} \
+            0x0000 bootloader.bin 0x8000 partitions.bin \
             0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
             0x10000 firmware.bin)
 
-          # Append FS if an image is present
           if [[ -n "$FS_BIN" ]]; then
             FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "$PART_CSV_PATH")
             MERGE+=("$FS_ADDR" "$FS_BIN")
           fi
 
-          echo "Running: ${MERGE[*]}"
+          echo "${MERGE[*]}"
           "${MERGE[@]}"
-      # -----------------------------------------
-      # Artifacts & Deployment
-      # -----------------------------------------
-      - name: Upload artifact ${{ matrix.env_name }}
+
+      # ---------------- UPLOAD ARTIFACT ----------------
+      - name: Publish merged artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.env_name }}-merged-firmware
+          name: ${{ matrix.env_name }}-bin
           path: ${{ env.PROJECT_DIR }}/.pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin
 
-      - name: Push merged firmware to youseetoo Webtool
-        uses: dmnemec/copy_file_to_another_repo_action@main
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+  # ==============================================================
+  # 2) DEPLOY — run once after matrix completes, push both bins
+  # ==============================================================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # ---------------- GATHER ARTIFACTS ---------------
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
         with:
-          source_file: '${{ env.PROJECT_DIR }}/.pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin'
-          destination_repo: 'youseetoo/youseetoo.github.io'
-          destination_folder: 'static/firmware_build'
-          user_email: 'bene.d@gmx.de'
-          user_name: 'beniroquai'
-          commit_message: 'New firmware ${{ matrix.env_name }} released => https://github.com/youseetoo/uc2-esp32'
+          path: firmware_artifacts
+
+      # ---------------- CHECKOUT DEST REPO -------------
+      - name: Checkout youseetoo.github.io (target)
+        uses: actions/checkout@v4
+        with:
+          repository: youseetoo/youseetoo.github.io
+          path: dest
+          token: ${{ secrets.API_TOKEN_GITHUB }}
+
+      # ---------------- COPY & COMMIT ------------------
+      - name: Copy binaries & commit
+        shell: bash
+        run: |
+          mkdir -p dest/static/firmware_build
+          cp firmware_artifacts/*/*.bin dest/static/firmware_build/
+          cd dest
+          git config user.email 'bene.d@gmx.de'
+          git config user.name  'beniroquai'
+          if git status --porcelain | grep -q '^??\|^ M'; then
+            git add static/firmware_build
+            git commit -m "New ESP32 firmware binaries (C3 & S3) => https://github.com/youseetoo/uc2-esp32"
+            git push
+          else
+            echo "No changes to commit"
+          fi
