@@ -89,7 +89,7 @@ jobs:
 
           # Append FS if present
           if [[ -n "$FS_BIN" ]]; then
-            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "../../${{ matrix.partition_csv }}")
+            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "${{ matrix.partition_csv }}")
             MERGE+=" $FS_ADDR $FS_BIN"
           fi
 
