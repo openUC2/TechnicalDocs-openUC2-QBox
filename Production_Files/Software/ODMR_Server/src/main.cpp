@@ -48,7 +48,7 @@ D10	GPIO_09	SPI_PICO	TP306
 // D9 -> GPIO_08 -> SPI_POCI (PIN_MISO, unused if not reading back)
 // D10 -> GPIO_09 -> SPI_PICO (PIN_MOSI)
 
-#define NUM_PIXELS 16 // Anzahl der LEDs im Streifen
+#define NUM_PIXELS 30 // Anzahl der LEDs im Streifen
 
 // Neopixel
 Adafruit_NeoPixel strip(NUM_PIXELS, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
@@ -300,7 +300,7 @@ void setup()
   Serial.println("Neopixel init");
   strip.begin();
   strip.show();            // Alle LEDs ausschalten
-  strip.setBrightness(50); // Helligkeit einstellen (0-255)
+  strip.setBrightness(255); // Helligkeit einstellen (0-255)
 
   // perform I2C scan to verify TSL2591 is connected
   i2c_scan();
