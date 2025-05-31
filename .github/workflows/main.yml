@@ -1,0 +1,117 @@
+name: Compile ESP32 (QBox ODMR Firmware)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---------- ESP32-S3 ----------
+          - env_name: seeed_xiao_esp32s3            # PIO environment name
+            chip: esp32s3
+            flash_size: 4MB
+            partition_csv: custom_partition_esp32s3.csv
+          # ---------- ESP32-C3 ----------
+          - env_name: seeed_xiao_esp32c3            # PIO environment name
+            chip: esp32c3
+            flash_size: 4MB
+            partition_csv: custom_partition_esp32c3.csv
+
+    # -----------------------------------------
+    # Checkout & working directory
+    # -----------------------------------------
+    steps:
+      - name: Checkout code (private repo + submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0                 # full history for tags / merges
+          token: ${{ secrets.API_TOKEN_GITHUB }}  # PAT with at least "repo" + "read:packages" if submodules
+
+      - name: Set working-directory variable
+        id: paths
+        run: echo "PROJECT_DIR=${{ github.workspace }}/Production_Files/Software/ODMR_Server" >> "$GITHUB_ENV"
+
+      # All next steps run inside the PIO project
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies (PlatformIO + esptool)
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio esptool
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Install PlatformIO libraries (global cache)
+        run: pio lib install
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      # -----------------------------------------
+      # Build firmware + filesystem (if data/ exists)
+      # -----------------------------------------
+      - name: Build FW ${{ matrix.env_name }}
+        run: pio run -v --environment ${{ matrix.env_name }}
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Build FS ${{ matrix.env_name }} when data folder exists
+        if: exists('${{ env.PROJECT_DIR }}/data')
+        run: pio run --target buildfs --environment ${{ matrix.env_name }}
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      # -----------------------------------------
+      # Merge bootloader + partitions + app (+FS) into one .bin
+      # -----------------------------------------
+      - name: Merge binary ${{ matrix.env_name }}
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          BUILD_DIR=.pio/build/${{ matrix.env_name }}
+          PART_FILE="${{ matrix.partition_csv }}"
+
+          # Detect filesystem image if it was built
+          FS_BIN=""
+          if [[ -f "$BUILD_DIR/spiffs.bin" ]]; then
+            FS_BIN="spiffs.bin"
+          elif [[ -f "$BUILD_DIR/littlefs.bin" ]]; then
+            FS_BIN="littlefs.bin"
+          fi
+
+          cd "$BUILD_DIR"
+
+          # Build base merge command
+          MERGE="python -m esptool --chip ${{ matrix.chip }} merge_bin -o ${{ matrix.env_name }}.bin --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} 0x0000 bootloader.bin 0x8000 partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 firmware.bin"
+
+          # Append FS if present
+          if [[ -n "$FS_BIN" ]]; then
+            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "../../${{ matrix.partition_csv }}")
+            MERGE+=" $FS_ADDR $FS_BIN"
+          fi
+
+          eval $MERGE
+
+      # -----------------------------------------
+      # Artifacts & Deployment
+      # -----------------------------------------
+      - name: Upload artifact ${{ matrix.env_name }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.env_name }}-merged-firmware
+          path: ${{ env.PROJECT_DIR }}/.pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin
+
+      - name: Push merged firmware to youseetoo Webtool
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+        with:
+          source_file: '${{ env.PROJECT_DIR }}/.pio/build/${{ matrix.env_name }}/${{ matrix.env_name }}.bin'
+          destination_repo: 'youseetoo/youseetoo.github.io'
+          destination_folder: 'static/firmware_build'
+          user_email: 'bene.d@gmx.de'
+          user_name: 'beniroquai'
+          commit_message: 'New firmware ${{ matrix.env_name }} released => https://github.com/youseetoo/uc2-esp32'
