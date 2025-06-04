@@ -1,52 +1,103 @@
-<!DOCTYPE HTML>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NV Experimente / ODMR</title>
-    <link rel="icon" href="data:,">
-    <link rel="stylesheet" type="text/css" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NV-Experimente / ODMR</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Brand palette ---------------------------------------------------------->
+  <style>
+    :root{
+      --uc2-blue:       #023773;  /* primary   */
+      --uc2-green:      #85b918;  /* success   */
+      --uc2-turquoise:  #1f9c7c;  /* info      */
+      --uc2-light:      #faf9f9;  /* body bg   */
+      --uc2-grey:       #999999;  /* muted txt */
+    }
+    body           { background: var(--uc2-light); color: var(--uc2-grey); }
+    h1,h2,h3,h4,h5 { color: var(--uc2-blue); }
+    /* navbar */
+    .navbar         { background: var(--uc2-blue); }
+    .navbar-brand,
+    .navbar-nav .nav-link { color:#fff; }
+    .navbar-nav .nav-link.active{ color: var(--uc2-green); }
+    .navbar-nav .nav-link:hover{ color: var(--uc2-turquoise); }
+    /* links in text */
+    a{ color: var(--uc2-blue); }
+    a:hover{ color: var(--uc2-turquoise); }
+    footer{ background: var(--uc2-blue); color:#fff; }
+  </style>
 </head>
+
 <body>
-    <header>
-        <nav>
-            <ul>
-                <li><a href="index.html" class="open">Start</a></li>
-                <li><a href="messung.html">Messung</a></li>
-                <li><a href="justage.html">Justage (folgt)</a></li>
-                <li><a href="infos.html">Weitere Informationen</a></li>
-            </ul>
-        </nav>
-        <h1>Low-Cost Experimente mit NV-Zentren</h1>
-    </header>
-    <main>
-        <article>
-            <h2>Über das Experiment</h2>
-            <p>
-                NV-Zentren sind Fehlstellen, die in Diamanten auftreten können. An diesen Stellen fehlen zwei Kohlenstoffatome im Gitter. 
-                Anstatt eines dieser Kohlstoffatome ist ein Stickstoffatom im Gitter vorhanden. Anstatt des zweiten fehlenden Kohlen&shy;stoff&shy;atoms
-                ist kein weiteres Atom sondern eine Fehlstelle im Gitter vorhanden. Dies führt dazu, dass sich an der Stelle im Gitter Elektronen befinden,
-                die angeregt werden können und dadurch einige wichtige. Die Abbildung 1 zeigt diese Diamantstruktur. 
-            </p>
-            <p align="center">
-                <img src="NVGitter.png", width="60%"><br>
-                    Abbildung 1: Struktur des Diamantgitters.
-            </p>
-            <p> 
-                Die Elektronen solcher Fehlstellen können mit grünem Licht in einen angeregten Zustand gebracht werden. Beim Übergang vom angeregten Zustand 
-                zurück in den Grundzustand wird ein rotes oder nahinfrarotes Photon emitiert. 
-            </p>
-        </article>
-        <article>
-            <h3>Anwendungen</h3>
-        <p> 
-            Diese Emmission kann zur Messung von Magnetfeldern genutzt werden. Außerdem lässt sich durch das 2- bzw. 3-Zustandssystem, dass sich aus den Spinzuständen ergibt, ein einfach Quantencomputer bauen. 
-        </p>
-        </article>
-    </main>
-    <footer>
-        <p> Uni Münster - info@o3q.de</p>
-    </footer>
-   
+  <!-- ░░ Navbar ░░----------------------------------------------------------- -->
+  <nav class="navbar navbar-expand-lg shadow-sm mb-4">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html">NV-Experimente</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#nvNav" aria-controls="nvNav" aria-expanded="false">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="nvNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link active" href="index.html">Start</a></li>
+          <li class="nav-item"><a class="nav-link" href="messung.html">Messung (on Device)</a></li>
+          <li class="nav-item"><a class="nav-link" href="messung_webserial.html">Messung (WebSerial)</a></li>
+          <li class="nav-item"><a class="nav-link" href="justage.html">Justage (folgt)</a></li>
+          <li class="nav-item"><a class="nav-link" href="infos.html">Weitere Infos</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ░░ Main content ░░------------------------------------------------------ -->
+  <main class="container">
+    <section class="mb-5">
+      <h1 class="display-5 mb-3">Low-Cost Experimente mit NV-Zentren</h1>
+      <h2 class="h4 mb-3">Über das Experiment</h2>
+
+      <p>
+        NV-Zentren sind Fehlstellen, die in Diamanten auftreten können. An diesen
+        Stellen fehlen zwei Kohlenstoffatome im Gitter. Anstatt eines dieser
+        Kohlenstoff­atome ist ein Stickstoffatom im Gitter vorhanden; anstelle
+        des zweiten fehlt ein Atom völlig. Dadurch befinden sich Elektronen im
+        Gitter, die angeregt werden können … Die Abbildung 1 zeigt diese
+        Diamantstruktur.
+      </p>
+
+      <figure class="text-center my-4">
+        <img src="NVGitter.png" class="img-fluid rounded shadow" style="max-width:60%;" alt="Diamantgitter">
+        <figcaption class="mt-2 small text-muted">Abbildung 1: Struktur des Diamantgitters.</figcaption>
+      </figure>
+
+      <p>
+        Die Elektronen solcher Fehlstellen können mit grünem Licht in einen
+        angeregten Zustand gebracht werden. Beim Übergang in den Grundzustand
+        wird ein rotes oder nahinfrarotes Photon emittiert.
+      </p>
+    </section>
+
+    <section class="mb-5">
+      <h3 class="h4 mb-3">Anwendungen</h3>
+      <p>
+        Diese Emission kann zur Messung von Magnetfeldern genutzt werden.
+        Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den
+        Spinzuständen ergibt, ein einfacher Quantencomputer bauen.
+      </p>
+    </section>
+  </main>
+
+  <!-- ░░ Footer ░░----------------------------------------------------------- -->
+  <footer class="py-3 mt-auto">
+    <div class="container text-center small">
+      Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

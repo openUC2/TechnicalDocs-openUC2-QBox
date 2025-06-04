@@ -61,6 +61,9 @@ static const int SCL_PIN = D5; // GPIO_06
 const char *SSID = "openUC2_ODMR";
 const char *PASSWORD = "";
 
+// serial buffer for webserial comm.
+String rxBuf;
+
 // Laser pin example
 static const int LASER_PIN = 10;
 bool laserState = false;
@@ -152,13 +155,12 @@ void handleLaserAct()
   }
   server.send(200, "application/json", "{\"status\":\"ok\"}");
 
-  for(int iFrequencyRequested = 1800; iFrequencyRequested <= 3600; iFrequencyRequested += 100)
+  for (int iFrequencyRequested = 1800; iFrequencyRequested <= 3600; iFrequencyRequested += 100)
   {
-    adf.updateFrequency(iFrequencyRequested*1e6); // Set frequency in Hz
-    delay(200); // Wait for the frequency to stabilize
-    Serial.println("Set frequency: " + String(iFrequencyRequested*1e6) + " Hz");
+    adf.updateFrequency(iFrequencyRequested * 1e6); // Set frequency in Hz
+    delay(200);                                     // Wait for the frequency to stabilize
+    Serial.println("Set frequency: " + String(iFrequencyRequested * 1e6) + " Hz");
   }
-
 }
 
 // Example /odmr_act handler for JSON:
@@ -202,8 +204,8 @@ void handleMeasure()
   // For demonstration, call changef
 
   // Set the frequency on the ADF4351
-  Serial.println("Setting frequency: " + String(freqRequested, 1));
-  adf.updateFrequency(freqRequested*1e6); // Set frequency in Hz
+  //Serial.println("Setting frequency: " + String(freqRequested, 1));
+  adf.updateFrequency(freqRequested * 1e6); // Set frequency in Hz
 
   // Read intensity
   // uint32_t intensity = readTSL2591();
@@ -215,8 +217,8 @@ void handleMeasure()
   // Return space-separated: freq intensity magnetfield
   // or however your front-end expects it
   String reply = String(freqRequested, 1) + " " + intensity + " " + exampleMagVal;
-  Serial.println("Intensity: " + String(intensity) + " Mag: " + String(exampleMagVal));
-  Serial.println("Reply: " + reply);
+  //Serial.println("Intensity: " + String(intensity) + " Mag: " + String(exampleMagVal));
+  //Serial.println("Reply: " + reply);
   server.send(200, "text/plain", reply);
 }
 
@@ -266,7 +268,7 @@ void setup()
   digitalWrite(LASER_PIN, LOW);
 
   Serial.begin(115200);
-  delay(3000); // Allow time to connect
+  delay(300); // Allow time to connect
   Serial.println("Booting...");
 
   // Wi-Fi
@@ -280,8 +282,8 @@ void setup()
   WiFi.mode(WIFI_AP);
   WiFi.softAP(dynamicSSID.c_str(), PASSWORD);
 
-  Serial.print("Access Point has started with SSID: ");
-  Serial.println(dynamicSSID);
+  //Serial.print("Access Point has started with SSID: ");
+  //Serial.println(dynamicSSID);
 
   // SPIFFS
   if (!SPIFFS.begin(true))
@@ -297,9 +299,8 @@ void setup()
   Wire.begin(SDA_PIN, SCL_PIN);
 
   // Neopixel initialisieren
-  Serial.println("Neopixel init");
   strip.begin();
-  strip.show();            // Alle LEDs ausschalten
+  strip.show();             // Alle LEDs ausschalten
   strip.setBrightness(255); // Helligkeit einstellen (0-255)
 
   // perform I2C scan to verify TSL2591 is connected
@@ -319,8 +320,8 @@ void setup()
   // ADF4351 init
   Serial.println("ADF4351 init");
   adf.begin();
-  //adf.updateFrequency(1800.0f); // Some initial frequency (example)
-    adf.updateFrequency(1.800e9);   // 1.800 GHz ─ writes R5…R0
+  // adf.updateFrequency(1800.0f); // Some initial frequency (example)
+  adf.updateFrequency(1.800e9); // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
   server.onNotFound([]()
@@ -341,8 +342,6 @@ void loop()
   // Read TSL2591 sensor (light intensity)
   // uint32_t lux = readTSL2591();
   uint32_t lux = readIR(); // Read IR instead of light for demonstration
-  Serial.print("Lux: ");
-  Serial.println(lux);
   // Read ADF4351 frequency
   if (firstPixelHue > 5 * 65536)
     firstPixelHue = 0;
@@ -356,4 +355,46 @@ void loop()
     delay(pixelWait);
   }
   firstPixelHue += 256;
+
+    // catch serial commands and process them
+  while (Serial.available())
+  { // collect one line
+    char c = Serial.read();
+    if (c == '\n')
+    {
+      rxBuf.trim();
+
+      if (rxBuf.startsWith("MEASURE"))
+      { // MEASURE <freq>
+        // Format: MEASURE 2500
+        float f = rxBuf.substring(7).toFloat();
+        if (f >= ADF_FREQ_MIN && f <= ADF_FREQ_MAX)
+        {
+          adf.updateFrequency(f * 1e6); // tune synthesiser
+          uint32_t i = readIR();        // intensity
+          float b = 123.0f;             // your magnetometer
+          Serial.printf("DATA %.1f %lu %.1f\n", f, i, b);
+        }
+        else
+        {
+          Serial.println("ERR range");
+        }
+      }
+
+      if (rxBuf == "LASER ON")
+      {
+        digitalWrite(LASER_PIN, HIGH);
+      }
+      if (rxBuf == "LASER OFF")
+      {
+        digitalWrite(LASER_PIN, LOW);
+      }
+
+      rxBuf = "";
+    }
+    else
+    {
+      rxBuf += c;
+    }
+  }
 }

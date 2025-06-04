@@ -43,8 +43,8 @@ void ADF4351::updateFrequency(double freqHz)
 		Serial.println("ADF4351: Frequency out of range (2.2 GHz to 4.4 GHz)");
 		return;
 	}
-	Serial.print("ADF4351: Setting frequency to ");
-	Serial.print(freqHz / 1e6, 1);
+	//Serial.print("ADF4351: Setting frequency to ");
+	//Serial.print(freqHz / 1e6, 1);
     uint32_t reg[6];
     calculateRegisterValues(freqHz, reg);
     for (int i = 5; i >= 0; --i) WriteRegister(reg[i]);   // R5 → R0
