@@ -1,8 +1,7 @@
-
 #ifndef STYLE_H
 #define STYLE_H
 
-// Example CSS content
+// CSS content from style.css
 const char STYLE_CSS[] PROGMEM = R"====(
 body {
     font-size: 120%;
@@ -293,8 +292,6 @@ input[type=text]:focus{
     z-index:0;
 
   }
-
-
 
 
 
