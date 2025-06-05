@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
-#include <SPIFFS.h>
+// #include <SPIFFS.h>  // No longer needed - using header files
 #include <SPI.h>
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
 #include <Adafruit_NeoPixel.h> // Neopixel-Bibliothek einbinden
@@ -11,6 +11,11 @@
 
 // website
 #include "website/style_css.h"
+#include "website/index_html.h"
+#include "website/messung_html.h"
+#include "website/justage_html.h"
+#include "website/infos_html.h"
+// #include "website/nvgitter_png.h"  // Excluded for size reasons
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351
 #define ADF_FREQ_MAX 3600.0f // Max frequency for ADF4351
@@ -84,7 +89,7 @@ WebServer server(80);
 long firstPixelHue = 0;
 int pixelWait = 1;
 
-// Utility to serve static files from SPIFFS
+// Utility to serve static files from header files
 void handleFileRequest(const String &path)
 {
   String actualPath = path;
@@ -92,29 +97,51 @@ void handleFileRequest(const String &path)
   {
     actualPath += "index.html";
   }
-  File file = SPIFFS.open(actualPath, "r");
-  if (!file || file.isDirectory())
+
+  String contentType = "text/html";
+  const char* content = nullptr;
+
+  // Route specific files to their header file content
+  if (actualPath == "/index.html")
   {
-    server.send(404, "text/plain", "Not found");
+    contentType = "text/html";
+    content = INDEX_HTML;
+  }
+  else if (actualPath == "/messung.html")
+  {
+    contentType = "text/html";
+    content = MESSUNG_HTML;
+  }
+  else if (actualPath == "/justage.html")
+  {
+    contentType = "text/html";
+    content = JUSTAGE_HTML;
+  }
+  else if (actualPath == "/infos.html")
+  {
+    contentType = "text/html";
+    content = INFOS_HTML;
+  }
+  else if (actualPath == "/style.css")
+  {
+    contentType = "text/css";
+    content = STYLE_CSS;
+  }
+  else if (actualPath == "/NVGitter.png")
+  {
+    // Image not included in header version for size reasons
+    server.send(404, "text/plain", "Image not available in header version");
     return;
   }
 
-  String contentType = "text/html";
-  if (actualPath.endsWith(".css"))
-    contentType = "text/css";
-  if (actualPath.endsWith(".js"))
-    contentType = "application/javascript";
-  if (actualPath.endsWith(".png"))
-    contentType = "image/png";
-  if (actualPath.endsWith(".jpg"))
-    contentType = "image/jpeg";
-  if (actualPath.endsWith(".ico"))
-    contentType = "image/x-icon";
-  if (actualPath.endsWith(".svg"))
-    contentType = "image/svg+xml";
-
-  server.streamFile(file, contentType);
-  file.close();
+  if (content != nullptr)
+  {
+    server.send_P(200, contentType.c_str(), content);
+  }
+  else
+  {
+    server.send(404, "text/plain", "Not found");
+  }
 }
 
 // Example: read TSL2591 sensor (light intensity)
@@ -288,15 +315,16 @@ void setup()
   //Serial.print("Access Point has started with SSID: ");
   //Serial.println(dynamicSSID);
 
-  // SPIFFS
-  if (!SPIFFS.begin(true))
-  {
-    Serial.println("SPIFFS mount failed");
-  }
-  else
-  {
-    Serial.println("SPIFFS mounted");
-  }
+  // SPIFFS no longer needed - using header files instead
+  // if (!SPIFFS.begin(true))
+  // {
+  //   Serial.println("SPIFFS mount failed");
+  // }
+  // else
+  // {
+  //   Serial.println("SPIFFS mounted");
+  // }
+  Serial.println("Using header files for website content");
 
   // I2C initialization for TSL2591
   Wire.begin(SDA_PIN, SCL_PIN);
