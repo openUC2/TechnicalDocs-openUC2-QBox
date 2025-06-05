@@ -9,6 +9,9 @@
 #include "adf4351.h"
 #include <SPI.h>
 
+// website
+#include "website/style_css.h"
+
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351
 #define ADF_FREQ_MAX 3600.0f // Max frequency for ADF4351
 
