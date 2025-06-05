@@ -58,11 +58,8 @@ jobs:
         run: pio run -v --environment ${{ matrix.env_name }}
         working-directory: ${{ env.PROJECT_DIR }}
 
-      # ---------------- BUILD FILESYSTEM ---------------
-      - name: Build FS image when data/ exists
-        if: exists('${{ env.PROJECT_DIR }}/data')
-        run: pio run --target buildfs --environment ${{ matrix.env_name }}
-        working-directory: ${{ env.PROJECT_DIR }}
+      # ---------------- FILESYSTEM NOT NEEDED -----------
+      # Filesystem build removed - website content now embedded as header files
 
       # ---------------- MERGE BIN ----------------------
       - name: Merge binaries
@@ -70,31 +67,17 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           BUILD_DIR=.pio/build/${{ matrix.env_name }}
-          PART_CSV_PATH="${{ env.PROJECT_DIR }}/${{ matrix.partition_csv }}"
-
-          FS_BIN=""
-          if [[ -f "$BUILD_DIR/spiffs.bin" ]]; then
-            FS_BIN="spiffs.bin"
-          elif [[ -f "$BUILD_DIR/littlefs.bin" ]]; then
-            FS_BIN="littlefs.bin"
-          fi
 
           cd "$BUILD_DIR"
 
-          MERGE=(python -m esptool --chip ${{ matrix.chip }} merge_bin \
+          # No filesystem binary needed - website content embedded as header files
+          python -m esptool --chip ${{ matrix.chip }} merge_bin \
             -o ${{ matrix.env_name }}.bin \
             --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} \
-            0x0000 bootloader.bin 0x8000 partitions.bin \
+            0x0000 bootloader.bin \
+            0x8000 partitions.bin \
             0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
-            0x10000 firmware.bin)
-
-          if [[ -n "$FS_BIN" ]]; then
-            FS_ADDR=$(awk -F',' '/(spiffs|littlefs)/{gsub(/^[ ]+/,"",$4); print tolower($4); exit}' "$PART_CSV_PATH")
-            MERGE+=("$FS_ADDR" "$FS_BIN")
-          fi
-
-          echo "${MERGE[*]}"
-          "${MERGE[@]}"
+            0x10000 firmware.bin
 
       # ---------------- UPLOAD ARTIFACT ----------------
       - name: Publish merged artifact
