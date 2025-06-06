@@ -216,7 +216,6 @@ void handleOdmrAct()
 // Return "freq intensity magnetfield" style data (just placeholders here)
 void handleMeasure()
 {
-  Serial.println("STart measurement");
   if (!server.hasArg("frequenz"))
   {
     Serial.println("No frequency set");
@@ -234,7 +233,7 @@ void handleMeasure()
   // For demonstration, call changef
 
   // Set the frequency on the ADF4351
-  //Serial.println("Setting frequency: " + String(freqRequested, 1));
+  Serial.println("Setting frequency: " + String(freqRequested, 1));
   adf.updateFrequency(freqRequested * 1e6); // Set frequency in Hz
 
   // Read intensity
@@ -346,6 +345,9 @@ void setup()
   {
     tsl.setGain(TSL2591_GAIN_MAX);
     tsl.setTiming(TSL2591_INTEGRATIONTIME_100MS);
+    // turn off led on TSL2591
+
+    
   }
 
   // ADF4351 init
