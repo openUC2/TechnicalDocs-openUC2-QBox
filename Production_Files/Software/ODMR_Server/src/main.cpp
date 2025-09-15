@@ -13,12 +13,13 @@
 #include "website/style_css.h"
 #include "website/index_html.h"
 #include "website/messung_html.h"
+#include "website/messung_webserial_html.h"
 #include "website/justage_html.h"
 #include "website/infos_html.h"
 // #include "website/nvgitter_png.h"  // Excluded for size reasons
 
-#define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351
-#define ADF_FREQ_MAX 3600.0f // Max frequency for ADF4351
+#define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
+#define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
 
 // Photodetector setup
 // Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
@@ -89,6 +90,67 @@ WebServer server(80);
 long firstPixelHue = 0;
 int pixelWait = 1;
 
+// LED status management
+enum LEDStatus {
+  LED_NO_CLIENT,     // white
+  LED_CONNECTED,     // rainbow
+  LED_MEASURING,     // red
+  LED_INTENSITY      // blue
+};
+
+LEDStatus currentLEDStatus = LED_NO_CLIENT;
+unsigned long lastLEDUpdate = 0;
+const unsigned long LED_UPDATE_INTERVAL = 50; // Update every 50ms
+unsigned long lastIntensityRequest = 0;
+const unsigned long INTENSITY_TIMEOUT = 2000; // 2 seconds timeout
+
+// LED control functions
+void setLEDStatus(LEDStatus status) {
+  currentLEDStatus = status;
+}
+
+void updateLEDs() {
+  if (millis() - lastLEDUpdate < LED_UPDATE_INTERVAL) return;
+  lastLEDUpdate = millis();
+  
+  strip.setBrightness(127); // Set to 50% brightness as requested
+  
+  switch (currentLEDStatus) {
+    case LED_NO_CLIENT:
+      // White color for no client connected
+      for (int i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, strip.Color(255, 255, 255));
+      }
+      break;
+      
+    case LED_CONNECTED:
+      // Rainbow effect when client connected but idle
+      for (int i = 0; i < strip.numPixels(); i++) {
+        int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
+        strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
+      }
+      firstPixelHue += 256;
+      if (firstPixelHue > 5 * 65536) firstPixelHue = 0;
+      break;
+      
+    case LED_MEASURING:
+      // Red color when measuring frequency sweep
+      for (int i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, strip.Color(255, 0, 0));
+      }
+      break;
+      
+    case LED_INTENSITY:
+      // Blue color when monitoring intensity for alignment
+      for (int i = 0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, strip.Color(0, 0, 255));
+      }
+      break;
+  }
+  
+  strip.show();
+}
+
 // Utility to serve static files from header files
 void handleFileRequest(const String &path)
 {
@@ -111,6 +173,11 @@ void handleFileRequest(const String &path)
   {
     contentType = "text/html";
     content = MESSUNG_HTML;
+  }
+  else if (actualPath == "/messung_webserial.html")
+  {
+    contentType = "text/html";
+    content = MESSUNG_WEBSERIAL_HTML;
   }
   else if (actualPath == "/justage.html")
   {
@@ -185,12 +252,18 @@ void handleLaserAct()
   }
   server.send(200, "application/json", "{\"status\":\"ok\"}");
 
-  for (int iFrequencyRequested = 1800; iFrequencyRequested <= 3600; iFrequencyRequested += 100)
+  // Set LED to measuring mode (red)
+  setLEDStatus(LED_MEASURING);
+  
+  for (int iFrequencyRequested = 2200; iFrequencyRequested <= 4400; iFrequencyRequested += 100)
   {
     adf.updateFrequency(iFrequencyRequested * 1e6); // Set frequency in Hz
     delay(200);                                     // Wait for the frequency to stabilize
     Serial.println("Set frequency: " + String(iFrequencyRequested * 1e6) + " Hz");
   }
+  
+  // Return to connected mode (rainbow) after measurement
+  setLEDStatus(LED_CONNECTED);
 }
 
 // Example /odmr_act handler for JSON:
@@ -234,6 +307,7 @@ void handleMeasure()
 
   // Set the frequency on the ADF4351
   Serial.println("Setting frequency: " + String(freqRequested, 1));
+  setLEDStatus(LED_MEASURING); // Set LED to red while measuring
   adf.updateFrequency(freqRequested * 1e6); // Set frequency in Hz
 
   // Read intensity
@@ -249,6 +323,22 @@ void handleMeasure()
   //Serial.println("Intensity: " + String(intensity) + " Mag: " + String(exampleMagVal));
   //Serial.println("Reply: " + reply);
   server.send(200, "text/plain", reply);
+  
+  // Return to connected status after measurement
+  setLEDStatus(LED_CONNECTED);
+}
+
+// Live intensity reading for photodiode alignment
+void handleIntensity()
+{
+  // Set LED to blue for intensity monitoring mode and track timestamp
+  setLEDStatus(LED_INTENSITY);
+  lastIntensityRequest = millis();
+  
+  uint32_t intensity = readIR(); // Read photodiode intensity
+  String response = String("{\"intensity\":") + intensity + "}";
+  server.send(200, "application/json", response);
+}
 }
 
 void i2c_scan()
@@ -331,7 +421,7 @@ void setup()
   // Neopixel initialisieren
   strip.begin();
   strip.show();             // Alle LEDs ausschalten
-  strip.setBrightness(255); // Helligkeit einstellen (0-255)
+  strip.setBrightness(127); // Helligkeit auf 50% einstellen (0-255)
 
   // perform I2C scan to verify TSL2591 is connected
   i2c_scan();
@@ -354,7 +444,7 @@ void setup()
   Serial.println("ADF4351 init");
   adf.begin();
   // adf.updateFrequency(1800.0f); // Some initial frequency (example)
-  adf.updateFrequency(1.800e9); // 1.800 GHz ─ writes R5…R0
+  adf.updateFrequency(2.2e9); // 2.2 GHz // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
   server.onNotFound([]()
@@ -362,6 +452,7 @@ void setup()
   server.on("/laser_act", HTTP_POST, handleLaserAct);
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
   server.on("/measure", HTTP_GET, handleMeasure);
+  server.on("/intensity", HTTP_GET, handleIntensity);
 
   server.begin();
   // TODO: Need a function that disables the adf4351 output
@@ -370,24 +461,28 @@ void setup()
 
 void loop()
 {
-
   server.handleClient();
+  
+  // Update LED status indicators
+  updateLEDs();
+  
+  // Check if any clients are connected to determine LED status
+  if (WiFi.softAPgetStationNum() > 0) {
+    if (currentLEDStatus == LED_NO_CLIENT) {
+      setLEDStatus(LED_CONNECTED);
+    }
+    // Check if intensity monitoring has timed out
+    if (currentLEDStatus == LED_INTENSITY && 
+        (millis() - lastIntensityRequest) > INTENSITY_TIMEOUT) {
+      setLEDStatus(LED_CONNECTED);
+    }
+  } else {
+    setLEDStatus(LED_NO_CLIENT);
+  }
+  
   // Read TSL2591 sensor (light intensity)
   // uint32_t lux = readTSL2591();
   uint32_t lux = readIR(); // Read IR instead of light for demonstration
-  // Read ADF4351 frequency
-  if (firstPixelHue > 5 * 65536)
-    firstPixelHue = 0;
-  { // 5 Zyklen durch den Regenbogen
-    for (int i = 0; i < strip.numPixels(); i++)
-    {
-      int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
-      strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
-    }
-    strip.show();
-    delay(pixelWait);
-  }
-  firstPixelHue += 256;
 
     // catch serial commands and process them
   while (Serial.available())

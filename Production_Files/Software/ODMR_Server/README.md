@@ -138,3 +138,47 @@ void ADF4351::updateFrequency(double fHz)
 ## License
 
 MIT License—see `LICENSE` file for details.
+
+---
+
+# ODMR Server Web Interface Build System
+
+This directory also contains the ODMR server firmware with an automated web interface build system.
+
+## Development Workflow
+
+### 1. Edit HTML/CSS Files
+Edit the web interface files in `src/website_html/`:
+- `index.html` - Main landing page with multi-language support
+- `messung.html` - On-device measurement page
+- `messung_webserial.html` - WebSerial measurement page
+- `justage.html` - Photodiode alignment page with live intensity monitoring
+- `infos.html` - Information page
+- `style.css` - Global styles
+
+### 2. Build Header Files
+Run the build script to convert HTML/CSS files to C++ header files:
+
+```bash
+python3 build_website.py
+```
+
+### 3. Flash Firmware
+Use PlatformIO to build and flash the firmware:
+
+```bash
+# For ESP32-S3
+pio run -e seeed_xiao_esp32s3 --target upload
+
+# For ESP32-C3 (with improved serial)
+pio run -e seeed_xiao_esp32c3 --target upload
+```
+
+## Features Implemented
+
+- ✅ **LED Status Indicators**: White (no client), Rainbow (connected), Red (measuring), Blue (intensity mode)
+- ✅ **Frequency Range Fix**: 2.2-4.4 GHz range properly enforced
+- ✅ **ESP32-C3 Serial**: TinyUSB CDC with 1024-byte buffers
+- ✅ **Live Intensity Monitoring**: Real-time photodiode readings for optical alignment
+- ✅ **Multi-Language Support**: German/English with localStorage persistence
+- ✅ **Automated Build System**: HTML→Header conversion with Python script
