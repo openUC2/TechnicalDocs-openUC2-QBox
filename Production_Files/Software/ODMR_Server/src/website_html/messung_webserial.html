@@ -97,7 +97,7 @@
       var _YMax = 0,
         _YMin = 36000;
       const fMin = 2200,
-        fMax = 3600,
+        fMax = 4400,
         stepMin = 0.2,
         stepMax = 5;
       const IntMin = 0,
@@ -1015,21 +1015,65 @@
       <script>
         /* Webserial Stuff */
         /* ---------- Web-Serial glue ---------- */
+        
+        // Check if WebSerial should be enabled
+        let webSerialEnabled = false;
+        
+        async function checkWebSerialAvailability() {
+          try {
+            const response = await fetch('/webserial_check');
+            const data = await response.json();
+            webSerialEnabled = data.webserial_enabled;
+            
+            const connectButton = document.getElementById("ConnectSerial");
+            if (!webSerialEnabled) {
+              connectButton.disabled = true;
+              connectButton.value = "WebSerial deaktiviert (lokaler Zugriff)";
+              connectButton.title = "WebSerial ist nur über externe Interfaces verfügbar";
+              
+              // Add warning message
+              const warningDiv = document.createElement('div');
+              warningDiv.className = 'alert alert-warning mt-2';
+              warningDiv.innerHTML = '<strong>Hinweis:</strong> WebSerial ist bei direktem Zugriff über das Geräte-Interface deaktiviert. Verwenden Sie stattdessen die "Messung (on Device)" Seite.';
+              connectButton.parentNode.appendChild(warningDiv);
+            }
+          } catch (error) {
+            console.error('Error checking WebSerial availability:', error);
+            // If check fails, assume WebSerial is available
+            webSerialEnabled = true;
+          }
+        }
+        
         let port, writer, reader;
         const enc = new TextEncoder();
         const dec = new TextDecoder();
         const pending = new Map(); // freq → resolve()
 
         async function connectSerial() {
-          port = await navigator.serial.requestPort();
-          await port.open({ baudRate: 115200 });
-          writer = port.writable.getWriter();
-          reader = port.readable
-            .pipeThrough(new TextDecoderStream())
-            .pipeThrough(new TransformStream(new LineBreakTransformer()))
-            .getReader();
-          readLoop();
-          document.getElementById("ConnectSerial").value = "Verbunden";
+          if (!webSerialEnabled) {
+            alert('WebSerial ist auf diesem Interface nicht verfügbar.');
+            return;
+          }
+          
+          if (!navigator.serial) {
+            alert('WebSerial API wird von diesem Browser nicht unterstützt.');
+            return;
+          }
+          
+          try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 115200 });
+            writer = port.writable.getWriter();
+            reader = port.readable
+              .pipeThrough(new TextDecoderStream())
+              .pipeThrough(new TransformStream(new LineBreakTransformer()))
+              .getReader();
+            readLoop();
+            document.getElementById("ConnectSerial").value = "Verbunden";
+          } catch (error) {
+            console.error('Error connecting to serial:', error);
+            alert('Fehler beim Verbinden mit dem seriellen Port: ' + error.message);
+          }
         }
 
         async function readLoop() {
@@ -1207,6 +1251,11 @@
         ClickListeners.forEach((element) =>
           ById(element[0]).addEventListener("click", element[1])
         );
+        
+        // Initialize WebSerial availability check
+        document.addEventListener('DOMContentLoaded', function() {
+          checkWebSerialAvailability();
+        });
       </script>
     </main>
     </div>

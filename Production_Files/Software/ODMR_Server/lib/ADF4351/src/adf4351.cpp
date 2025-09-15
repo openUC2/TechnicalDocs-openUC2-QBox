@@ -162,12 +162,12 @@ void ADF4351::WriteRegister(long regData)
 		}
 
 		digitalWrite(_sclk, HIGH);
-		delay(1);
+		delayMicroseconds(1); // Reduced from 1ms to 1μs for 1000x speed improvement
 		digitalWrite(_sclk, LOW);
 	}
 
 	// load data into register
 	digitalWrite(_le, HIGH);
-	delay(1);
+	delayMicroseconds(10); // Reduced from 1ms to 10μs, ADF4351 needs minimum 10ns
 	digitalWrite(_le, LOW);
 }

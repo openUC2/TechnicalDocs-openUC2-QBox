@@ -72,6 +72,7 @@ const char *PASSWORD = "";
 
 // serial buffer for webserial comm.
 String rxBuf;
+const size_t MAX_SERIAL_BUFFER = 256; // Prevent buffer overflow
 
 // Laser pin example
 static const int LASER_PIN = 10;
@@ -339,6 +340,17 @@ void handleIntensity()
   String response = String("{\"intensity\":") + intensity + "}";
   server.send(200, "application/json", response);
 }
+
+// Check if WebSerial should be enabled (not on local AP interface)
+void handleWebSerialCheck()
+{
+  // Check if request is coming from the local AP (192.168.4.x)
+  IPAddress clientIP = server.client().remoteIP();
+  bool isLocalAP = (clientIP[0] == 192 && clientIP[1] == 168 && clientIP[2] == 4);
+  
+  String response = String("{\"webserial_enabled\":") + (!isLocalAP ? "true" : "false") + "}";
+  server.send(200, "application/json", response);
+}
 }
 
 void i2c_scan()
@@ -453,6 +465,7 @@ void setup()
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
   server.on("/measure", HTTP_GET, handleMeasure);
   server.on("/intensity", HTTP_GET, handleIntensity);
+  server.on("/webserial_check", HTTP_GET, handleWebSerialCheck);
 
   server.begin();
   // TODO: Need a function that disables the adf4351 output
@@ -488,41 +501,63 @@ void loop()
   while (Serial.available())
   { // collect one line
     char c = Serial.read();
-    if (c == '\n')
+    if (c == '\n' || c == '\r')
     {
-      rxBuf.trim();
+      if (rxBuf.length() > 0) {
+        rxBuf.trim();
 
-      if (rxBuf.startsWith("MEASURE"))
-      { // MEASURE <freq>
-        // Format: MEASURE 2500
-        float f = rxBuf.substring(7).toFloat();
-        if (f >= ADF_FREQ_MIN && f <= ADF_FREQ_MAX)
-        {
-          adf.updateFrequency(f * 1e6); // tune synthesiser
-          uint32_t i = readIR();        // intensity
-          float b = 123.0f;             // your magnetometer
-          Serial.printf("DATA %.1f %lu %.1f\n", f, i, b);
+        if (rxBuf.startsWith("MEASURE"))
+        { // MEASURE <freq>
+          // Format: MEASURE 2500
+          float f = rxBuf.substring(7).toFloat();
+          if (f >= ADF_FREQ_MIN && f <= ADF_FREQ_MAX)
+          {
+            setLEDStatus(LED_MEASURING); // Set LED to red
+            adf.updateFrequency(f * 1e6); // tune synthesiser
+            delay(10); // Allow settling time
+            uint32_t i = readIR();        // intensity
+            float b = 123.0f;             // your magnetometer
+            Serial.printf("DATA %.1f %lu %.1f\n", f, i, b);
+            setLEDStatus(LED_CONNECTED); // Return to connected state
+          }
+          else
+          {
+            Serial.printf("ERR range: %.1f not in [%.1f, %.1f] MHz\n", f, ADF_FREQ_MIN, ADF_FREQ_MAX);
+          }
         }
-        else
+        else if (rxBuf == "LASER ON")
         {
-          Serial.println("ERR range");
+          digitalWrite(LASER_PIN, HIGH);
+          Serial.println("OK laser on");
+        }
+        else if (rxBuf == "LASER OFF")
+        {
+          digitalWrite(LASER_PIN, LOW);
+          Serial.println("OK laser off");
+        }
+        else if (rxBuf == "STATUS")
+        {
+          // Add status command for debugging
+          Serial.printf("STATUS connected:%d freq_range:[%.1f,%.1f] led:%d\n", 
+                       WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus);
+        }
+        else if (rxBuf.length() > 0)
+        {
+          Serial.printf("ERR unknown command: %s\n", rxBuf.c_str());
         }
       }
-
-      if (rxBuf == "LASER ON")
-      {
-        digitalWrite(LASER_PIN, HIGH);
-      }
-      if (rxBuf == "LASER OFF")
-      {
-        digitalWrite(LASER_PIN, LOW);
-      }
-
       rxBuf = "";
     }
-    else
+    else if (c >= 32 && c <= 126) // Only accept printable characters
     {
-      rxBuf += c;
+      if (rxBuf.length() < MAX_SERIAL_BUFFER) {
+        rxBuf += c;
+      } else {
+        // Buffer overflow protection
+        Serial.println("ERR buffer overflow");
+        rxBuf = "";
+      }
     }
+    // Ignore other characters (control characters, etc.)
   }
 }
