@@ -6,7 +6,7 @@
   <title>NV-Experimente / ODMR</title>
 
   <!-- Bootstrap 5 -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/bootstrap.min.css" rel="stylesheet">
 
   <!-- Brand palette ---------------------------------------------------------->
   <style>
@@ -44,11 +44,20 @@
 
       <div class="collapse navbar-collapse" id="nvNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link active" href="index.html">Start</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung.html">Messung (on Device)</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung_webserial.html">Messung (WebSerial)</a></li>
-          <li class="nav-item"><a class="nav-link" href="justage.html">Justage (folgt)</a></li>
-          <li class="nav-item"><a class="nav-link" href="infos.html">Weitere Infos</a></li>
+          <li class="nav-item"><a class="nav-link active" href="index.html" data-lang-key="nav_start">Start</a></li>
+          <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+          <li class="nav-item"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+          <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
+          <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              🌐 DE
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="langDropdown">
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('de')">🇩🇪 Deutsch</a></li>
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('en')">🇺🇸 English</a></li>
+            </ul>
+          </li>
         </ul>
       </div>
     </div>
@@ -57,10 +66,10 @@
   <!-- ░░ Main content ░░------------------------------------------------------ -->
   <main class="container">
     <section class="mb-5">
-      <h1 class="display-5 mb-3">Low-Cost Experimente mit NV-Zentren</h1>
-      <h2 class="h4 mb-3">Über das Experiment</h2>
+      <h1 class="display-5 mb-3" data-lang-key="welcome_title">Low-Cost Experimente mit NV-Zentren</h1>
+      <h2 class="h4 mb-3" data-lang-key="nv_centers_title">Über das Experiment</h2>
 
-      <p>
+      <p data-lang-key="nv_centers_text">
         NV-Zentren sind Fehlstellen, die in Diamanten auftreten können. An diesen
         Stellen fehlen zwei Kohlenstoffatome im Gitter. Anstatt eines dieser
         Kohlenstoff­atome ist ein Stickstoffatom im Gitter vorhanden; anstelle
@@ -82,8 +91,8 @@
     </section>
 
     <section class="mb-5">
-      <h3 class="h4 mb-3">Anwendungen</h3>
-      <p>
+      <h3 class="h4 mb-3" data-lang-key="applications_title">Anwendungen</h3>
+      <p data-lang-key="applications_text">
         Diese Emission kann zur Messung von Magnetfeldern genutzt werden.
         Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den
         Spinzuständen ergibt, ein einfacher Quantencomputer bauen.
@@ -98,6 +107,70 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/bootstrap.bundle.min.js"></script>
+  
+  <script>
+    // Multi-language support
+    const translations = {
+      de: {
+        nav_start: "Start",
+        nav_measurement_device: "Messung (on Device)",
+        nav_measurement_webserial: "Messung (WebSerial)",
+        nav_alignment: "Justage",
+        nav_info: "Weitere Infos",
+        title: "NV-Experimente / ODMR",
+        welcome_title: "Willkommen zu den NV-Experimenten",
+        welcome_text: "Diese Weboberfläche ermöglicht die Durchführung von Experimenten mit Stickstoff-Vakanz-Zentren (NV-Zentren) in Diamanten.",
+        nv_centers_title: "Was sind NV-Zentren?",
+        nv_centers_text: "NV-Zentren entstehen, wenn in einem Diamantgitter ein Kohlenstoffatom durch Stickstoff ersetzt wird und direkt daneben eine Vakanz (Leerstelle) entsteht.",
+        applications_title: "Anwendungen",
+        applications_text: "Diese Emission kann zur Messung von Magnetfeldern genutzt werden. Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den Spinzuständen ergibt, ein einfacher Quantencomputer bauen."
+      },
+      en: {
+        nav_start: "Start",
+        nav_measurement_device: "Measurement (on Device)",
+        nav_measurement_webserial: "Measurement (WebSerial)",
+        nav_alignment: "Alignment",
+        nav_info: "More Info",
+        title: "NV Experiments / ODMR",
+        welcome_title: "Welcome to NV Experiments",
+        welcome_text: "This web interface enables conducting experiments with nitrogen-vacancy centers (NV centers) in diamonds.",
+        nv_centers_title: "What are NV Centers?",
+        nv_centers_text: "NV centers form when a carbon atom in a diamond lattice is replaced by nitrogen and a vacancy (empty space) is created directly adjacent to it.",
+        applications_title: "Applications",
+        applications_text: "This emission can be used to measure magnetic fields. Furthermore, the 2- or 3-state system resulting from the spin states can be used to build a simple quantum computer."
+      }
+    };
+    
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      updateLanguage(lang);
+      
+      // Update dropdown display
+      const langDropdown = document.getElementById('langDropdown');
+      langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;
+    }
+    
+    function updateLanguage(lang) {
+      const elements = document.querySelectorAll('[data-lang-key]');
+      elements.forEach(element => {
+        const key = element.getAttribute('data-lang-key');
+        if (translations[lang] && translations[lang][key]) {
+          element.textContent = translations[lang][key];
+        }
+      });
+      
+      // Update title
+      if (translations[lang] && translations[lang].title) {
+        document.title = translations[lang].title;
+      }
+    }
+    
+    // Initialize language on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedLang = localStorage.getItem('language') || 'de';
+      setLanguage(savedLang);
+    });
+  </script>
 </body>
 </html>

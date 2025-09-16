@@ -1,58 +1,9 @@
-#ifndef INDEX_HTML_H
-#define INDEX_HTML_H
+// Auto-generated header file from index.html
+// Do not edit manually - use build_website.py to regenerate
 
-const char INDEX_HTML[] PROGMEM = R"====(
-<!DOCTYPE HTML>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NV Experimente / ODMR</title>
-    <link rel="icon" href="data:,">
-    <link rel="stylesheet" type="text/css" href="style.css">
-</head>
-<body>
-    <header>
-        <nav>
-            <ul>
-                <li><a href="index.html" class="open">Start</a></li>
-                <li><a href="messung.html">Messung</a></li>
-                <li><a href="justage.html">Justage (folgt)</a></li>
-                <li><a href="infos.html">Weitere Informationen</a></li>
-            </ul>
-        </nav>
-        <h1>Low-Cost Experimente mit NV-Zentren</h1>
-    </header>
-    <main>
-        <article>
-            <h2>Über das Experiment</h2>
-            <p>
-                NV-Zentren sind Fehlstellen, die in Diamanten auftreten können. An diesen Stellen fehlen zwei Kohlenstoffatome im Gitter. 
-                Anstatt eines dieser Kohlstoffatome ist ein Stickstoffatom im Gitter vorhanden. Anstatt des zweiten fehlenden Kohlen&shy;stoff&shy;atoms
-                ist kein weiteres Atom sondern eine Fehlstelle im Gitter vorhanden. Dies führt dazu, dass sich an der Stelle im Gitter Elektronen befinden,
-                die angeregt werden können und dadurch einige wichtige. Die Abbildung 1 zeigt diese Diamantstruktur. 
-            </p>
-            <p align="center">
-                [Abbildung 1: Struktur des Diamantgitters - Bild nicht verfügbar in Header-Version]
-            </p>
-            <p> 
-                Die Elektronen solcher Fehlstellen können mit grünem Licht in einen angeregten Zustand gebracht werden. Beim Übergang vom angeregten Zustand 
-                zurück in den Grundzustand wird ein rotes oder nahinfrarotes Photon emitiert. 
-            </p>
-        </article>
-        <article>
-            <h3>Anwendungen</h3>
-        <p> 
-            Diese Emmission kann zur Messung von Magnetfeldern genutzt werden. Außerdem lässt sich durch das 2- bzw. 3-Zustandssystem, dass sich aus den Spinzuständen ergibt, ein einfach Quantencomputer bauen. 
-        </p>
-        </article>
-    </main>
-    <footer>
-        <p> Uni Münster - info@o3q.de</p>
-    </footer>
-   
-</body>
-</html>
-)====";
+#ifndef __INDEX_HTML_H__
+#define __INDEX_HTML_H__
 
-#endif // INDEX_HTML_H
+const char INDEX_HTML[] PROGMEM = "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>NV-Experimente / ODMR</title>\n\n  <!-- Bootstrap 5 -->\n  <link href=\"/bootstrap.min.css\" rel=\"stylesheet\">\n\n  <!-- Brand palette ---------------------------------------------------------->\n  <style>\n    :root{\n      --uc2-blue:       #023773;  /* primary   */\n      --uc2-green:      #85b918;  /* success   */\n      --uc2-turquoise:  #1f9c7c;  /* info      */\n      --uc2-light:      #faf9f9;  /* body bg   */\n      --uc2-grey:       #999999;  /* muted txt */\n    }\n    body           { background: var(--uc2-light); color: var(--uc2-grey); }\n    h1,h2,h3,h4,h5 { color: var(--uc2-blue); }\n    /* navbar */\n    .navbar         { background: var(--uc2-blue); }\n    .navbar-brand,\n    .navbar-nav .nav-link { color:#fff; }\n    .navbar-nav .nav-link.active{ color: var(--uc2-green); }\n    .navbar-nav .nav-link:hover{ color: var(--uc2-turquoise); }\n    /* links in text */\n    a{ color: var(--uc2-blue); }\n    a:hover{ color: var(--uc2-turquoise); }\n    footer{ background: var(--uc2-blue); color:#fff; }\n  </style>\n</head>\n\n<body>\n  <!-- ░░ Navbar ░░----------------------------------------------------------- -->\n  <nav class=\"navbar navbar-expand-lg shadow-sm mb-4\">\n    <div class=\"container\">\n      <a class=\"navbar-brand fw-bold\" href=\"index.html\">NV-Experimente</a>\n      <button class=\"navbar-toggler\" type=\"button\" data-bs-toggle=\"collapse\"\n              data-bs-target=\"#nvNav\" aria-controls=\"nvNav\" aria-expanded=\"false\">\n        <span class=\"navbar-toggler-icon\"></span>\n      </button>\n\n      <div class=\"collapse navbar-collapse\" id=\"nvNav\">\n        <ul class=\"navbar-nav ms-auto\">\n          <li class=\"nav-item\"><a class=\"nav-link active\" href=\"index.html\" data-lang-key=\"nav_start\">Start</a></li>\n          <li class=\"nav-item\"><a class=\"nav-link\" href=\"messung.html\" data-lang-key=\"nav_measurement_device\">Messung (on Device)</a></li>\n          <li class=\"nav-item\"><a class=\"nav-link\" href=\"messung_webserial.html\" data-lang-key=\"nav_measurement_webserial\">Messung (WebSerial)</a></li>\n          <li class=\"nav-item\"><a class=\"nav-link\" href=\"justage.html\" data-lang-key=\"nav_alignment\">Justage</a></li>\n          <li class=\"nav-item\"><a class=\"nav-link\" href=\"infos.html\" data-lang-key=\"nav_info\">Weitere Infos</a></li>\n          <li class=\"nav-item dropdown\">\n            <a class=\"nav-link dropdown-toggle\" href=\"#\" id=\"langDropdown\" role=\"button\" data-bs-toggle=\"dropdown\" aria-expanded=\"false\">\n              🌐 DE\n            </a>\n            <ul class=\"dropdown-menu\" aria-labelledby=\"langDropdown\">\n              <li><a class=\"dropdown-item\" href=\"#\" onclick=\"setLanguage('de')\">🇩🇪 Deutsch</a></li>\n              <li><a class=\"dropdown-item\" href=\"#\" onclick=\"setLanguage('en')\">🇺🇸 English</a></li>\n            </ul>\n          </li>\n        </ul>\n      </div>\n    </div>\n  </nav>\n\n  <!-- ░░ Main content ░░------------------------------------------------------ -->\n  <main class=\"container\">\n    <section class=\"mb-5\">\n      <h1 class=\"display-5 mb-3\" data-lang-key=\"welcome_title\">Low-Cost Experimente mit NV-Zentren</h1>\n      <h2 class=\"h4 mb-3\" data-lang-key=\"nv_centers_title\">Über das Experiment</h2>\n\n      <p data-lang-key=\"nv_centers_text\">\n        NV-Zentren sind Fehlstellen, die in Diamanten auftreten können. An diesen\n        Stellen fehlen zwei Kohlenstoffatome im Gitter. Anstatt eines dieser\n        Kohlenstoff­atome ist ein Stickstoffatom im Gitter vorhanden; anstelle\n        des zweiten fehlt ein Atom völlig. Dadurch befinden sich Elektronen im\n        Gitter, die angeregt werden können … Die Abbildung 1 zeigt diese\n        Diamantstruktur.\n      </p>\n\n      <figure class=\"text-center my-4\">\n        <img src=\"NVGitter.png\" class=\"img-fluid rounded shadow\" style=\"max-width:60%;\" alt=\"Diamantgitter\">\n        <figcaption class=\"mt-2 small text-muted\">Abbildung 1: Struktur des Diamantgitters.</figcaption>\n      </figure>\n\n      <p>\n        Die Elektronen solcher Fehlstellen können mit grünem Licht in einen\n        angeregten Zustand gebracht werden. Beim Übergang in den Grundzustand\n        wird ein rotes oder nahinfrarotes Photon emittiert.\n      </p>\n    </section>\n\n    <section class=\"mb-5\">\n      <h3 class=\"h4 mb-3\" data-lang-key=\"applications_title\">Anwendungen</h3>\n      <p data-lang-key=\"applications_text\">\n        Diese Emission kann zur Messung von Magnetfeldern genutzt werden.\n        Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den\n        Spinzuständen ergibt, ein einfacher Quantencomputer bauen.\n      </p>\n    </section>\n  </main>\n\n  <!-- ░░ Footer ░░----------------------------------------------------------- -->\n  <footer class=\"py-3 mt-auto\">\n    <div class=\"container text-center small\">\n      Uni Münster · openUC2 GmbH – <a class=\"text-white text-decoration-none\" href=\"mailto:hello@openuc2.com\">hello@openuc2.com</a>\n    </div>\n  </footer>\n\n  <script src=\"/bootstrap.bundle.min.js\"></script>\n  \n  <script>\n    // Multi-language support\n    const translations = {\n      de: {\n        nav_start: \"Start\",\n        nav_measurement_device: \"Messung (on Device)\",\n        nav_measurement_webserial: \"Messung (WebSerial)\",\n        nav_alignment: \"Justage\",\n        nav_info: \"Weitere Infos\",\n        title: \"NV-Experimente / ODMR\",\n        welcome_title: \"Willkommen zu den NV-Experimenten\",\n        welcome_text: \"Diese Weboberfläche ermöglicht die Durchführung von Experimenten mit Stickstoff-Vakanz-Zentren (NV-Zentren) in Diamanten.\",\n        nv_centers_title: \"Was sind NV-Zentren?\",\n        nv_centers_text: \"NV-Zentren entstehen, wenn in einem Diamantgitter ein Kohlenstoffatom durch Stickstoff ersetzt wird und direkt daneben eine Vakanz (Leerstelle) entsteht.\",\n        applications_title: \"Anwendungen\",\n        applications_text: \"Diese Emission kann zur Messung von Magnetfeldern genutzt werden. Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den Spinzuständen ergibt, ein einfacher Quantencomputer bauen.\"\n      },\n      en: {\n        nav_start: \"Start\",\n        nav_measurement_device: \"Measurement (on Device)\",\n        nav_measurement_webserial: \"Measurement (WebSerial)\",\n        nav_alignment: \"Alignment\",\n        nav_info: \"More Info\",\n        title: \"NV Experiments / ODMR\",\n        welcome_title: \"Welcome to NV Experiments\",\n        welcome_text: \"This web interface enables conducting experiments with nitrogen-vacancy centers (NV centers) in diamonds.\",\n        nv_centers_title: \"What are NV Centers?\",\n        nv_centers_text: \"NV centers form when a carbon atom in a diamond lattice is replaced by nitrogen and a vacancy (empty space) is created directly adjacent to it.\",\n        applications_title: \"Applications\",\n        applications_text: \"This emission can be used to measure magnetic fields. Furthermore, the 2- or 3-state system resulting from the spin states can be used to build a simple quantum computer.\"\n      }\n    };\n    \n    function setLanguage(lang) {\n      localStorage.setItem('language', lang);\n      updateLanguage(lang);\n      \n      // Update dropdown display\n      const langDropdown = document.getElementById('langDropdown');\n      langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;\n    }\n    \n    function updateLanguage(lang) {\n      const elements = document.querySelectorAll('[data-lang-key]');\n      elements.forEach(element => {\n        const key = element.getAttribute('data-lang-key');\n        if (translations[lang] && translations[lang][key]) {\n          element.textContent = translations[lang][key];\n        }\n      });\n      \n      // Update title\n      if (translations[lang] && translations[lang].title) {\n        document.title = translations[lang].title;\n      }\n    }\n    \n    // Initialize language on page load\n    document.addEventListener('DOMContentLoaded', function() {\n      const savedLang = localStorage.getItem('language') || 'de';\n      setLanguage(savedLang);\n    });\n  </script>\n</body>\n</html>\n";
+
+#endif // __INDEX_HTML_H__

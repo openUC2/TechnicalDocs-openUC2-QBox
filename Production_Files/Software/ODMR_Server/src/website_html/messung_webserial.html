@@ -6,7 +6,7 @@
     <title>NV Experimente - Messung durchführen</title>
 
     <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/bootstrap.min.css" rel="stylesheet">
 
     <!-- Brand palette ---------------------------------------------------------->
     <style>
@@ -31,19 +31,77 @@
       footer{ background: var(--uc2-blue); color:#fff; }
       
       /* Custom styles for this page */
+      body {
+        overflow-x: hidden;
+      }
+      
+      .container-fluid {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      #measurementTabContent {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .tab-pane {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      
       .grid-container {
           display: grid;
           grid-template-columns: 1fr 300px;
           gap: 1rem;
           margin: auto;
           padding: 0;
+          flex: 1;
+          min-height: 0;
       }
       .grid1 {
           grid-area: 1 / 1 / 4 / 2;
           padding: 1rem;
+          height: 100%;
+          min-height: 0;
       }
       .grid2, .grid3, .grid4, .grid5, .grid6 {
           padding: 1rem;
+      }
+      
+      /* Fixed height containers for measurement sections */
+      .measurement-section {
+        max-height: 50vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      
+      .measurement-history-section {
+        max-height: 40vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        margin-top: 1rem;
+      }
+      
+      .table-responsive {
+        max-height: 35vh;
+        overflow-y: auto;
+        overflow-x: auto;
+      }
+      
+      /* Sticky table header */
+      .table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: var(--bs-dark) !important;
       }
       .Button {
           background-color: var(--uc2-blue);
@@ -56,6 +114,18 @@
       }
       .Button:hover {
           background-color: var(--uc2-turquoise);
+      }
+      .StopButton {
+          background-color: #dc3545 !important; /* Red color for stop */
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          margin: 4px;
+          border-radius: 4px;
+          cursor: pointer;
+      }
+      .StopButton:hover {
+          background-color: #c82333 !important; /* Darker red on hover */
       }
       .inputField {
           background-color: #fff;
@@ -72,11 +142,58 @@
       }
       .svg {
           width: 100%;
-          height: auto;
+          height: calc(100vh - 300px);
+          max-height: 600px;
       }
+      
+      /* Measurement table styles */
+      .measurement-row:hover {
+          background-color: var(--uc2-light);
+      }
+      
+      /* Live chart styles */
+      #liveChart {
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background-color: #fff;
+          display: block;
+      }
+      
+      /* Tab content spacing */
+      .tab-pane .row {
+          height: 100%;
+      }
+      
+      .card.h-100 {
+          height: 100% !important;
+      }
+      
+      /* Ensure cards fill available space */
+      .card-body {
+          display: flex;
+          flex-direction: column;
+      }
+      
+      .card-body canvas {
+          flex: 1;
+      }
+      
+      /* Responsive design improvements */
       @media (max-width: 768px) {
           .grid-container {
               grid-template-columns: 1fr;
+              height: auto;
+          }
+          .input-group .btn {
+              padding: 0.25rem 0.5rem;
+              font-size: 0.875rem;
+          }
+          .svg {
+              height: 400px;
+          }
+          .tab-pane {
+              height: auto;
+              overflow: visible;
           }
       }
     </style>
@@ -97,7 +214,7 @@
       var _YMax = 0,
         _YMin = 36000;
       const fMin = 2200,
-        fMax = 3600,
+        fMax = 4400,
         stepMin = 0.2,
         stepMax = 5;
       const IntMin = 0,
@@ -106,6 +223,7 @@
       const XPlotSize = 1600,
         YPlotSize = 800;
       var AutoMessung = 0;
+      var MessungRunning = false; // Track if measurement is running
       const PlotViewBox =
         "-200 -" +
         (YPlotSize + 75) +
@@ -136,23 +254,39 @@
 
     <script>
       async function MessungStarten() {
+        if (MessungRunning) {
+          // Stop measurement
+          MessungRunning = false;
+          ToggleStart(1);
+          return;
+        }
+        
+        MessungRunning = true;
         ToggleStart(0);
         deleteScaleGroup("DataGroupID");
         AngezeigteDatenpunkte = [];
         (_YMax = 0), (_YMin = 36000);
         prepareFreqs();
         prepareXSkala(fBegin, fEnd);
-        while (Frequenzen.length != 0) {
+        
+        while (Frequenzen.length != 0 && MessungRunning) {
           var response = await freqMessung(Frequenzen.shift());
+          if (!MessungRunning) break; // Check if stopped during measurement
+          
           Messreihe.push(response);
           _YMin = Math.min(_YMin, response[1] - 100);
           _YMax = Math.max(_YMax, response[1] + 100);
           autoScale();
           drawCircle(response, +200, "black");
         }
-        addDataGroup();
+        
+        if (MessungRunning) { // Only add data if measurement completed
+          addDataGroup();
+        }
         Messreihe = [];
-        if (AutoMessung) {
+        MessungRunning = false;
+        
+        if (AutoMessung && MessungRunning) {
           setTimeout(MessungStarten, 600);
         } else {
           ToggleStart(1);
@@ -246,9 +380,11 @@
         if (OnOff) {
           StartButton.disabled = false;
           StartButton.value = "Messung starten";
+          StartButton.className = "Button StartButton";
         } else {
-          StartButton.disabled = true;
-          StartButton.value = "Messung läuft";
+          StartButton.disabled = false; // Keep enabled to allow stopping
+          StartButton.value = "Messung stoppen";
+          StartButton.className = "Button StopButton";
         }
       }
       function DownloadCSV() {
@@ -576,51 +712,135 @@
 
       function addDataGroup() {
         MessreihenHerunterladen.push(Messreihe);
-        const Eingabefeld = ById("Messungen");
-        let NR = MessreihenHerunterladen.length - 1;
-        var row = Eingabefeld.insertRow(NR);
-        row.id = "Messreihe" + String(NR);
-        var _Cells = [];
-        let b_av = 0;
-        for (let i = 0; i < 7; i++) {
-          _Cells[i] = row.insertCell(i);
+        const tableBody = ById("Messungen");
+        const noMeasurementsDiv = document.getElementById("noMeasurements");
+        
+        // Hide "no measurements" message
+        if (noMeasurementsDiv) {
+          noMeasurementsDiv.style.display = "none";
         }
+        
+        let NR = MessreihenHerunterladen.length - 1;
+        var row = tableBody.insertRow(NR);
+        row.id = "Messreihe" + String(NR);
+        row.className = "measurement-row";
+        
+        var cells = [];
+        let b_av = 0;
+        for (let i = 0; i < 9; i++) {
+          cells[i] = row.insertCell(i);
+        }
+        
+        // Calculate average B field
         for (let i = 0; i < Messreihe.length; i++) {
           b_av += Messreihe[i][2];
         }
-        b_av = Math.round(b_av / Messreihe.length);
-        var inhalt = [
-          MessreihenHerunterladen.length,
-          fBegin,
-          fEnd,
-          fStep,
-          b_av,
-        ];
+        b_av = Math.round((b_av / Messreihe.length) * 1000) / 1000; // Round to 3 decimals
+        
+        // Create timestamp
+        const now = new Date();
+        const timestamp = now.toLocaleString('de-DE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        // Checkbox
         var check = document.createElement("input");
         check.type = "checkbox";
-        check.class = "TableCheckBox";
-        _Cells[0].appendChild(check);
-        for (let i = 0; i < 5; i++) {
-          _Cells[i + 1].innerHTML = String(inhalt[i]);
+        check.className = "form-check-input measurement-checkbox";
+        check.setAttribute("data-measurement-id", NR);
+        cells[0].appendChild(check);
+        
+        // Fill data cells
+        var content = [
+          MessreihenHerunterladen.length,
+          fBegin.toFixed(1),
+          fEnd.toFixed(1),
+          fStep.toFixed(1),
+          b_av.toFixed(3),
+          Messreihe.length,
+          timestamp
+        ];
+        
+        for (let i = 0; i < content.length; i++) {
+          cells[i + 1].innerHTML = String(content[i]);
         }
-        var BTN1 = document.createElement("button");
-        BTN1.innerHTML = "Messreihe Löschen";
-        BTN1.type = "button";
-        _Cells[6].appendChild(BTN1);
-        BTN1.addEventListener("click", () => {
-          row.remove();
-          MessreihenHerunterladen.splice(NR, 1);
+        
+        // Actions cell with button group
+        const actionGroup = document.createElement("div");
+        actionGroup.className = "btn-group btn-group-sm";
+        
+        // Show button
+        var showBtn = document.createElement("button");
+        showBtn.innerHTML = '<i class="bi bi-eye"></i> Anzeigen';
+        showBtn.className = "btn btn-primary btn-sm";
+        showBtn.type = "button";
+        showBtn.addEventListener("click", () => MessreiheAnzeigen(NR, row.id));
+        actionGroup.appendChild(showBtn);
+        
+        // Color picker
+        var colorInput = document.createElement("input");
+        colorInput.type = "color";
+        colorInput.className = "btn btn-outline-secondary btn-sm";
+        colorInput.value = getRandomColor();
+        colorInput.title = "Farbe ändern";
+        colorInput.style.width = "40px";
+        actionGroup.appendChild(colorInput);
+        
+        // Delete button
+        var deleteBtn = document.createElement("button");
+        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+        deleteBtn.className = "btn btn-danger btn-sm";
+        deleteBtn.type = "button";
+        deleteBtn.title = "Löschen";
+        deleteBtn.addEventListener("click", () => {
+          if (confirm('Messung wirklich löschen?')) {
+            row.remove();
+            MessreihenHerunterladen.splice(NR, 1);
+            updateMeasurementNumbers();
+            checkEmptyTable();
+          }
         });
-        var BTN2 = document.createElement("button");
-        BTN2.innerHTML = "Anzeigen";
-        BTN2.type = "button";
-        _Cells[6].appendChild(BTN2);
-        BTN2.addEventListener("click", () => MessreiheAnzeigen(NR, row.id));
-        var BTN3 = document.createElement("input");
-        BTN3.type = "color";
-        BTN3.value = "#ff0000";
-        _Cells[6].appendChild(BTN3);
+        actionGroup.appendChild(deleteBtn);
+        
+        cells[8].appendChild(actionGroup);
       }
+      
+      function getRandomColor() {
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
+      
+      function updateMeasurementNumbers() {
+        const rows = document.querySelectorAll('.measurement-row');
+        rows.forEach((row, index) => {
+          row.cells[1].textContent = index + 1;
+          row.id = "Messreihe" + index;
+        });
+      }
+      
+      function checkEmptyTable() {
+        const tableBody = ById("Messungen");
+        const noMeasurementsDiv = document.getElementById("noMeasurements");
+        
+        if (tableBody.rows.length === 0 && noMeasurementsDiv) {
+          noMeasurementsDiv.style.display = "block";
+        }
+      }
+      
+      // Select all functionality
+      document.addEventListener('DOMContentLoaded', function() {
+        const selectAllCheckbox = document.getElementById('selectAll');
+        if (selectAllCheckbox) {
+          selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.measurement-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+          });
+        }
+      });
     </script>
   </head>
 
@@ -650,386 +870,764 @@
     <div class="container-fluid">
       <h1 class="display-6 mb-4 text-center">Messung der Lichtintensität in Abhängigkeit von der Frequenz</h1>
       
-      <main class="Block">
-      <div class="grid-container">
-        <div class="grid1" id="fullPlot">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            style="
-              border: 1px solid rgb(255, 255, 255);
-              background-color: #ffffff;
-            "
-            id="PlotSVGID"
-            class="svg"
-          >
-            <line
-              id="XAxisID"
-              x1="-20"
-              x2="1700"
-              y1="50"
-              y2="50"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <line
-              x1="-50"
-              x2="-30"
-              y1="50"
-              y2="50"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <line
-              x1="-35"
-              x2="-25"
-              y1="65"
-              y2="35"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <line
-              x1="-25"
-              x2="-15"
-              y1="65"
-              y2="35"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <polyline
-              points="1680,40 1700,50 1680,60"
-              fill="none"
-              stroke="black"
-              stroke-width="3"
-            />
-            <text
-              x="1690"
-              y="90"
-              text-anchor="middle"
-              alignment-baseline="Central"
-              style="font: 35px Calibri"
-            >
-              <tspan
-                alignment-baseline="Central"
-                style="font: italic 35px Calibri"
+      <!-- ░░ Tabs Navigation ░░------------------------------------------------- -->
+      <ul class="nav nav-tabs mb-4" id="measurementTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="sweep-tab" data-bs-toggle="tab" 
+                  data-bs-target="#sweep-pane" type="button" role="tab">
+            Frequenz-Sweep
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="live-tab" data-bs-toggle="tab" 
+                  data-bs-target="#live-pane" type="button" role="tab">
+            Live Monitor
+          </button>
+        </li>
+      </ul>
+
+      <!-- ░░ Tab Content ░░---------------------------------------------------- -->
+      <div class="tab-content" id="measurementTabContent">
+        
+        <!-- ░░ Frequency Sweep Tab ░░----------------------------------------- -->
+        <div class="tab-pane fade show active" id="sweep-pane" role="tabpanel">
+          <main class="Block">
+          <div class="grid-container">
+            <div class="grid1" id="fullPlot">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                style="
+                  border: 1px solid rgb(255, 255, 255);
+                  background-color: #ffffff;
+                "
+                id="PlotSVGID"
+                class="svg"
               >
-                f
-              </tspan>
-              <tspan alignment-baseline="Central" style="font: 35px Calibri">
-                /MHz
-              </tspan>
-            </text>
+                <line
+                  id="XAxisID"
+                  x1="-20"
+                  x2="1700"
+                  y1="50"
+                  y2="50"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-50"
+                  x2="-30"
+                  y1="50"
+                  y2="50"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-35"
+                  x2="-25"
+                  y1="65"
+                  y2="35"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-25"
+                  x2="-15"
+                  y1="65"
+                  y2="35"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <polyline
+                  points="1680,40 1700,50 1680,60"
+                  fill="none"
+                  stroke="black"
+                  stroke-width="3"
+                />
+                <text
+                  x="1690"
+                  y="90"
+                  text-anchor="middle"
+                  alignment-baseline="Central"
+                  style="font: 35px Calibri"
+                >
+                  <tspan
+                    alignment-baseline="Central"
+                    style="font: italic 35px Calibri"
+                  >
+                    f
+                  </tspan>
+                  <tspan alignment-baseline="Central" style="font: 35px Calibri">
+                    /MHz
+                  </tspan>
+                </text>
 
-            <line
-              id="YAxisID"
-              x1="-50"
-              x2="-50"
-              y1="10"
-              y2="-855"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <line
-              x1="-50"
-              x2="-50"
-              y1="50"
-              y2="20"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <line
-              x1="-35"
-              x2="-65"
-              y1="5"
-              y2="15"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <line
-              x1="-35"
-              x2="-65"
-              y1="15"
-              y2="25"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <polyline
-              points="-60,-835 -50,-855 -40,-835"
-              fill="none"
-              stroke="black"
-              stroke-width="3"
-            />
-            <text
-              x="-85"
-              y="-845"
-              text-anchor="middle"
-              alignment-baseline="Central"
-              style="font: italic 35px Calibri"
-            >
-              I
-            </text>
+                <line
+                  id="YAxisID"
+                  x1="-50"
+                  x2="-50"
+                  y1="10"
+                  y2="-855"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-50"
+                  x2="-50"
+                  y1="50"
+                  y2="20"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-35"
+                  x2="-65"
+                  y1="5"
+                  y2="15"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-35"
+                  x2="-65"
+                  y1="15"
+                  y2="25"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <polyline
+                  points="-60,-835 -50,-855 -40,-835"
+                  fill="none"
+                  stroke="black"
+                  stroke-width="3"
+                />
+                <text
+                  x="-85"
+                  y="-845"
+                  text-anchor="middle"
+                  alignment-baseline="Central"
+                  style="font: italic 35px Calibri"
+                >
+                  I
+                </text>
 
-            <line
-              x1="-85"
-              x2="-50"
-              y1="85"
-              y2="50"
-              stroke="#000000"
-              stroke-width="3"
-            />
-            <text
-              x="-85"
-              y="100"
-              text-anchor="end"
-              alignment-baseline="Central"
-              style="font: 30px Calibri"
-            >
-              0
-            </text>
-            <g id="DataGroupID" />
-            <g id="XScaleGroupID" />
-            <g id="YScaleGroupID" />
-            <script>
-              const plot=ById("PlotSVGID"); plot.setAttribute("viewBox",
-              PlotViewBox);
-            </script>
-          </svg>
-        </div>
-        <div class="grid2">
-          <input
-            type="button"
-            class="Button Laserbutton"
-            id="Laser"
-            value="Laserdiode einschalten"
-          />
-        </div>
-        <div class="grid3">
-          <div
-            class="inputField inputFieldWide"
-            id="Y-Controll"
-            style="background-color: #fff"
-          >
-            <label for="YMid1">Y-Abschnitt: </label>
-            <input
-              type="text"
-              id="YMid1"
-              value="18000"
-              onchange="YMidContr(this);adaptYScale();"
-            />
-            <input
-              type="range"
-              class="slider"
-              id="YMid2"
-              min="9000"
-              max="27000"
-              step="100"
-              value="18000"
-              oninput="YMidContr(this);adaptYScale();"
-            />
-            <input
-              type="checkbox"
-              id="YMidAuto"
-              checked="true"
-              onchange="autoScale()"
-              style="display: block"
-            />
+                <line
+                  x1="-85"
+                  x2="-50"
+                  y1="85"
+                  y2="50"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <text
+                  x="-85"
+                  y="100"
+                  text-anchor="end"
+                  alignment-baseline="Central"
+                  style="font: 30px Calibri"
+                >
+                  0
+                </text>
+                <g id="DataGroupID" />
+                <g id="XScaleGroupID" />
+                <g id="YScaleGroupID" />
+                <script>
+                  const plot=ById("PlotSVGID"); plot.setAttribute("viewBox",
+                  PlotViewBox);
+                </script>
+              </svg>
+            </div>
+            <div class="grid2">
+              <input
+                type="button"
+                class="Button Laserbutton"
+                id="Laser"
+                value="Laserdiode einschalten"
+              />
+            </div>
+            <div class="grid3">
+              <div
+                class="inputField inputFieldWide"
+                id="Y-Controll"
+                style="background-color: #fff"
+              >
+                <label for="YMid1">Y-Abschnitt: </label>
+                <input
+                  type="text"
+                  id="YMid1"
+                  value="18000"
+                  onchange="YMidContr(this);adaptYScale();"
+                />
+                <input
+                  type="range"
+                  class="slider"
+                  id="YMid2"
+                  min="9000"
+                  max="27000"
+                  step="100"
+                  value="18000"
+                  oninput="YMidContr(this);adaptYScale();"
+                />
+                <input
+                  type="checkbox"
+                  id="YMidAuto"
+                  checked="true"
+                  onchange="autoScale()"
+                  style="display: block"
+                />
+              </div>
+              <div
+                class="inputField inputFieldWide"
+                id="YR-Controll"
+                style="background-color: #fff"
+              >
+                <label for="YRange2">Y-Bereich: </label>
+                <input
+                  type="text"
+                  id="YRange1"
+                  value="18000"
+                  onchange="YRangeContr(this);adaptYScale();"
+                />
+                <input
+                  type="range"
+                  class="slider"
+                  id="YRange2"
+                  min="0"
+                  max="8.5"
+                  step="0.1"
+                  value="7"
+                  oninput="YRangeContr2(this);adaptYScale();"
+                />
+                <input
+                  type="checkbox"
+                  id="YRangeAuto"
+                  checked="true"
+                  onchange="autoScale()"
+                  style="display: flex"
+                />
+              </div>
+            </div>
+
+            <div class="grid4">
+              <input
+                type="button"
+                class="Button"
+                id="ConnectSerial"
+                value="Serial verbinden"
+              />
+              <input
+                type="button"
+                class="Button StartButton"
+                id="StartStop"
+                value="Messung starten"
+              />
+              <input
+                type="button"
+                class="Button Toggle"
+                id="AutoMessung"
+                value="Einzelmessung"
+              />
+            </div>
+
+            <div class="gridb1"></div>
           </div>
-          <div
-            class="inputField inputFieldWide"
-            id="YR-Controll"
-            style="background-color: #fff"
-          >
-            <label for="YRange2">Y-Bereich: </label>
-            <input
-              type="text"
-              id="YRange1"
-              value="18000"
-              onchange="YRangeContr(this);adaptYScale();"
-            />
-            <input
-              type="range"
-              class="slider"
-              id="YRange2"
-              min="0"
-              max="8.5"
-              step="0.1"
-              value="7"
-              oninput="YRangeContr2(this);adaptYScale();"
-            />
-            <input
-              type="checkbox"
-              id="YRangeAuto"
-              checked="true"
-              onchange="autoScale()"
-              style="display: flex"
-            />
+        </div>
+
+        <!-- ░░ Live Monitor Tab ░░-------------------------------------------- -->
+        <div class="tab-pane fade" id="live-pane" role="tabpanel">
+          <div class="row h-100">
+            <div class="col-md-9">
+              <div class="card h-100">
+                <div class="card-header">
+                  <h5 class="mb-0">Live Intensität Monitor</h5>
+                </div>
+                <div class="card-body p-2">
+                  <canvas id="liveChart" class="w-100" style="height: 60vh;"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-header">
+                  <h5 class="mb-0">Live Kontrolle</h5>
+                </div>
+                <div class="card-body">
+                  <div class="mb-3">
+                    <button id="startLiveBtn" class="btn btn-success w-100">
+                      Live Monitor starten
+                    </button>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label small">Messintervall:</label>
+                    <select id="liveInterval" class="form-select form-select-sm">
+                      <option value="100">100ms</option>
+                      <option value="250">250ms</option>
+                      <option value="500" selected>500ms</option>
+                      <option value="1000">1s</option>
+                    </select>
+                  </div>
+                  <div class="row text-center">
+                    <div class="col-12 mb-2">
+                      <div class="border rounded p-2">
+                        <small class="text-muted d-block">Intensität</small>
+                        <div id="liveIntensity" class="h4 text-primary mb-0">---</div>
+                      </div>
+                    </div>
+                    <div class="col-12 mb-2">
+                      <div class="border rounded p-2">
+                        <small class="text-muted d-block">B-Feld (T)</small>
+                        <div id="liveBField" class="h4 text-info mb-0">---</div>
+                      </div>
+                    </div>
+                    <div class="col-12 mb-2">
+                      <div class="border rounded p-2">
+                        <small class="text-muted d-block">Messungen</small>
+                        <div id="liveCount" class="h4 text-success mb-0">0</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <button id="resetLiveBtn" class="btn btn-warning btn-sm w-100">
+                      Daten zurücksetzen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div class="grid4">
-          <input
-            type="button"
-            class="Button"
-            id="ConnectSerial"
-            value="Serial verbinden"
-          />
-          <input
-            type="button"
-            class="Button StartButton"
-            id="StartStop"
-            value="Messung starten"
-          />
-          <input
-            type="button"
-            class="Button Toggle"
-            id="AutoMessung"
-            value="Einzelmessung"
-          />
-        </div>
-
-        <div class="gridb1"></div>
       </div>
 
-      <form>
-        <div>
-          <input
-            type="button"
-            class="Button setValue"
-            id="fB-100"
-            value="-100"
-          />
-          <input type="button" class="Button setValue" id="fB-10" value="-10" />
-          <div class="inputField">
-            <label for="f_begin">Startfrequenz: </label>
-            <input
-              type="number"
-              name="Startfrequenz"
-              id="f_begin"
-              value="2820"
-              min="2200"
-              max="3600"
-              step="0.1"
-            />
+      <!-- ░░ Scan Range Controls ░░------------------------------------------- -->
+      <div class="card mt-2 measurement-section">
+        <div class="card-header py-2">
+          <h6 class="mb-0">Scan-Parameter einstellen</h6>
+        </div>
+        <div class="card-body py-2">
+          <div class="row g-2">
+            <!-- Start Frequency -->
+            <div class="col-md-4">
+              <label for="f_begin" class="form-label small">Startfrequenz (MHz)</label>
+              <div class="input-group input-group-sm">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-100', 'f_begin')">-100</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-10', 'f_begin')">-10</button>
+                <input type="number" class="form-control form-control-sm" id="f_begin" 
+                       value="2820" min="2200" max="3600" step="0.1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('10', 'f_begin')">+10</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('100', 'f_begin')">+100</button>
+              </div>
+            </div>
+            
+            <!-- End Frequency -->
+            <div class="col-md-4">
+              <label for="f_end" class="form-label small">Endfrequenz (MHz)</label>
+              <div class="input-group input-group-sm">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-100', 'f_end')">-100</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-10', 'f_end')">-10</button>
+                <input type="number" class="form-control form-control-sm" id="f_end" 
+                       value="2920" min="2200" max="3600" step="0.1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('10', 'f_end')">+10</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('100', 'f_end')">+100</button>
+              </div>
+            </div>
+            
+            <!-- Step Size -->
+            <div class="col-md-4">
+              <label for="f_step" class="form-label small">Schrittweite (MHz)</label>
+              <div class="input-group input-group-sm">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-1', 'f_step')">-1</button>
+                <input type="number" class="form-control form-control-sm" id="f_step" 
+                       value="2.0" min="0.1" max="5" step="0.1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('1', 'f_step')">+1</button>
+              </div>
+            </div>
           </div>
-          <input type="button" class="Button setValue" id="fB10" value="+10" />
-          <input
-            type="button"
-            class="Button setValue"
-            id="fB100"
-            value="+100"
-          />
-        </div>
-
-        <div>
-          <input
-            type="button"
-            class="Button setValue"
-            id="fE-100"
-            value="-100"
-          />
-          <input type="button" class="Button setValue" id="fE-10" value="-10" />
-          <div class="inputField">
-            <label for="f_end">Endfrequenz: </label>
-            <input
-              type="number"
-              name="Endfrequenz"
-              id="f_end"
-              value="2920"
-              min="2200"
-              max="3600"
-              step="0.1"
-            />
+          
+          <div class="row mt-2">
+            <div class="col-md-6">
+              <button type="button" class="btn btn-primary btn-sm" id="sendData" disabled>
+                Daten übernehmen
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm ms-1" id="f_Reset">
+                Zurücksetzen
+              </button>
+            </div>
+            <div class="col-md-6 text-end">
+              <button type="button" class="btn btn-success btn-sm" id="MessreiheHerunterladen">
+                Download CSV
+              </button>
+              <button type="button" class="btn btn-warning btn-sm ms-1" id="Clear">
+                Leeren
+              </button>
+            </div>
           </div>
-          <input type="button" class="Button setValue" id="fE10" value="+10" />
-          <input
-            type="button"
-            class="Button setValue"
-            id="fE100"
-            value="+100"
-          />
         </div>
+      </div>
 
-        <div>
-          <input type="button" class="Button setValue" id="fs-1" value="-1" />
-          <div class="inputField">
-            <label for="f_step">Schrittweite: </label>
-            <input
-              type="number"
-              name="Schrittgroesse"
-              id="f_step"
-              value="2.0"
-              min="0.1"
-              max="5"
-              step="0.1"
-            />
+      <!-- ░░ Measurement History ░░------------------------------------------- -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <h5 class="mb-0">Durchgeführte Messungen</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead class="table-dark">
+                <tr>
+                  <th width="40"><input type="checkbox" id="selectAll" title="Alle auswählen"></th>
+                  <th width="60">#</th>
+                  <th width="120">f<sub>Begin</sub> (MHz)</th>
+                  <th width="120">f<sub>End</sub> (MHz)</th>
+                  <th width="100">Δf (MHz)</th>
+                  <th width="100">B (T)</th>
+                  <th width="120">Datenpunkte</th>
+                  <th width="150">Zeitstempel</th>
+                  <th>Aktionen</th>
+                </tr>
+              </thead>
+              <tbody id="Messungen">
+                <!-- Dynamic content will be inserted here -->
+              </tbody>
+            </table>
+            <div id="noMeasurements" class="text-center text-muted py-3" style="display: none;">
+              <i class="bi bi-clipboard-data"></i>
+              <p class="mb-0">Noch keine Messungen durchgeführt</p>
+            </div>
           </div>
-          <input type="button" class="Button setValue" id="fs1" value="+1" />
         </div>
-        <div>
-          <input
-            type="button"
-            class="Button setValue SaveData"
-            id="sendData"
-            disabled="true"
-            value="Daten übernehmen"
-          />
-          <input
-            type="button"
-            class="Button setValue SaveData"
-            id="f_Reset"
-            value="Daten zurücksetzen"
-          />
-        </div>
-        <div>
-          <input
-            type="button"
-            class="Button"
-            id="MessreiheHerunterladen"
-            value="Messungen herunterladen"
-          />
-          <input
-            type="button"
-            class="Button"
-            id="Clear"
-            value="Anzeige leeren"
-          />
-        </div>
-      </form>
-
-      <form>
-        <h2>Durchgeführte Messungen</h2>
-        <div>
-          <table>
-            <tr>
-              <th width="25"></th>
-              <th width="50">#</th>
-              <th width="100">f<sub>Begin</sub></th>
-              <th width="100">f<sub>End</sub></th>
-              <th width="100">&Delta;f</th>
-              <th width="100">B</th>
-              <th>Anzeigen</th>
-            </tr>
-            <tbody id="Messungen"></tbody>
-          </table>
-        </div>
-      </form>
+      </div>
+    </main>
       <script>
         /* Webserial Stuff */
         /* ---------- Web-Serial glue ---------- */
+        
+        // Check if WebSerial should be enabled
+        let webSerialEnabled = true; // Enable by default
+        
+        // Live monitoring variables
+        let liveMonitorActive = false;
+        let liveChart = null;
+        let liveData = [];
+        let liveCount = 0;
+        const maxLiveDataPoints = 200;
+        
+        async function checkWebSerialAvailability() {
+          // Simply enable WebSerial - remove the server check since it may not exist
+          webSerialEnabled = true;
+          
+          // Check if browser supports WebSerial
+          const connectButton = document.getElementById("ConnectSerial");
+          if (!navigator.serial) {
+            connectButton.disabled = true;
+            connectButton.value = "WebSerial nicht unterstützt";
+            connectButton.title = "Ihr Browser unterstützt WebSerial nicht";
+            
+            // Add warning message
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'alert alert-warning mt-2';
+            warningDiv.innerHTML = '<strong>Hinweis:</strong> Ihr Browser unterstützt die WebSerial API nicht. Bitte verwenden Sie Chrome/Edge oder die "Messung (on Device)" Seite.';
+            connectButton.parentNode.appendChild(warningDiv);
+            webSerialEnabled = false;
+          }
+        }
+        
+        // Initialize live chart
+        function initLiveChart() {
+          const canvas = document.getElementById('liveChart');
+          if (!canvas) return;
+          
+          // Set canvas size to fit container
+          const container = canvas.parentElement;
+          canvas.width = container.clientWidth - 20;
+          canvas.height = container.clientHeight - 20;
+          
+          const ctx = canvas.getContext('2d');
+          
+          liveChart = {
+            canvas: canvas,
+            ctx: ctx,
+            data: [],
+            margin: { top: 20, right: 50, bottom: 50, left: 80 },
+            
+            draw: function() {
+              const { width, height } = this.canvas;
+              const { margin } = this;
+              const plotWidth = width - margin.left - margin.right;
+              const plotHeight = height - margin.top - margin.bottom;
+              
+              this.ctx.clearRect(0, 0, width, height);
+              
+              if (this.data.length < 2) {
+                // Show "waiting for data" message
+                this.ctx.fillStyle = '#666';
+                this.ctx.font = '16px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('Warten auf Daten...', width/2, height/2);
+                return;
+              }
+              
+              // Find min/max for scaling
+              const intensities = this.data.map(d => d.intensity);
+              const minI = Math.min(...intensities);
+              const maxI = Math.max(...intensities);
+              const range = maxI - minI || 1;
+              const padding = range * 0.1; // 10% padding
+              const yMin = minI - padding;
+              const yMax = maxI + padding;
+              const yRange = yMax - yMin;
+              
+              // Draw background
+              this.ctx.fillStyle = '#f8f9fa';
+              this.ctx.fillRect(margin.left, margin.top, plotWidth, plotHeight);
+              
+              // Draw grid
+              this.ctx.strokeStyle = '#e0e0e0';
+              this.ctx.lineWidth = 1;
+              
+              // Horizontal grid lines
+              for (let i = 0; i <= 10; i++) {
+                const y = margin.top + (plotHeight * i / 10);
+                this.ctx.beginPath();
+                this.ctx.moveTo(margin.left, y);
+                this.ctx.lineTo(margin.left + plotWidth, y);
+                this.ctx.stroke();
+                
+                // Y-axis labels
+                const value = yMax - (yRange * i / 10);
+                this.ctx.fillStyle = '#666';
+                this.ctx.font = '12px Arial';
+                this.ctx.textAlign = 'right';
+                this.ctx.fillText(Math.round(value), margin.left - 10, y + 4);
+              }
+              
+              // Vertical grid lines
+              const timeSpan = this.data[this.data.length - 1].timestamp - this.data[0].timestamp;
+              for (let i = 0; i <= 5; i++) {
+                const x = margin.left + (plotWidth * i / 5);
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, margin.top);
+                this.ctx.lineTo(x, margin.top + plotHeight);
+                this.ctx.stroke();
+                
+                // X-axis labels (time)
+                if (timeSpan > 0) {
+                  const timeOffset = (timeSpan * i / 5);
+                  const time = new Date(this.data[0].timestamp + timeOffset);
+                  const timeStr = time.toLocaleTimeString('de-DE', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                  });
+                  this.ctx.fillStyle = '#666';
+                  this.ctx.font = '10px Arial';
+                  this.ctx.textAlign = 'center';
+                  this.ctx.fillText(timeStr, x, height - 10);
+                }
+              }
+              
+              // Draw data line
+              this.ctx.strokeStyle = '#023773';
+              this.ctx.lineWidth = 2;
+              this.ctx.beginPath();
+              
+              const startTime = this.data[0].timestamp;
+              const endTime = this.data[this.data.length - 1].timestamp;
+              const timeRange = endTime - startTime || 1;
+              
+              for (let i = 0; i < this.data.length; i++) {
+                const x = margin.left + ((this.data[i].timestamp - startTime) / timeRange) * plotWidth;
+                const y = margin.top + plotHeight - ((this.data[i].intensity - yMin) / yRange) * plotHeight;
+                
+                if (i === 0) {
+                  this.ctx.moveTo(x, y);
+                } else {
+                  this.ctx.lineTo(x, y);
+                }
+              }
+              this.ctx.stroke();
+              
+              // Draw current value point
+              if (this.data.length > 0) {
+                const lastPoint = this.data[this.data.length - 1];
+                const x = margin.left + plotWidth;
+                const y = margin.top + plotHeight - ((lastPoint.intensity - yMin) / yRange) * plotHeight;
+                
+                this.ctx.fillStyle = '#85b918';
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                this.ctx.fill();
+              }
+              
+              // Draw axes
+              this.ctx.strokeStyle = '#333';
+              this.ctx.lineWidth = 2;
+              this.ctx.beginPath();
+              // Y-axis
+              this.ctx.moveTo(margin.left, margin.top);
+              this.ctx.lineTo(margin.left, margin.top + plotHeight);
+              // X-axis
+              this.ctx.moveTo(margin.left, margin.top + plotHeight);
+              this.ctx.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+              this.ctx.stroke();
+              
+              // Axis labels
+              this.ctx.fillStyle = '#333';
+              this.ctx.font = '14px Arial';
+              this.ctx.textAlign = 'center';
+              this.ctx.fillText('Zeit', width/2, height - 5);
+              
+              this.ctx.save();
+              this.ctx.translate(15, height/2);
+              this.ctx.rotate(-Math.PI/2);
+              this.ctx.fillText('Intensität', 0, 0);
+              this.ctx.restore();
+            }
+          };
+          
+          // Handle window resize
+          window.addEventListener('resize', () => {
+            setTimeout(() => {
+              const container = canvas.parentElement;
+              canvas.width = container.clientWidth - 20;
+              canvas.height = container.clientHeight - 20;
+              if (liveChart && liveChart.data.length > 0) {
+                liveChart.draw();
+              }
+            }, 100);
+          });
+        }
+        
+        // Live monitoring functions
+        async function startLiveMonitor() {
+          if (!writer) {
+            alert('Bitte erst Serial-Verbindung herstellen');
+            return;
+          }
+          
+          const btn = document.getElementById('startLiveBtn');
+          if (liveMonitorActive) {
+            liveMonitorActive = false;
+            btn.textContent = 'Live Monitor starten';
+            btn.className = 'btn btn-success w-100';
+            return;
+          }
+          
+          liveMonitorActive = true;
+          btn.textContent = 'Live Monitor stoppen';
+          btn.className = 'btn btn-danger w-100';
+          
+          liveData = [];
+          liveCount = 0;
+          initLiveChart();
+          
+          // Start continuous monitoring
+          liveMonitorLoop();
+        }
+        
+        async function liveMonitorLoop() {
+          while (liveMonitorActive) {
+            // Use frequency 0 for live monitoring (current frequency setting)
+            const freq = 0;
+            
+            try {
+              const response = await freqMessung(freq);
+              const timestamp = Date.now();
+              liveCount++;
+              
+              // Update live displays
+              document.getElementById('liveIntensity').textContent = response[1];
+              document.getElementById('liveBField').textContent = response[2].toFixed(3);
+              document.getElementById('liveCount').textContent = liveCount;
+              
+              // Add to chart data
+              liveData.push({
+                timestamp: timestamp,
+                intensity: response[1],
+                bfield: response[2]
+              });
+              
+              // Keep only last N points
+              if (liveData.length > maxLiveDataPoints) {
+                liveData.shift();
+              }
+              
+              // Update chart
+              if (liveChart) {
+                liveChart.data = liveData;
+                liveChart.draw();
+              }
+              
+            } catch (error) {
+              console.error('Live monitoring error:', error);
+            }
+            
+            // Get interval from dropdown
+            const interval = parseInt(document.getElementById('liveInterval').value) || 500;
+            await new Promise(resolve => setTimeout(resolve, interval));
+          }
+        }
+        
+        function resetLiveData() {
+          liveData = [];
+          liveCount = 0;
+          document.getElementById('liveIntensity').textContent = '---';
+          document.getElementById('liveBField').textContent = '---';
+          document.getElementById('liveCount').textContent = '0';
+          
+          if (liveChart) {
+            liveChart.data = [];
+            liveChart.draw();
+          }
+        }
+        
+        async function setFrequency() {
+          if (!writer) {
+            alert('Bitte erst Serial-Verbindung herstellen');
+            return;
+          }
+          
+          const freq = parseFloat(document.getElementById('liveFreq').value);
+          await writer.write(enc.encode(`FREQ ${freq}\n`));
+        }
+        
         let port, writer, reader;
         const enc = new TextEncoder();
         const dec = new TextDecoder();
         const pending = new Map(); // freq → resolve()
 
         async function connectSerial() {
-          port = await navigator.serial.requestPort();
-          await port.open({ baudRate: 115200 });
-          writer = port.writable.getWriter();
-          reader = port.readable
-            .pipeThrough(new TextDecoderStream())
-            .pipeThrough(new TransformStream(new LineBreakTransformer()))
-            .getReader();
-          readLoop();
-          document.getElementById("ConnectSerial").value = "Verbunden";
+          if (!webSerialEnabled) {
+            alert('WebSerial ist auf diesem Interface nicht verfügbar.');
+            return;
+          }
+          
+          if (!navigator.serial) {
+            alert('WebSerial API wird von diesem Browser nicht unterstützt.');
+            return;
+          }
+          
+          try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 115200 });
+            writer = port.writable.getWriter();
+            reader = port.readable
+              .pipeThrough(new TextDecoderStream())
+              .pipeThrough(new TransformStream(new LineBreakTransformer()))
+              .getReader();
+            readLoop();
+            document.getElementById("ConnectSerial").value = "Verbunden";
+          } catch (error) {
+            console.error('Error connecting to serial:', error);
+            alert('Fehler beim Verbinden mit dem seriellen Port: ' + error.message);
+          }
         }
 
         async function readLoop() {
@@ -1177,17 +1775,10 @@
           ["f_Reset", fReset],
           ["StartStop", MessungStarten],
           ["AutoMessung", AutoToggle],
-          ["fB-100", () => addValue("-100", "f_begin")],
-          ["fB-10", () => addValue("-10", "f_begin")],
-          ["fB10", () => addValue("10", "f_begin")],
-          ["fB100", () => addValue("100", "f_begin")],
-          ["fE-100", () => addValue("-100", "f_end")],
-          ["fE-10", () => addValue("-10", "f_end")],
-          ["fE10", () => addValue("10", "f_end")],
-          ["fE100", () => addValue("100", "f_end")],
-          ["fs-1", () => addValue("-1", "f_step")],
-          ["fs1", () => addValue("1", "f_step")],
           ["Laser", LaserOn],
+          ["startLiveBtn", startLiveMonitor],
+          ["resetLiveBtn", resetLiveData],
+          ["setFreqBtn", setFrequency],
           [
             "Clear",
             () => {
@@ -1207,6 +1798,11 @@
         ClickListeners.forEach((element) =>
           ById(element[0]).addEventListener("click", element[1])
         );
+        
+        // Initialize WebSerial availability check
+        document.addEventListener('DOMContentLoaded', function() {
+          checkWebSerialAvailability();
+        });
       </script>
     </main>
     </div>
@@ -1218,6 +1814,6 @@
       </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/bootstrap.bundle.min.js"></script>
   </body>
 </html>
