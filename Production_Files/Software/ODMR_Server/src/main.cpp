@@ -16,6 +16,8 @@
 #include "website/messung_webserial_html.h"
 #include "website/justage_html.h"
 #include "website/infos_html.h"
+#include "website/bootstrap_css.h"
+#include "website/bootstrap_js.h"
 // #include "website/nvgitter_png.h"  // Excluded for size reasons
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
@@ -68,7 +70,7 @@ static const int SCL_PIN = D5; // GPIO_06
 
 // Wi-Fi credentials
 const char *SSID = "openUC2_ODMR";
-const char *PASSWORD = "";
+const char *PASSWORD = ""; // Empty password for open network
 
 // serial buffer for webserial comm.
 String rxBuf;
@@ -101,7 +103,7 @@ enum LEDStatus {
 
 LEDStatus currentLEDStatus = LED_NO_CLIENT;
 unsigned long lastLEDUpdate = 0;
-const unsigned long LED_UPDATE_INTERVAL = 50; // Update every 50ms
+const unsigned long LED_UPDATE_INTERVAL = 20; // Update every 20ms
 unsigned long lastIntensityRequest = 0;
 const unsigned long INTENSITY_TIMEOUT = 2000; // 2 seconds timeout
 
@@ -113,14 +115,14 @@ void setLEDStatus(LEDStatus status) {
 void updateLEDs() {
   if (millis() - lastLEDUpdate < LED_UPDATE_INTERVAL) return;
   lastLEDUpdate = millis();
-  
-  strip.setBrightness(127); // Set to 50% brightness as requested
+
+  strip.setBrightness(100); // Set to 50% brightness 
   
   switch (currentLEDStatus) {
     case LED_NO_CLIENT:
       // White color for no client connected
       for (int i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(255, 255, 255));
+        strip.setPixelColor(i, strip.Color(100,100,100)); // TODO: Make it glowing?
       }
       break;
       
@@ -137,14 +139,14 @@ void updateLEDs() {
     case LED_MEASURING:
       // Red color when measuring frequency sweep
       for (int i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(255, 0, 0));
+        strip.setPixelColor(i, strip.Color(100, 0, 0));// TODO: Make it glowing?
       }
       break;
       
     case LED_INTENSITY:
       // Blue color when monitoring intensity for alignment
       for (int i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(0, 0, 255));
+        strip.setPixelColor(i, strip.Color(0, 0, 100));// TODO: Make it glowing?
       }
       break;
   }
@@ -194,6 +196,16 @@ void handleFileRequest(const String &path)
   {
     contentType = "text/css";
     content = STYLE_CSS;
+  }
+  else if (actualPath == "/bootstrap.min.css")
+  {
+    contentType = "text/css";
+    content = BOOTSTRAP_CSS;
+  }
+  else if (actualPath == "/bootstrap.bundle.min.js")
+  {
+    contentType = "application/javascript";
+    content = BOOTSTRAP_JS;
   }
   else if (actualPath == "/NVGitter.png")
   {
@@ -350,7 +362,7 @@ void handleWebSerialCheck()
   
   String response = String("{\"webserial_enabled\":") + (!isLocalAP ? "true" : "false") + "}";
   server.send(200, "application/json", response);
-}
+
 }
 
 void i2c_scan()
@@ -399,8 +411,14 @@ void setup()
   digitalWrite(LASER_PIN, LOW);
 
   Serial.begin(115200);
-  delay(300); // Allow time to connect
+  delay(1500); // Allow time to connect
   Serial.println("Booting...");
+  
+  // Check WiFi capabilities
+  Serial.print("WiFi Mode capabilities: ");
+  Serial.println(WiFi.getMode());
+  Serial.print("MAC Address: ");
+  Serial.println(WiFi.macAddress());
 
   // Wi-Fi
   uint8_t mac[6];
@@ -408,23 +426,49 @@ void setup()
   String macID = String(mac[3], HEX) + String(mac[4], HEX) + String(mac[5], HEX);
   macID.toUpperCase();
   String dynamicSSID = "ODMR_" + macID;
+  Serial.print("SSID: ");
+  Serial.println(dynamicSSID);
+
+  // Ensure WiFi is completely disconnected and reset
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(1000);
+  
+  Serial.println("Starting WiFi Access Point...");
 
   // Wi-Fi Access Point starting
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(dynamicSSID.c_str(), PASSWORD);
+  
+  // Try setting WiFi configuration first
+  WiFi.softAPConfig(
+    IPAddress(192, 168, 4, 1),   // IP address of the AP
+    IPAddress(192, 168, 4, 1),   // Gateway
+    IPAddress(255, 255, 255, 0)  // Subnet mask
+  );
+  
+  // Start the Access Point with better error checking
+  bool apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD);
+  
+  if (apResult) {
+    Serial.print("Access Point started successfully with SSID: ");
+    Serial.println(dynamicSSID);
+    Serial.print("AP IP address: ");
+    Serial.println(WiFi.softAPIP());
+  } else {
+    Serial.println("Failed to start Access Point!");
+    Serial.println("Trying alternative configuration...");
+    
+    // Try with a different channel and explicit parameters
+    apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, 1, 0, 4);
+    if (apResult) {
+      Serial.println("Access Point started with alternative config");
+      Serial.print("AP IP address: ");
+      Serial.println(WiFi.softAPIP());
+    } else {
+      Serial.println("Access Point startup failed completely!");
+    }
+  }
 
-  //Serial.print("Access Point has started with SSID: ");
-  //Serial.println(dynamicSSID);
-
-  // SPIFFS no longer needed - using header files instead
-  // if (!SPIFFS.begin(true))
-  // {
-  //   Serial.println("SPIFFS mount failed");
-  // }
-  // else
-  // {
-  //   Serial.println("SPIFFS mounted");
-  // }
   Serial.println("Using header files for website content");
 
   // I2C initialization for TSL2591
@@ -433,7 +477,7 @@ void setup()
   // Neopixel initialisieren
   strip.begin();
   strip.show();             // Alle LEDs ausschalten
-  strip.setBrightness(127); // Helligkeit auf 50% einstellen (0-255)
+  strip.setBrightness(100); // Helligkeit auf 50% einstellen (0-255)
 
   // perform I2C scan to verify TSL2591 is connected
   i2c_scan();
@@ -448,7 +492,8 @@ void setup()
     tsl.setGain(TSL2591_GAIN_MAX);
     tsl.setTiming(TSL2591_INTEGRATIONTIME_100MS);
     // turn off led on TSL2591
-
+    tsl.enableAutoRange(true);
+    Serial.println("TSL2591 initialized");
     
   }
 
@@ -456,12 +501,11 @@ void setup()
   Serial.println("ADF4351 init");
   adf.begin();
   // adf.updateFrequency(1800.0f); // Some initial frequency (example)
-  adf.updateFrequency(2.2e9); // 2.2 GHz // 1.800 GHz ─ writes R5…R0
+  // adf.updateFrequency(2.2e9); // 2.2 GHz // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
-  server.on("/laser_act", HTTP_POST, handleLaserAct);
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
   server.on("/measure", HTTP_GET, handleMeasure);
   server.on("/intensity", HTTP_GET, handleIntensity);
@@ -495,9 +539,12 @@ void loop()
   
   // Read TSL2591 sensor (light intensity)
   // uint32_t lux = readTSL2591();
-  uint32_t lux = readIR(); // Read IR instead of light for demonstration
+  // uint32_t lux = readIR(); // Read IR instead of light for demonstration
 
-    // catch serial commands and process them
+  // catch serial commands and process them
+  // Format should be:
+  // COMMAND PARAMETER
+  // e.g. MEASURE 2500
   while (Serial.available())
   { // collect one line
     char c = Serial.read();
@@ -516,24 +563,19 @@ void loop()
             adf.updateFrequency(f * 1e6); // tune synthesiser
             delay(10); // Allow settling time
             uint32_t i = readIR();        // intensity
-            float b = 123.0f;             // your magnetometer
-            Serial.printf("DATA %.1f %lu %.1f\n", f, i, b);
+            Serial.printf("DATA %.1f %lu\n", f, i);
             setLEDStatus(LED_CONNECTED); // Return to connected state
+            adf.stop(); // Disable output after measurement
           }
           else
-          {
-            Serial.printf("ERR range: %.1f not in [%.1f, %.1f] MHz\n", f, ADF_FREQ_MIN, ADF_FREQ_MAX);
+            {
+            setLEDStatus(LED_MEASURING); // Set LED to red
+            uint32_t i = readIR();        // intensity
+            Serial.printf("DATA %.1f %lu\n", f, i);
+                        setLEDStatus(LED_CONNECTED); // Return to connected state
+
+            //Serial.printf("ERR range: %.1f not in [%.1f, %.1f] MHz\n", f, ADF_FREQ_MIN, ADF_FREQ_MAX);
           }
-        }
-        else if (rxBuf == "LASER ON")
-        {
-          digitalWrite(LASER_PIN, HIGH);
-          Serial.println("OK laser on");
-        }
-        else if (rxBuf == "LASER OFF")
-        {
-          digitalWrite(LASER_PIN, LOW);
-          Serial.println("OK laser off");
         }
         else if (rxBuf == "STATUS")
         {
