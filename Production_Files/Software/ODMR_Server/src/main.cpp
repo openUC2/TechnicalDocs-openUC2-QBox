@@ -18,7 +18,7 @@
 #include "website/infos_html.h"
 #include "website/bootstrap_css.h"
 #include "website/bootstrap_js.h"
-// #include "website/nvgitter_png.h"  // Excluded for size reasons
+#include "website/nvgitter_png.h"
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
 #define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
@@ -209,8 +209,9 @@ void handleFileRequest(const String &path)
   }
   else if (actualPath == "/NVGitter.png")
   {
-    // Image not included in header version for size reasons
-    server.send(404, "text/plain", "Image not available in header version");
+    // Serve optimized image from header file
+    contentType = NVGITTER_PNG_CONTENT_TYPE;
+    server.send_P(200, contentType, (const char*)NVGITTER_PNG_DATA, NVGITTER_PNG_SIZE);
     return;
   }
 
@@ -504,6 +505,11 @@ void setup()
   // adf.updateFrequency(2.2e9); // 2.2 GHz // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
+  // Explicit root handler to ensure proper routing
+  server.on("/", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);

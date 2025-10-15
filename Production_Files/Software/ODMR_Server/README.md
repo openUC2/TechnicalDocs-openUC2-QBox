@@ -163,6 +163,21 @@ Run the build script to convert HTML/CSS files to C++ header files:
 python3 build_website.py
 ```
 
+This script automatically:
+- Converts all HTML and CSS files to header files
+- Optimizes and converts images to header files
+- Creates PROGMEM arrays for efficient ESP32 memory usage
+
+### 2a. Image Optimization (Optional)
+If you need to optimize images manually:
+
+```bash
+python3 optimize_image.py  # Optimizes NVGitter.png
+python3 convert_image.py   # Converts optimized image to header file
+```
+
+Images are automatically optimized to 600px width and converted to RGB format to reduce size.
+
 ### 3. Flash Firmware
 Use PlatformIO to build and flash the firmware:
 
@@ -182,3 +197,5 @@ pio run -e seeed_xiao_esp32c3 --target upload
 - ✅ **Live Intensity Monitoring**: Real-time photodiode readings for optical alignment
 - ✅ **Multi-Language Support**: German/English with localStorage persistence
 - ✅ **Automated Build System**: HTML→Header conversion with Python script
+- ✅ **Image Support**: Optimized PNG images served from header files
+- ✅ **Root Path Handling**: Explicit "/" route to prevent redirection issues

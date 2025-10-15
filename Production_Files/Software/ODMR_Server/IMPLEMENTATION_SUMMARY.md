@@ -104,6 +104,20 @@ pio run -e seeed_xiao_esp32s3 --target upload
 - Fixed frequency validation in both measurement pages
 - Consistent error handling across all interfaces
 
+### 8. Static Website Improvements
+
+#### Root Path Routing
+- Added explicit "/" route handler to prevent redirection issues
+- Ensures clean URLs without "/static/" prefix
+- Improved routing reliability for direct IP access (192.168.4.1)
+
+#### Image Optimization and Embedding
+- Created image optimization pipeline using Pillow
+- Reduced NVGitter.png from 515KB to 118KB (77% reduction)
+- Converted optimized image to C header file format
+- Images now served directly from PROGMEM (no filesystem required)
+- Automated image conversion in build_website.py script
+
 ## 🔄 System Architecture
 
 ### Network Configuration
@@ -113,7 +127,9 @@ pio run -e seeed_xiao_esp32s3 --target upload
 
 ### API Endpoints
 ```
-GET  /                    - Main interface
+GET  /                    - Main interface (explicit root handler)
+GET  /index.html          - Main interface  
+GET  /NVGitter.png        - Optimized diamond lattice image
 GET  /intensity           - Live photodiode readings
 GET  /measure?frequenz=X  - Single frequency measurement
 GET  /webserial_check     - WebSerial availability check
@@ -170,8 +186,15 @@ This represents a significant architectural change that would be better addresse
 ### Build Process
 ```bash
 cd Production_Files/Software/ODMR_Server
-python3 build_website.py  # Convert HTML to headers
-pio run -e seeed_xiao_esp32s3 --target upload  # Flash firmware
+
+# Optimize images (if needed)
+python3 optimize_image.py
+
+# Convert HTML and images to headers  
+python3 build_website.py  
+
+# Flash firmware
+pio run -e seeed_xiao_esp32s3 --target upload
 ```
 
 ### Testing Checklist
