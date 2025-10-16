@@ -72,7 +72,7 @@
       
       .grid-container {
           display: grid;
-          grid-template-columns: 1fr 300px;
+          grid-template-columns: 1fr 350px;
           gap: 1rem;
           margin: auto;
           padding: 0;
@@ -84,9 +84,11 @@
           padding: 1rem;
           height: 100%;
           min-height: 0;
+          overflow: hidden;
       }
       .grid2, .grid3, .grid4, .grid5, .grid6 {
           padding: 1rem;
+          min-width: 0;
       }
       
       /* Fixed height containers for measurement sections */
@@ -194,10 +196,25 @@
       }
       
       /* Responsive design improvements */
+      @media (max-width: 1200px) {
+          .grid-container {
+              grid-template-columns: 1fr 300px;
+          }
+      }
+      
+      @media (max-width: 992px) {
+          .grid-container {
+              grid-template-columns: 1fr 280px;
+          }
+      }
+      
       @media (max-width: 768px) {
           .grid-container {
               grid-template-columns: 1fr;
               height: auto;
+          }
+          .grid1 {
+              grid-area: auto;
           }
           .input-group .btn {
               padding: 0.25rem 0.5rem;
@@ -1140,6 +1157,13 @@
                 id="AutoMessung"
                 value="Einzelmessung"
               />
+              <!-- Serial Status Indicator -->
+              <div id="serialStatus" class="mt-2 p-2 border rounded" style="background-color: #f8f9fa; font-size: 12px; max-height: 150px; overflow-y: auto;">
+                <div class="fw-bold mb-1">Serial Status:</div>
+                <div id="serialMessages" style="font-family: monospace; font-size: 11px;">
+                  <span class="text-muted">Nicht verbunden</span>
+                </div>
+              </div>
             </div>
 
             <div class="gridb1"></div>
@@ -1639,6 +1663,12 @@
               .getReader();
             readLoop();
             document.getElementById("ConnectSerial").value = "Verbunden";
+            
+            // Update serial status
+            const messagesDiv = document.getElementById('serialMessages');
+            if (messagesDiv) {
+              messagesDiv.innerHTML = '<span class="text-success">✓ Serial verbunden</span>';
+            }
           } catch (error) {
             console.error('Error connecting to serial:', error);
             alert('Fehler beim Verbinden mit dem seriellen Port: ' + error.message);
@@ -1653,6 +1683,9 @@
             value.split("\n").forEach((raw) => {
               const line = raw.trim(); // remove \r or extra blanks
               console.log(line);
+              
+              // Display all serial messages in the status area
+              addSerialMessage(line);
               if (!line.startsWith("DATA")) return;
 
               // DATA <freq> <adc> <b-field>
@@ -1667,6 +1700,43 @@
                 pending.delete(f);
               }
             });
+          }
+        }
+
+
+        
+        function addSerialMessage(message) {
+          if (!message) return;
+          
+          const messagesDiv = document.getElementById('serialMessages');
+          if (!messagesDiv) return;
+          
+          const timestamp = new Date().toLocaleTimeString('de-DE');
+          const messageElement = document.createElement('div');
+          messageElement.className = 'mb-1';
+          
+          // Color code different message types
+          let messageClass = 'text-dark';
+          if (message.startsWith('DATA')) {
+            messageClass = 'text-success';
+          } else if (message.includes('ERROR') || message.includes('FAIL')) {
+            messageClass = 'text-danger';
+          } else if (message.includes('OK') || message.includes('SUCCESS')) {
+            messageClass = 'text-primary';
+          }
+          
+          messageElement.innerHTML = `<span class="text-muted">[${timestamp}]</span> <span class="${messageClass}">${message}</span>`;
+          messagesDiv.appendChild(messageElement);
+          
+          // Keep only last 50 messages
+          while (messagesDiv.children.length > 50) {
+            messagesDiv.removeChild(messagesDiv.firstChild);
+          }
+          
+          // Auto-scroll to bottom
+          const statusDiv = document.getElementById('serialStatus');
+          if (statusDiv) {
+            statusDiv.scrollTop = statusDiv.scrollHeight;
           }
         }
 
