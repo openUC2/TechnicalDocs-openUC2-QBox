@@ -9,6 +9,9 @@
 #include "adf4351.h"
 #include <SPI.h>
 
+// version info
+#include "version_info.h"
+
 // website
 #include "website/style_css.h"
 #include "website/index_html.h"
@@ -509,6 +512,18 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   // Explicit root handler to ensure proper routing
   server.on("/", HTTP_GET, []() {
     server.send_P(200, "text/html", INDEX_HTML);
+  });
+  
+  // Version information endpoint
+  server.on("/version", HTTP_GET, []() {
+    String json = "{";
+    json += "\"version\":\"" + String(FIRMWARE_VERSION) + "\",";
+    json += "\"build_date\":\"" + String(BUILD_DATE) + "\",";
+    json += "\"build_time\":\"" + String(BUILD_TIME) + "\",";
+    json += "\"git_hash\":\"" + String(GIT_HASH) + "\",";
+    json += "\"git_branch\":\"" + String(GIT_BRANCH) + "\"";
+    json += "}";
+    server.send(200, "application/json", json);
   });
   
   server.onNotFound([]()

@@ -10,6 +10,7 @@ enabling development in standard HTML/CSS/JS files with automatic build integrat
 import os
 import re
 import sys
+import subprocess
 from pathlib import Path
 
 def sanitize_variable_name(filename):
@@ -103,9 +104,16 @@ def main():
     
     print(f"\n🎉 Conversion complete! {converted_count} files processed.")
     
+    # Generate version information
+    print("\nGenerating version information...")
+    result = subprocess.run([sys.executable, str(script_dir / "generate_version.py")], 
+                          capture_output=True, text=True)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+    
     # Also run image conversion
     print("\nConverting images...")
-    import subprocess
     result = subprocess.run([sys.executable, str(script_dir / "convert_image.py")], 
                           capture_output=True, text=True)
     print(result.stdout)

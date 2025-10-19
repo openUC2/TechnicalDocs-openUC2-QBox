@@ -165,6 +165,7 @@ python3 build_website.py
 
 This script automatically:
 - Converts all HTML and CSS files to header files
+- Generates version information with build date and git hash
 - Optimizes and converts images to header files
 - Creates PROGMEM arrays for efficient ESP32 memory usage
 
@@ -172,11 +173,11 @@ This script automatically:
 If you need to optimize images manually:
 
 ```bash
-python3 optimize_image.py  # Optimizes NVGitter.png
+python3 optimize_image.py  # Optimizes NVGitter.png to 300px (43KB)
 python3 convert_image.py   # Converts optimized image to header file
 ```
 
-Images are automatically optimized to 600px width and converted to RGB format to reduce size.
+Images are automatically optimized to 300px width and converted to RGB format to reduce size for ESP32C3 compatibility.
 
 ### 3. Flash Firmware
 Use PlatformIO to build and flash the firmware:
@@ -197,5 +198,6 @@ pio run -e seeed_xiao_esp32c3 --target upload
 - ✅ **Live Intensity Monitoring**: Real-time photodiode readings for optical alignment
 - ✅ **Multi-Language Support**: German/English with localStorage persistence
 - ✅ **Automated Build System**: HTML→Header conversion with Python script
-- ✅ **Image Support**: Optimized PNG images served from header files
+- ✅ **Image Support**: Optimized PNG images served from header files (43KB, ESP32C3 compatible)
 - ✅ **Root Path Handling**: Explicit "/" route to prevent redirection issues
+- ✅ **Version Information**: Build date, git hash displayed on website and available via /version endpoint

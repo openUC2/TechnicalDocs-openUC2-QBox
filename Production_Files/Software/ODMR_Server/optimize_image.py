@@ -8,14 +8,14 @@ from PIL import Image
 import os
 from pathlib import Path
 
-def optimize_image(input_path, output_path, max_width=600, quality=85):
+def optimize_image(input_path, output_path, max_width=300, quality=70):
     """Optimize an image by resizing and compressing"""
     # Load the image
     img = Image.open(input_path)
     print(f'Original size: {img.size}')
     print(f'Original mode: {img.mode}')
     
-    # Calculate new dimensions
+    # Calculate new dimensions - much smaller for ESP32C3 compatibility
     aspect_ratio = img.height / img.width
     new_width = min(max_width, img.width)  # Don't upscale
     new_height = int(new_width * aspect_ratio)
@@ -33,7 +33,7 @@ def optimize_image(input_path, output_path, max_width=600, quality=85):
         background.paste(img_resized, mask=img_resized.split()[3])  # 3 is the alpha channel
         img_resized = background
     
-    # Save optimized version
+    # Save optimized version with more aggressive compression
     img_resized.save(output_path, optimize=True, quality=quality)
     print(f'Optimized size: {img_resized.size}')
     

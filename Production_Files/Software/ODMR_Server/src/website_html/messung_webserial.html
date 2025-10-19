@@ -865,6 +865,22 @@
       
       // Select all functionality
       document.addEventListener('DOMContentLoaded', function() {
+      // Fetch and display version information
+      fetch('/version')
+        .then(response => response.json())
+        .then(data => {
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = '';
+          }
+        });
         const selectAllCheckbox = document.getElementById('selectAll');
         if (selectAllCheckbox) {
           selectAllCheckbox.addEventListener('change', function() {
@@ -1895,8 +1911,9 @@
     <!-- ░░ Footer ░░----------------------------------------------------------- -->
     <footer class="py-3 mt-auto">
       <div class="container text-center small">
-        Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a>
-      </div>
+      <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
+    </div>
     </footer>
 
     <!-- Bootstrap JS -->
