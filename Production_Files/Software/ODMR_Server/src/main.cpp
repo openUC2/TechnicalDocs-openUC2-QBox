@@ -211,7 +211,8 @@ void handleFileRequest(const String &path)
   {
     // Serve optimized image from header file
     contentType = NVGITTER_PNG_CONTENT_TYPE;
-    server.send_P(200, contentType, (const char*)NVGITTER_PNG_DATA, NVGITTER_PNG_SIZE);
+    server.send(200, contentType, "");
+    server.sendContent_P((const char*)NVGITTER_PNG_DATA, NVGITTER_PNG_SIZE);
     return;
   }
 
@@ -404,17 +405,17 @@ void setup()
 
 // only for esp32s3
 #ifdef ESP32S3
-  disableCore1WDT(); // Deactivate Watchdog for core 1
+  //disableCore1WDT(); // Deactivate Watchdog for core 1
 #endif
-  disableLoopWDT(); // Deactivate Watchdog for loop
 
-  pinMode(LASER_PIN, OUTPUT);
-  digitalWrite(LASER_PIN, LOW);
+pinMode(LASER_PIN, OUTPUT);
+digitalWrite(LASER_PIN, LOW);
 
-  Serial.begin(115200);
-  delay(1500); // Allow time to connect
-  Serial.println("Booting...");
-  
+Serial.begin(115200);
+delay(1500); // Allow time to connect
+Serial.println("Booting...");
+
+disableLoopWDT(); // Deactivate Watchdog for loop
   // Check WiFi capabilities
   Serial.print("WiFi Mode capabilities: ");
   Serial.println(WiFi.getMode());
