@@ -9,9 +9,6 @@
 #include "adf4351.h"
 #include <SPI.h>
 
-// version info
-#include "version_info.h"
-
 // website
 #include "website/style_css.h"
 #include "website/index_html.h"
@@ -88,6 +85,10 @@ ADF4351 adf(clock, data, LE, CE);
 
 // TSL2591 sensor
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
+
+// TSL2591 settings storage
+tsl2591Gain_t currentGain = TSL2591_GAIN_MAX;
+tsl2591IntegrationTime_t currentIntegrationTime = TSL2591_INTEGRATIONTIME_100MS;
 
 // WebServer on port 80
 WebServer server(80);
@@ -236,6 +237,7 @@ uint32_t readTSL2591()
   tsl.getEvent(&event);
   // event.light is in lux, but you can read raw channels as well
   uint32_t lux = (uint32_t)event.light;
+  Serial.println("Light: " + String(lux) + " lux");
   return lux;
 }
 
@@ -358,6 +360,103 @@ void handleIntensity()
   server.send(200, "application/json", response);
 }
 
+// Get current TSL2591 settings
+void handleGetTSLSettings()
+{
+  String response = "{\"gain\":";
+  response += String((int)currentGain);
+  response += ",\"integration_time\":";
+  response += String((int)currentIntegrationTime);
+  response += "}";
+  server.send(200, "application/json", response);
+}
+
+// Set TSL2591 gain
+void handleSetTSLGain()
+{
+  if (!server.hasArg("gain"))
+  {
+    server.send(400, "application/json", "{\"error\":\"no gain parameter\"}");
+    return;
+  }
+  
+  int gainValue = server.arg("gain").toInt();
+  tsl2591Gain_t newGain;
+  
+  switch(gainValue) {
+    case 0x00:
+      newGain = TSL2591_GAIN_LOW;
+      break;
+    case 0x10:
+      newGain = TSL2591_GAIN_MED;
+      break;
+    case 0x20:
+      newGain = TSL2591_GAIN_HIGH;
+      break;
+    case 0x30:
+      newGain = TSL2591_GAIN_MAX;
+      break;
+    default:
+      server.send(400, "application/json", "{\"error\":\"invalid gain value\"}");
+      return;
+  }
+  
+  currentGain = newGain;
+  tsl.setGain(currentGain);
+  Serial.printf("TSL2591 Gain set to: 0x%02X\n", (int)currentGain);
+  
+  String response = "{\"status\":\"ok\",\"gain\":";
+  response += String((int)currentGain);
+  response += "}";
+  server.send(200, "application/json", response);
+}
+
+// Set TSL2591 integration time
+void handleSetTSLIntegrationTime()
+{
+  if (!server.hasArg("integration_time"))
+  {
+    server.send(400, "application/json", "{\"error\":\"no integration_time parameter\"}");
+    return;
+  }
+  
+  int timeValue = server.arg("integration_time").toInt();
+  tsl2591IntegrationTime_t newTime;
+  
+  switch(timeValue) {
+    case 0x00:
+      newTime = TSL2591_INTEGRATIONTIME_100MS;
+      break;
+    case 0x01:
+      newTime = TSL2591_INTEGRATIONTIME_200MS;
+      break;
+    case 0x02:
+      newTime = TSL2591_INTEGRATIONTIME_300MS;
+      break;
+    case 0x03:
+      newTime = TSL2591_INTEGRATIONTIME_400MS;
+      break;
+    case 0x04:
+      newTime = TSL2591_INTEGRATIONTIME_500MS;
+      break;
+    case 0x05:
+      newTime = TSL2591_INTEGRATIONTIME_600MS;
+      break;
+    default:
+      server.send(400, "application/json", "{\"error\":\"invalid integration time value\"}");
+      return;
+  }
+  
+  currentIntegrationTime = newTime;
+  tsl.setTiming(currentIntegrationTime);
+  Serial.printf("TSL2591 Integration Time set to: 0x%02X\n", (int)currentIntegrationTime);
+  
+  String response = "{\"status\":\"ok\",\"integration_time\":";
+  response += String((int)currentIntegrationTime);
+  response += "}";
+  server.send(200, "application/json", response);
+}
+
 // Check if WebSerial should be enabled (not on local AP interface)
 void handleWebSerialCheck()
 {
@@ -430,7 +529,7 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   WiFi.macAddress(mac);
   String macID = String(mac[3], HEX) + String(mac[4], HEX) + String(mac[5], HEX);
   macID.toUpperCase();
-  String dynamicSSID = "ODMR_" + macID;
+  String dynamicSSID = "openUC2_ODMR_" + macID;
   Serial.print("SSID: ");
   Serial.println(dynamicSSID);
 
@@ -494,11 +593,12 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   }
   else
   {
-    tsl.setGain(TSL2591_GAIN_MAX);
-    tsl.setTiming(TSL2591_INTEGRATIONTIME_100MS);
+    tsl.setGain(currentGain);
+    tsl.setTiming(currentIntegrationTime);
     // turn off led on TSL2591
     tsl.enableAutoRange(true);
     Serial.println("TSL2591 initialized");
+    Serial.printf("TSL2591 Gain: 0x%02X, Integration Time: 0x%02X\n", (int)currentGain, (int)currentIntegrationTime);
     
   }
 
@@ -514,24 +614,15 @@ disableLoopWDT(); // Deactivate Watchdog for loop
     server.send_P(200, "text/html", INDEX_HTML);
   });
   
-  // Version information endpoint
-  server.on("/version", HTTP_GET, []() {
-    String json = "{";
-    json += "\"version\":\"" + String(FIRMWARE_VERSION) + "\",";
-    json += "\"build_date\":\"" + String(BUILD_DATE) + "\",";
-    json += "\"build_time\":\"" + String(BUILD_TIME) + "\",";
-    json += "\"git_hash\":\"" + String(GIT_HASH) + "\",";
-    json += "\"git_branch\":\"" + String(GIT_BRANCH) + "\"";
-    json += "}";
-    server.send(200, "application/json", json);
-  });
-  
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
   server.on("/measure", HTTP_GET, handleMeasure);
   server.on("/intensity", HTTP_GET, handleIntensity);
   server.on("/webserial_check", HTTP_GET, handleWebSerialCheck);
+  server.on("/tsl/settings", HTTP_GET, handleGetTSLSettings);
+  server.on("/tsl/gain", HTTP_POST, handleSetTSLGain);
+  server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
 
   server.begin();
   // TODO: Need a function that disables the adf4351 output

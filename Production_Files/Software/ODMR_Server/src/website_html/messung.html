@@ -19,6 +19,7 @@
       } else {
         // Load from CDN for development
         document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">');
+        document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">');
       }
     })();
   </script>
@@ -54,7 +55,7 @@
         padding: 0;
     }
     .grid1 {
-        grid-area: 1 / 1 / 4 / 2;
+        grid-area: 1 / 1 / 5 / 2;
         padding: 1rem;
     }
     .grid2, .grid3, .grid4, .grid5, .grid6 {
@@ -81,6 +82,13 @@
     }
     .inputFieldWide {
         width: 100%;
+    }
+    .form-select {
+        width: 100%;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        margin-top: 5px;
     }
     .slider {
         width: 100%;
@@ -125,7 +133,10 @@
     
     <script> 
         async function MessungStarten(){ 
-            ToggleStart(0);      
+            ToggleStart(0);
+            setLEDStatus('measuring', 'Messung läuft');
+            enableADF();
+            
             deleteScaleGroup("DataGroupID");    
             AngezeigteDatenpunkte=[];
             _YMax=0, _YMin=36000;
@@ -140,9 +151,16 @@
                 drawCircle(response,+200,"black");  
             }
             addDataGroup(); 
-            Messreihe=[];   
-            if(AutoMessung){setTimeout(MessungStarten, 600);}
-            else{ToggleStart(1);}  
+            Messreihe=[];
+            
+            setLEDStatus('ready', 'Messungen abgeschlossen');
+            
+            if(AutoMessung){
+                setTimeout(MessungStarten, 600);
+            } else {
+                ToggleStart(1);
+                disableADF();
+            }  
         }
         function autoScale(){
             if(ById("YMidAuto").checked){
@@ -172,11 +190,104 @@
             [["f_begin",fMin,fMax-5],["f_end",5+parseFloat(ById("f_begin").value),fMax],["f_step",stepMin,stepMax]].forEach(element=>ById(element[0]).value=Math.min(element[2],Math.max(element[1],ById(element[0]).value)));
             ById("f_step").value=parseFloat(ById("f_step").value).toFixed(1);
             ById("sendData").disabled=false;
+            updateParameterSummary();
+        }
+        
+        // LED Status Functions
+        function setLEDStatus(status, text) {
+            const led = ById('statusLED');
+            const statusText = ById('statusText');
+            
+            switch(status) {
+                case 'ready':
+                    led.style.backgroundColor = '#6c757d'; // Gray
+                    break;
+                case 'measuring':
+                    led.style.backgroundColor = '#28a745'; // Green
+                    led.style.animation = 'pulse 1s infinite';
+                    break;
+                case 'error':
+                    led.style.backgroundColor = '#dc3545'; // Red
+                    led.style.animation = 'none';
+                    break;
+                case 'laser_on':
+                    led.style.backgroundColor = '#ffc107'; // Yellow
+                    led.style.animation = 'none';
+                    break;
+                default:
+                    led.style.backgroundColor = '#6c757d';
+                    led.style.animation = 'none';
+            }
+            
+            if (text) {
+                statusText.textContent = text;
+            }
+        }
+        
+        // Add CSS animation for pulsing LED
+        function addLEDAnimation() {
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                    100% { opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // ADF Control Functions
+        function enableADF() {
+            // Send command to enable ADF4351
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/ADF_Enable", true);
+            xhr.send();
+        }
+        
+        function disableADF() {
+            // Send command to disable ADF4351
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/ADF_Disable", true);
+            xhr.send();
+        }
+        
+        function updateParameterSummary() {
+            const fBegin = parseFloat(ById("f_begin").value);
+            const fEnd = parseFloat(ById("f_end").value);
+            const fStep = parseFloat(ById("f_step").value);
+            
+            // Update frequency range
+            ById("freqRange").textContent = `${fBegin} - ${fEnd} MHz`;
+            
+            // Update step size
+            ById("stepSizeDisplay").textContent = `${fStep.toFixed(1)} MHz`;
+            
+            // Calculate data points
+            const dataPoints = Math.floor((fEnd - fBegin) / fStep) + 1;
+            ById("dataPointsCount").textContent = dataPoints;
+            
+            // Estimate scan time (assuming ~3 seconds per point)
+            const estimatedSeconds = dataPoints * 3;
+            const minutes = Math.floor(estimatedSeconds / 60);
+            const seconds = estimatedSeconds % 60;
+            ById("estimatedTime").textContent = `~${minutes}:${seconds.toString().padStart(2, '0')} min`;
         }
         function AutoToggle(){
             const Autobutton=ById("AutoMessung");
-            if (AutoMessung){ Autobutton.value="Einzelmessung"; AutoMessung=0;}
-            else{ Autobutton.value="Dauermessung";AutoMessung=1;}
+            const icon = Autobutton.querySelector('i');
+            const span = Autobutton.querySelector('span');
+            if (AutoMessung){ 
+                icon.className = "bi bi-repeat";
+                span.setAttribute('data-lang-key', 'single_measurement');
+                span.textContent = "Einzelmessung";
+                AutoMessung=0;
+            } else { 
+                icon.className = "bi bi-arrow-repeat";
+                span.setAttribute('data-lang-key', 'continuous_measurement');
+                span.textContent = "Dauermessung";
+                AutoMessung=1;
+            }
         }
         function fReset(){
             ById("f_begin").value=2820;
@@ -190,9 +301,11 @@
                 xhr.open("POST","/Laser_An",true);
                 xhr.send();
                 let Laser=ById("Laser");
-                Laser.value="Laserdiode ausschalten";
+                Laser.innerHTML = '<i class="bi bi-lightbulb-fill"></i> Laserdiode ausschalten';
+                Laser.className = "btn btn-danger btn-lg";
                 Laser.removeEventListener("click", LaserOn);
                 Laser.addEventListener("click", LaserOff);
+                setLEDStatus('laser_on', 'Laser aktiv');
             }
         }
         function LaserOff(){
@@ -200,15 +313,23 @@
             xhr.open("POST","/Laser_Aus",true);
             xhr.send();
             let Laser=ById("Laser");
-            Laser.value="Laserdiode einschalten";
+            Laser.innerHTML = '<i class="bi bi-lightbulb"></i> Laserdiode einschalten';
+            Laser.className = "btn btn-warning btn-lg";
             Laser.removeEventListener("click", LaserOff);
             Laser.addEventListener("click", LaserOn);
-        
+            setLEDStatus('ready', 'Bereit');
         }
         function ToggleStart(OnOff){
             let StartButton=ById("StartStop");
-            if(OnOff){StartButton.disabled=false;StartButton.value="Messung starten";}
-            else{StartButton.disabled=true;StartButton.value="Messung läuft";}
+            if(OnOff){
+                StartButton.disabled=false;
+                StartButton.innerHTML = '<i class="bi bi-play-fill"></i> <span data-lang-key="start_measurement">Messung starten</span>';
+                StartButton.className = "btn btn-success btn-lg";
+            } else {
+                StartButton.disabled=true;
+                StartButton.innerHTML = '<i class="bi bi-hourglass-split"></i> <span data-lang-key="measurement_running">Messung läuft</span>';
+                StartButton.className = "btn btn-secondary btn-lg";
+            }
         }
         function DownloadCSV(){
             var csv_data = [];
@@ -476,8 +597,8 @@
       <div class="collapse navbar-collapse" id="nvNav">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item"><a class="nav-link" href="index.html" data-lang-key="nav_start">Start</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+          <li class="nav-item"><a class="nav-link active" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+          <li class="nav-item" id="webSerialNavItem"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
           <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
           <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
                   <li class="nav-item dropdown">
@@ -527,8 +648,19 @@
                 </script>
             </svg>
         </div>
-        <div class="grid2" >
-            <input type="button" class="Button Laserbutton" id="Laser"  value="Laserdiode einschalten">
+        <div class="grid2">
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-warning btn-lg" id="Laser"
+                      title="Schaltet die Laserdiode ein/aus für die Anregung der NV-Zentren" 
+                      data-bs-toggle="tooltip">
+                <i class="bi bi-lightbulb"></i> Laserdiode einschalten
+              </button>
+              <!-- LED Status Indicator -->
+              <div class="d-flex align-items-center justify-content-center mt-2">
+                <div id="statusLED" class="me-2" style="width: 12px; height: 12px; border-radius: 50%; background-color: #6c757d; border: 2px solid #dee2e6;"></div>
+                <small id="statusText" class="text-muted">Bereit</small>
+              </div>
+            </div>
         </div>
         <div class="grid3">
             <div class="inputField inputFieldWide" id="Y-Controll" style="background-color: #fff;"> 
@@ -546,55 +678,183 @@
         </div>
 
         <div class="grid4">
-            <input type="button" class="Button StartButton" id="StartStop" value="Messung starten">
-            <input type="button" class="Button Toggle"id="AutoMessung" value="Einzelmessung">   
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-success btn-lg" id="StartStop"
+                      title="Startet die ODMR-Messung über den gewählten Frequenzbereich" 
+                      data-bs-toggle="tooltip">
+                <i class="bi bi-play-fill"></i> <span data-lang-key="start_measurement">Messung starten</span>
+              </button>
+              <button type="button" class="btn btn-outline-primary" id="AutoMessung"
+                      title="Wechselt zwischen Einzel- und Dauermessung" 
+                      data-bs-toggle="tooltip">
+                <i class="bi bi-repeat"></i> <span data-lang-key="single_measurement">Einzelmessung</span>
+              </button>
+            </div>
+        </div>
+
+        <div class="grid5">
+            <div class="card">
+              <div class="card-header py-2">
+                <h6 class="mb-0" data-lang-key="sensor_settings">Sensor-Einstellungen</h6>
+              </div>
+              <div class="card-body py-2">
+                <div class="mb-2">
+                  <label for="gainSelect" class="form-label small" data-lang-key="gain">Verstärkung (Gain):</label>
+                  <select id="gainSelect" class="form-select form-select-sm"
+                          title="Bestimmt die Verstärkung des TSL2591 Lichtsensors" 
+                          data-bs-toggle="tooltip">
+                    <option value="0x00">Low (1x)</option>
+                    <option value="0x10">Medium (25x)</option>
+                    <option value="0x20">High (428x)</option>
+                    <option value="0x30" selected>Max (9876x)</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label for="integrationSelect" class="form-label small" data-lang-key="integration_time">Integrationszeit:</label>
+                  <select id="integrationSelect" class="form-select form-select-sm"
+                          title="Bestimmt die Belichtungszeit des Sensors" 
+                          data-bs-toggle="tooltip">
+                    <option value="0x00" selected>100 ms</option>
+                    <option value="0x01">200 ms</option>
+                    <option value="0x02">300 ms</option>
+                    <option value="0x03">400 ms</option>
+                    <option value="0x04">500 ms</option>
+                    <option value="0x05">600 ms</option>
+                  </select>
+                </div>
+                <div class="d-grid">
+                  <button type="button" class="btn btn-primary btn-sm" id="applyTSLSettings"
+                          title="Wendet die neuen Sensor-Einstellungen an" 
+                          data-bs-toggle="tooltip">
+                    <i class="bi bi-gear"></i> <span data-lang-key="apply_settings">Einstellungen anwenden</span>
+                  </button>
+                </div>
+                <div id="tslSettingsStatus" class="small mt-2 text-center"></div>
+              </div>
+            </div>
         </div>
 
         <div class="gridb1"></div> 
         </div>    
 
-            
-
-        <form>
-
-            <div>
-                <input type="button" class="Button setValue" id="fB-100" value="-100">
-                <input type="button" class="Button setValue" id="fB-10" value="-10">
-                <div class="inputField">
-                    <label for="f_begin">Startfrequenz: </label>
-                    <input type="number" name="Startfrequenz" id="f_begin" value=2820 min="2200" max="3600" step="0.1">
+        <!-- ░░ Frequency Parameter Controls ░░---------------------------------- -->
+        <div class="card mt-4">
+          <div class="card-header">
+            <h5 class="mb-0" data-lang-key="scan_params">Scan-Parameter</h5>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <!-- Start Frequency -->
+              <div class="col-lg-4">
+                <label for="f_begin" class="form-label" data-lang-key="start_freq">Startfrequenz (MHz)</label>
+                <div class="input-group">
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('-100', 'f_begin')" 
+                          title="100 MHz subtrahieren" data-bs-toggle="tooltip">-100</button>
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('-10', 'f_begin')"
+                          title="10 MHz subtrahieren" data-bs-toggle="tooltip">-10</button>
+                  <input type="number" class="form-control text-center" id="f_begin" 
+                         value="2820" min="2200" max="3600" step="0.1"
+                         title="Startfrequenz für den Sweep" data-bs-toggle="tooltip">
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('10', 'f_begin')"
+                          title="10 MHz addieren" data-bs-toggle="tooltip">+10</button>
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('100', 'f_begin')"
+                          title="100 MHz addieren" data-bs-toggle="tooltip">+100</button>
                 </div>
-                <input type="button" class="Button setValue" id="fB10" value="+10">
-                <input type="button" class="Button setValue" id="fB100" value="+100">
+              </div>
+              
+              <!-- End Frequency -->
+              <div class="col-lg-4">
+                <label for="f_end" class="form-label" data-lang-key="end_freq">Endfrequenz (MHz)</label>
+                <div class="input-group">
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('-100', 'f_end')"
+                          title="100 MHz subtrahieren" data-bs-toggle="tooltip">-100</button>
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('-10', 'f_end')"
+                          title="10 MHz subtrahieren" data-bs-toggle="tooltip">-10</button>
+                  <input type="number" class="form-control text-center" id="f_end" 
+                         value="2920" min="2200" max="3600" step="0.1"
+                         title="Endfrequenz für den Sweep" data-bs-toggle="tooltip">
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('10', 'f_end')"
+                          title="10 MHz addieren" data-bs-toggle="tooltip">+10</button>
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('100', 'f_end')"
+                          title="100 MHz addieren" data-bs-toggle="tooltip">+100</button>
+                </div>
+              </div>
+              
+              <!-- Step Size -->
+              <div class="col-lg-4">
+                <label for="f_step" class="form-label" data-lang-key="step_size">Schrittweite (MHz)</label>
+                <div class="input-group">
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('-1', 'f_step')"
+                          title="1 MHz subtrahieren" data-bs-toggle="tooltip">-1</button>
+                  <input type="number" class="form-control text-center" id="f_step" 
+                         value="2.0" min="0.1" max="5" step="0.1"
+                         title="Schrittweite zwischen Messpunkten" data-bs-toggle="tooltip">
+                  <button class="btn btn-outline-secondary" type="button" 
+                          onclick="addValue('1', 'f_step')"
+                          title="1 MHz addieren" data-bs-toggle="tooltip">+1</button>
+                </div>
+              </div>
             </div>
             
-            <div>
-                <input type="button" class="Button setValue" id="fE-100" value="-100">
-                <input type="button" class="Button setValue" id="fE-10" value="-10">
-                <div class="inputField">
-                    <label for="f_end">Endfrequenz: </label>
-                    <input type="number" name="Endfrequenz" id="f_end" value="2920" min="2200" max="3600" step="0.1">
-                </div>
-                <input type="button" class="Button setValue" id="fE10" value="+10">
-                <input type="button" class="Button setValue" id="fE100" value="+100">
+            <div class="row mt-3">
+              <div class="col-md-6">
+                <button type="button" class="btn btn-primary me-2" id="sendData" disabled 
+                        title="Übernimmt die neuen Parameter" data-bs-toggle="tooltip" data-lang-key="apply_data">
+                  <i class="bi bi-check2-circle"></i> Daten übernehmen
+                </button>
+                <button type="button" class="btn btn-secondary" id="f_Reset"
+                        title="Setzt alle Werte auf Standard zurück" data-bs-toggle="tooltip" data-lang-key="reset">
+                  <i class="bi bi-arrow-clockwise"></i> Zurücksetzen
+                </button>
+              </div>
+              <div class="col-md-6 text-end">
+                <button type="button" class="btn btn-success me-2" id="MessreiheHerunterladen"
+                        title="Lädt alle Messungen als CSV-Datei herunter" data-bs-toggle="tooltip" data-lang-key="download_csv">
+                  <i class="bi bi-download"></i> Download CSV
+                </button>
+                <button type="button" class="btn btn-warning" id="Clear"
+                        title="Löscht alle Datenpunkte aus der Anzeige" data-bs-toggle="tooltip" data-lang-key="clear">
+                  <i class="bi bi-eraser"></i> Leeren
+                </button>
+              </div>
             </div>
             
-            <div>
-                <input type="button" class="Button setValue" id="fs-1" value="-1">
-               <div class="inputField">
-                    <label for="f_step">Schrittweite: </label>
-                    <input type="number" name="Schrittgroesse" id="f_step" value="2.0"min="0.1" max="5" step="0.1">
+            <!-- Parameter Summary -->
+            <div class="row mt-3">
+              <div class="col-12">
+                <div class="alert alert-info mb-0">
+                  <div class="row text-center">
+                    <div class="col-md-3">
+                      <small class="text-muted d-block">Frequenzbereich</small>
+                      <span id="freqRange">2820 - 2920 MHz</span>
+                    </div>
+                    <div class="col-md-3">
+                      <small class="text-muted d-block">Schrittweite</small>
+                      <span id="stepSizeDisplay">2.0 MHz</span>
+                    </div>
+                    <div class="col-md-3">
+                      <small class="text-muted d-block">Datenpunkte</small>
+                      <span id="dataPointsCount">51</span>
+                    </div>
+                    <div class="col-md-3">
+                      <small class="text-muted d-block">Scan-Dauer</small>
+                      <span id="estimatedTime">~2.5 min</span>
+                    </div>
+                  </div>
                 </div>
-                <input type="button" class="Button setValue" id="fs1" value="+1">
-                
+              </div>
             </div>
-            <div> 
-                <input type="button" class="Button setValue SaveData" id="sendData" disabled="true" value="Daten übernehmen">
-                <input type="button" class="Button setValue SaveData" id="f_Reset" value="Daten zurücksetzen">
-            </div>
-            <div>
-                <input type="button" class="Button" id="MessreiheHerunterladen" value="Messungen herunterladen">
-                <input type="button" class="Button" id="Clear" value="Anzeige leeren">
+          </div>
+        </div>
             </div>
 
 
@@ -619,6 +879,66 @@
             </div>
         </form>
         <script>
+            // TSL2591 Settings Management
+            function loadTSLSettings() {
+                fetch('/tsl/settings')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            throw new Error('TSL settings endpoint not available');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        ById('gainSelect').value = '0x' + data.gain.toString(16).toUpperCase().padStart(2, '0');
+                        ById('integrationSelect').value = '0x' + data.integration_time.toString(16).toUpperCase().padStart(2, '0');
+                        ById('tslSettingsStatus').textContent = 'Einstellungen geladen';
+                        ById('tslSettingsStatus').style.color = 'var(--uc2-green)';
+                    })
+                    .catch(error => {
+                        console.error('Error loading TSL settings:', error);
+                        ById('tslSettingsStatus').textContent = 'TSL Endpoint nicht verfügbar';
+                        ById('tslSettingsStatus').style.color = 'orange';
+                    });
+            }
+            
+            function applyTSLSettings() {
+                const gain = parseInt(ById('gainSelect').value);
+                const integrationTime = parseInt(ById('integrationSelect').value);
+                
+                ById('tslSettingsStatus').textContent = 'Wird angewendet...';
+                ById('tslSettingsStatus').style.color = 'var(--uc2-turquoise)';
+                
+                // Set gain
+                fetch('/tsl/gain?gain=' + gain, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Set integration time
+                        return fetch('/tsl/integration_time?integration_time=' + integrationTime, { method: 'POST' });
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        ById('tslSettingsStatus').textContent = 'Erfolgreich angewendet';
+                        ById('tslSettingsStatus').style.color = 'var(--uc2-green)';
+                    })
+                    .catch(error => {
+                        console.error('Error applying TSL settings:', error);
+                        ById('tslSettingsStatus').textContent = 'Fehler beim Anwenden';
+                        ById('tslSettingsStatus').style.color = 'red';
+                    });
+            }
+            
+            // Load TSL settings on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                loadTSLSettings();
+            });
+            
+            // Add event listener for apply button
+            ById('applyTSLSettings').addEventListener('click', applyTSLSettings);
+            
             function YMidContr(_this){ 
                 if(isNaN(_this.value)){_this.value=_this.nextElementSibling.value;} 
                 else if(_this.value<IntMin+ById("YRange1").value/2){_this.value=IntMin+ById("YRange1").value/2;}
@@ -646,6 +966,32 @@
                 ById("YMid2").min=IntMin+IntensitätswertLogarithmisch/2;
             }            
             adaptYScale();
+            
+            // Initialize LED animation
+            addLEDAnimation();
+            
+            // Initialize tooltips
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
+
+            // Hide WebSerial navigation item if on ESP32
+            const isLocalDevice = window.location.hostname === '192.168.4.1' || 
+                               window.location.hostname.includes('ODMR_') || 
+                               window.location.protocol === 'file:';
+            
+            if (isLocalDevice) {
+                const webSerialNavItem = document.getElementById('webSerialNavItem');
+                if (webSerialNavItem) {
+                    webSerialNavItem.style.display = 'none';
+                }
+            }
+            
+            // Initialize parameter summary
+            updateParameterSummary();
 
             
             let ChangeListeners=[
@@ -715,7 +1061,16 @@
     document.addEventListener('DOMContentLoaded', function() {
       // Fetch and display version information
       fetch('/version')
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Version endpoint not available');
+          }
+          return response.json();
+        })
         .then(data => {
           const versionInfo = document.getElementById('versionInfo');
           if (versionInfo) {
@@ -726,7 +1081,7 @@
           console.error('Error fetching version:', error);
           const versionInfo = document.getElementById('versionInfo');
           if (versionInfo) {
-            versionInfo.textContent = '';
+            versionInfo.textContent = 'Version: ESP32 ODMR Server';
           }
         });
     });
@@ -743,7 +1098,7 @@
         "nav_info": "Weitere Infos",
         "title": "NV Experimente - Messung durchführen",
         "page_title": "Messung der Lichtintensität in Abhängigkeit von der Frequenz",
-        "scan_params": "Scan-Parameter einstellen",
+        "scan_params": "Scan-Parameter",
         "start_freq": "Startfrequenz (MHz)",
         "end_freq": "Endfrequenz (MHz)",
         "step_size": "Schrittweite (MHz)",
@@ -754,7 +1109,11 @@
         "start_measurement": "Messung starten",
         "measurement_running": "Messung läuft",
         "single_measurement": "Einzelmessung",
-        "continuous_measurement": "Dauermessung"
+        "continuous_measurement": "Dauermessung",
+        "sensor_settings": "Sensor-Einstellungen",
+        "gain": "Verstärkung (Gain)",
+        "integration_time": "Integrationszeit",
+        "apply_settings": "Einstellungen anwenden"
       },
       en: {
         "nav_start": "Start",
@@ -764,7 +1123,7 @@
         "nav_info": "More Info",
         "title": "NV Experiments - Perform Measurement",
         "page_title": "Measurement of Light Intensity as a Function of Frequency",
-        "scan_params": "Set Scan Parameters",
+        "scan_params": "Scan Parameters",
         "start_freq": "Start Frequency (MHz)",
         "end_freq": "End Frequency (MHz)",
         "step_size": "Step Size (MHz)",
@@ -775,7 +1134,11 @@
         "start_measurement": "Start Measurement",
         "measurement_running": "Measurement Running",
         "single_measurement": "Single Measurement",
-        "continuous_measurement": "Continuous Measurement"
+        "continuous_measurement": "Continuous Measurement",
+        "sensor_settings": "Sensor Settings",
+        "gain": "Gain",
+        "integration_time": "Integration Time",
+        "apply_settings": "Apply Settings"
       }
     };
     
