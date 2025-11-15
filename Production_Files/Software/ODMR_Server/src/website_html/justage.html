@@ -60,11 +60,20 @@
 
       <div class="collapse navbar-collapse" id="nvNav">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link" href="index.html">Start</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung.html">Messung (on Device)</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung_webserial.html">Messung (WebSerial)</a></li>
-          <li class="nav-item"><a class="nav-link active" href="justage.html">Justage (folgt)</a></li>
-          <li class="nav-item"><a class="nav-link" href="infos.html">Weitere Infos</a></li>
+          <li class="nav-item"><a class="nav-link" href="index.html" data-lang-key="nav_start">Start</a></li>
+          <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+          <li class="nav-item" id="webSerialNavItem"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+          <li class="nav-item"><a class="nav-link active" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
+          <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
+                  <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              🌐 DE
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="langDropdown">
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('de'); return false;">🇩🇪 Deutsch</a></li>
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('en'); return false;">🇺🇸 English</a></li>
+            </ul>
+          </li>
         </ul>
       </div>
     </div>
@@ -135,6 +144,38 @@
               <p><strong>Optimal:</strong> > 50000</p>
             </div>
           </div>
+          
+          <div class="card mt-3">
+            <div class="card-header">
+              <h5>Sensor-Einstellungen</h5>
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label for="gainSelect" class="form-label">Verstärkung (Gain)</label>
+                <select class="form-select" id="gainSelect">
+                  <option value="0x00">Low (1x)</option>
+                  <option value="0x10">Medium (25x)</option>
+                  <option value="0x20">High (428x)</option>
+                  <option value="0x30" selected>Max (9876x)</option>
+                </select>
+              </div>
+              
+              <div class="mb-3">
+                <label for="integrationSelect" class="form-label">Integrationszeit</label>
+                <select class="form-select" id="integrationSelect">
+                  <option value="0x00" selected>100 ms</option>
+                  <option value="0x01">200 ms</option>
+                  <option value="0x02">300 ms</option>
+                  <option value="0x03">400 ms</option>
+                  <option value="0x04">500 ms</option>
+                  <option value="0x05">600 ms</option>
+                </select>
+              </div>
+              
+              <button class="btn btn-primary w-100" id="applySettings">Einstellungen anwenden</button>
+              <div id="settingsStatus" class="mt-2 small text-muted"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -143,7 +184,8 @@
   <!-- ░░ Footer ░░----------------------------------------------------------- -->
   <footer class="py-3 mt-auto">
     <div class="container text-center small">
-      Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a>
+      <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
     </div>
   </footer>
 
@@ -158,6 +200,63 @@
     const alignmentStatus = document.getElementById('alignmentStatus');
     const startBtn = document.getElementById('startIntensity');
     const stopBtn = document.getElementById('stopIntensity');
+    const gainSelect = document.getElementById('gainSelect');
+    const integrationSelect = document.getElementById('integrationSelect');
+    const applySettingsBtn = document.getElementById('applySettings');
+    const settingsStatus = document.getElementById('settingsStatus');
+    
+    // Load current TSL settings on page load
+    function loadTSLSettings() {
+      fetch('/tsl/settings')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('TSL settings endpoint not available');
+          }
+          return response.json();
+        })
+        .then(data => {
+          gainSelect.value = '0x' + data.gain.toString(16).toUpperCase().padStart(2, '0');
+          integrationSelect.value = '0x' + data.integration_time.toString(16).toUpperCase().padStart(2, '0');
+          settingsStatus.textContent = 'Aktuelle Einstellungen geladen';
+          settingsStatus.className = 'mt-2 small text-success';
+        })
+        .catch(error => {
+          console.error('Error loading TSL settings:', error);
+          settingsStatus.textContent = 'TSL Einstellungen nicht verfügbar';
+          settingsStatus.className = 'mt-2 small text-warning';
+        });
+    }
+    
+    // Apply TSL settings
+    function applyTSLSettings() {
+      const gain = parseInt(gainSelect.value);
+      const integrationTime = parseInt(integrationSelect.value);
+      
+      settingsStatus.textContent = 'Einstellungen werden angewendet...';
+      settingsStatus.className = 'mt-2 small text-info';
+      
+      // Set gain
+      fetch('/tsl/gain?gain=' + gain, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          // Set integration time
+          return fetch('/tsl/integration_time?integration_time=' + integrationTime, { method: 'POST' });
+        })
+        .then(response => response.json())
+        .then(data => {
+          settingsStatus.textContent = 'Einstellungen erfolgreich angewendet';
+          settingsStatus.className = 'mt-2 small text-success';
+        })
+        .catch(error => {
+          console.error('Error applying TSL settings:', error);
+          settingsStatus.textContent = 'Fehler beim Anwenden der Einstellungen';
+          settingsStatus.className = 'mt-2 small text-danger';
+        });
+    }
     
     function updateIntensity() {
       fetch('/intensity')
@@ -226,6 +325,12 @@
     // Event listeners
     startBtn.addEventListener('click', startMonitoring);
     stopBtn.addEventListener('click', stopMonitoring);
+    applySettingsBtn.addEventListener('click', applyTSLSettings);
+    
+    // Load settings on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      loadTSLSettings();
+    });
     
     // Handle page visibility changes
     document.addEventListener('visibilitychange', function() {
@@ -239,6 +344,137 @@
       if (isMonitoring) {
         stopMonitoring();
       }
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Fetch and display version information
+      fetch('/version')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Version endpoint not available');
+          }
+          return response.json();
+        })
+        .then(data => {
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = 'Version: ESP32 ODMR Server';
+          }
+        });
+    });
+  </script>
+
+  <script>
+    // Multi-language support
+    const translations = {
+      de: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Messung (on Device)",
+        "nav_measurement_webserial": "Messung (WebSerial)",
+        "nav_alignment": "Justage",
+        "nav_info": "Weitere Infos",
+        "title": "NV Experimente - Justage",
+        "page_title": "Photodioden-Justage",
+        "intensity_monitor": "Intensitäts-Monitor",
+        "start_monitoring": "Monitoring starten",
+        "stop_monitoring": "Monitoring stoppen",
+        "current_intensity": "Aktuelle Intensität"
+      },
+      en: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Measurement (on Device)",
+        "nav_measurement_webserial": "Measurement (WebSerial)",
+        "nav_alignment": "Alignment",
+        "nav_info": "More Info",
+        "title": "NV Experiments - Alignment",
+        "page_title": "Photodiode Alignment",
+        "intensity_monitor": "Intensity Monitor",
+        "start_monitoring": "Start Monitoring",
+        "stop_monitoring": "Stop Monitoring",
+        "current_intensity": "Current Intensity"
+      }
+    };
+    
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      updateLanguage(lang);
+      
+      // Update dropdown display
+      const langDropdown = document.getElementById('langDropdown');
+      if (langDropdown) {
+        langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;
+      }
+    }
+    
+    function updateLanguage(lang) {
+      const elements = document.querySelectorAll('[data-lang-key]');
+      elements.forEach(element => {
+        const key = element.getAttribute('data-lang-key');
+        if (translations[lang] && translations[lang][key]) {
+          element.textContent = translations[lang][key];
+        }
+      });
+      
+      // Update title
+      if (translations[lang] && translations[lang].title) {
+        document.title = translations[lang].title;
+      }
+    }
+    
+    // Initialize language on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedLang = localStorage.getItem('language') || 'de';
+      setLanguage(savedLang);
+      
+      // Hide WebSerial navigation item if on ESP32
+      const isLocalDevice = window.location.hostname === '192.168.4.1' || 
+                           window.location.hostname.includes('ODMR_') || 
+                           window.location.protocol === 'file:';
+      
+      if (isLocalDevice) {
+        const webSerialNavItem = document.getElementById('webSerialNavItem');
+        if (webSerialNavItem) {
+          webSerialNavItem.style.display = 'none';
+        }
+      }
+      
+      // Fetch and display version information
+      fetch('/version')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Version endpoint not available');
+          }
+          return response.json();
+        })
+        .then(data => {
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = 'Version: ESP32 ODMR Server';
+          }
+        });
     });
   </script>
 </body>

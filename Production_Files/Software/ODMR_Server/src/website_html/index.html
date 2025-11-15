@@ -61,7 +61,7 @@
         <ul class="navbar-nav ms-auto">
           <li class="nav-item"><a class="nav-link active" href="index.html" data-lang-key="nav_start">Start</a></li>
           <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
-          <li class="nav-item"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+          <li class="nav-item" id="webSerialNavItem"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
           <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
           <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
           <li class="nav-item dropdown">
@@ -82,43 +82,187 @@
   <main class="container">
     <section class="mb-5">
       <h1 class="display-5 mb-3" data-lang-key="welcome_title">Low-Cost Experimente mit NV-Zentren</h1>
-      <h2 class="h4 mb-3" data-lang-key="nv_centers_title">Über das Experiment</h2>
-
-      <p data-lang-key="nv_centers_text">
-        NV-Zentren sind Fehlstellen, die in Diamanten auftreten können. An diesen
-        Stellen fehlen zwei Kohlenstoffatome im Gitter. Anstatt eines dieser
-        Kohlenstoff­atome ist ein Stickstoffatom im Gitter vorhanden; anstelle
-        des zweiten fehlt ein Atom völlig. Dadurch befinden sich Elektronen im
-        Gitter, die angeregt werden können … Die Abbildung 1 zeigt diese
-        Diamantstruktur.
-      </p>
-
-      <figure class="text-center my-4">
-        <img src="NVGitter.png" class="img-fluid rounded shadow" style="max-width:60%;" alt="Diamantgitter">
-        <figcaption class="mt-2 small text-muted">Abbildung 1: Struktur des Diamantgitters.</figcaption>
-      </figure>
-
-      <p>
-        Die Elektronen solcher Fehlstellen können mit grünem Licht in einen
-        angeregten Zustand gebracht werden. Beim Übergang in den Grundzustand
-        wird ein rotes oder nahinfrarotes Photon emittiert.
-      </p>
+      
+      <!-- Introduction Section -->
+      <div class="row">
+        <div class="col-lg-8">
+          <h2 class="h4 mb-3" data-lang-key="odmr_intro_title">Tutorial: Building an ODMR Setup</h2>
+          <p class="lead" data-lang-key="odmr_intro_text">
+            In diesem Workshop konstruieren wir ein ODMR (Optically Detected Magnetic Resonance) System mit dem UC2 modularen Mikroskop-Toolbox und NV (Nitrogen-Vacancy) Diamanten. ODMR ist eine Quantensensing-Technik, die es uns ermöglicht, Magnetfelder durch Beobachtung von Fluoreszenzänderungen in Quantensystemen zu messen.
+          </p>
+        </div>
+        <div class="col-lg-4">
+          <div class="card">
+            <div class="card-body text-center">
+              <h6 class="card-title" data-lang-key="quick_start">Quick Start</h6>
+              <div class="d-grid gap-2">
+                <a href="messung.html" class="btn btn-primary" data-lang-key="start_measurement">Messung starten</a>
+                <a href="justage.html" class="btn btn-secondary" data-lang-key="alignment">Aufbau justieren</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
+    <!-- Theory Section -->
     <section class="mb-5">
-      <h3 class="h4 mb-3" data-lang-key="applications_title">Anwendungen</h3>
-      <p data-lang-key="applications_text">
-        Diese Emission kann zur Messung von Magnetfeldern genutzt werden.
-        Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den
-        Spinzuständen ergibt, ein einfacher Quantencomputer bauen.
-      </p>
+      <h2 class="h4 mb-3" data-lang-key="theory_title">Theoretischer Hintergrund</h2>
+      
+      <div class="row">
+        <div class="col-lg-6">
+          <h3 class="h5 mb-3" data-lang-key="nv_centers_title">Was sind NV-Zentren?</h3>
+          <p data-lang-key="nv_centers_text">
+            NV-Zentren sind Fehlstellen in Diamanten, bestehend aus einem Stickstoffatom neben einer Vakanz (Leerstelle). Diese Quantensysteme haben einzigartige Eigenschaften, die sie ideal für Sensoranwendungen machen:
+          </p>
+          <ul>
+            <li data-lang-key="nv_property_1">Spin-1 Grundzustand mit drei möglichen Projektionen</li>
+            <li data-lang-key="nv_property_2">Optische Anregung bei 532 nm (grün)</li>
+            <li data-lang-key="nv_property_3">Fluoreszenz im roten Spektralbereich</li>
+            <li data-lang-key="nv_property_4">Raumtemperatur-stabile Quantenkohärenz</li>
+          </ul>
+        </div>
+        <div class="col-lg-6">
+          <figure class="text-center">
+            <img src="NVGitter.png" class="img-fluid rounded shadow" alt="NV Center Structure" data-lang-key="nv_structure_alt">
+            <figcaption class="mt-2 small text-muted" data-lang-key="nv_structure_caption">
+              Struktur des NV-Zentrums im Diamantgitter
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+      
+      <div class="row mt-4">
+        <div class="col-12">
+          <h3 class="h5 mb-3" data-lang-key="odmr_principle_title">ODMR-Prinzip</h3>
+          <p data-lang-key="odmr_principle_text">
+            Der ODMR-Effekt basiert auf spinabhängiger Fluoreszenz. Wenn Mikrowellenstrahlung bei der Resonanzfrequenz (~2,87 GHz) angewendet wird, verursacht sie Übergänge zwischen Quantenspinzuständen, was zu einer messbaren Abnahme der Fluoreszenzintensität führt.
+          </p>
+          
+          <div class="alert alert-info">
+            <h6 data-lang-key="key_concept">Schlüsselkonzept:</h6>
+            <p class="mb-0" data-lang-key="zeeman_effect_text">
+              Externe Magnetfelder verschieben die Resonanzfrequenzen durch den Zeeman-Effekt, wodurch präzise Magnetfeldmessungen ermöglicht werden.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Applications Section -->
+    <section class="mb-5">
+      <h2 class="h4 mb-3" data-lang-key="applications_title">Moderne Anwendungen</h2>
+      
+      <div class="row">
+        <div class="col-md-6 col-lg-3 mb-3">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h6 class="card-title" data-lang-key="app_biomedical">Biomedizinische Bildgebung</h6>
+              <p class="card-text small" data-lang-key="app_biomedical_desc">
+                Kartierung von Magnetfeldern in lebenden Zellen und Geweben
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3 mb-3">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h6 class="card-title" data-lang-key="app_materials">Materialwissenschaft</h6>
+              <p class="card-text small" data-lang-key="app_materials_desc">
+                Untersuchung magnetischer Domänen und Spintransport
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3 mb-3">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h6 class="card-title" data-lang-key="app_quantum">Quanteninformation</h6>
+              <p class="card-text small" data-lang-key="app_quantum_desc">
+                Bausteine für Quantencomputer und -netzwerke
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3 mb-3">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h6 class="card-title" data-lang-key="app_physics">Fundamentale Physik</h6>
+              <p class="card-text small" data-lang-key="app_physics_desc">
+                Test der Quantenmechanik und Messung von Fundamentalkonstanten
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Setup Overview Section -->
+    <section class="mb-5">
+      <h2 class="h4 mb-3" data-lang-key="setup_overview_title">Versuchsaufbau</h2>
+      
+      <div class="row">
+        <div class="col-lg-8">
+          <p data-lang-key="setup_overview_text">
+            Der ODMR-Aufbau folgt konfokalen Mikroskopieprinzipien und kombiniert optische Anregung, Mikrowellenmanipulation und Fluoreszenzdetektion für hochpräzise Quantensensing.
+          </p>
+          
+          <h3 class="h6 mb-2" data-lang-key="components_needed">Benötigte Komponenten:</h3>
+          <div class="row">
+            <div class="col-md-6">
+              <ul class="list-unstyled">
+                <li data-lang-key="component_1">• Grundplatte für Montage</li>
+                <li data-lang-key="component_2">• Grüne Laserdiode (532 nm)</li>
+                <li data-lang-key="component_3">• 45° Spiegel für Strahlführung</li>
+                <li data-lang-key="component_4">• Strahlteiler mit Filter</li>
+                <li data-lang-key="component_5">• Konvergente Linse</li>
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-unstyled">
+                <li data-lang-key="component_6">• Lichtsensor (Photodiode)</li>
+                <li data-lang-key="component_7">• Elektronik-Box mit Mikrowellenerzeugung</li>
+                <li data-lang-key="component_8">• XY-Bühnensystem mit NV-Diamant</li>
+                <li data-lang-key="component_9">• Magnet für externes Magnetfeld</li>
+                <li data-lang-key="component_10">• Mikrowellenantenne</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="alert alert-warning">
+            <h6 class="alert-heading" data-lang-key="safety_title">⚠️ Sicherheitshinweise</h6>
+            <ul class="mb-0 small">
+              <li data-lang-key="safety_laser">Niemals direkt in den Laser blicken</li>
+              <li data-lang-key="safety_magnet">Vorsicht bei Implantaten und elektronischen Geräten</li>
+              <li data-lang-key="safety_power">Stromversorgung vor Verkabelungsänderungen trennen</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QuantumMiniLabs Section -->
+    <section class="mb-5">
+      <div class="card">
+        <div class="card-body">
+          <h2 class="h4 mb-3" data-lang-key="quantumminilabs_title">Das QuantumMiniLabs Projekt</h2>
+          <p data-lang-key="quantumminilabs_text">
+            Das QuantumMiniLabs-Projekt entwickelt ein Open-Source-Ökosystem, das kostengünstige, skalierbare, modulare und reparable Quantentechnologie-Experimente ermöglicht. Das Ziel ist es, das System an 100 Bildungsstandorten in Deutschland einzusetzen.
+          </p>
+          <p data-lang-key="quantumminilabs_vision">
+            QuantumMiniLabs bietet die erste erschwingliche DIY-Plattform für Experimente mit Quantensystemen der zweiten Generation. NV-Diamanten ermöglichen stabile Experimente bei Raumtemperatur.
+          </p>
+        </div>
+      </div>
     </section>
   </main>
 
   <!-- ░░ Footer ░░----------------------------------------------------------- -->
   <footer class="py-3 mt-auto">
     <div class="container text-center small">
-      Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a>
+      <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
     </div>
   </footer>
 
@@ -150,12 +294,54 @@
         nav_alignment: "Justage",
         nav_info: "Weitere Infos",
         title: "NV-Experimente / ODMR",
-        welcome_title: "Willkommen zu den NV-Experimenten",
-        welcome_text: "Diese Weboberfläche ermöglicht die Durchführung von Experimenten mit Stickstoff-Vakanz-Zentren (NV-Zentren) in Diamanten.",
+        welcome_title: "Low-Cost Experimente mit NV-Zentren",
+        odmr_intro_title: "Tutorial: Building an ODMR Setup",
+        odmr_intro_text: "In diesem Workshop konstruieren wir ein ODMR (Optically Detected Magnetic Resonance) System mit dem UC2 modularen Mikroskop-Toolbox und NV (Nitrogen-Vacancy) Diamanten. ODMR ist eine Quantensensing-Technik, die es uns ermöglicht, Magnetfelder durch Beobachtung von Fluoreszenzänderungen in Quantensystemen zu messen.",
+        quick_start: "Quick Start",
+        start_measurement: "Messung starten",
+        alignment: "Aufbau justieren",
+        theory_title: "Theoretischer Hintergrund",
         nv_centers_title: "Was sind NV-Zentren?",
-        nv_centers_text: "NV-Zentren entstehen, wenn in einem Diamantgitter ein Kohlenstoffatom durch Stickstoff ersetzt wird und direkt daneben eine Vakanz (Leerstelle) entsteht.",
-        applications_title: "Anwendungen",
-        applications_text: "Diese Emission kann zur Messung von Magnetfeldern genutzt werden. Außerdem lässt sich mit dem 2- bzw. 3-Zustandssystem, das sich aus den Spinzuständen ergibt, ein einfacher Quantencomputer bauen."
+        nv_centers_text: "NV-Zentren sind Fehlstellen in Diamanten, bestehend aus einem Stickstoffatom neben einer Vakanz (Leerstelle). Diese Quantensysteme haben einzigartige Eigenschaften, die sie ideal für Sensoranwendungen machen:",
+        nv_property_1: "Spin-1 Grundzustand mit drei möglichen Projektionen",
+        nv_property_2: "Optische Anregung bei 532 nm (grün)",
+        nv_property_3: "Fluoreszenz im roten Spektralbereich",
+        nv_property_4: "Raumtemperatur-stabile Quantenkohärenz",
+        nv_structure_alt: "NV-Zentrum Struktur",
+        nv_structure_caption: "Struktur des NV-Zentrums im Diamantgitter",
+        odmr_principle_title: "ODMR-Prinzip",
+        odmr_principle_text: "Der ODMR-Effekt basiert auf spinabhängiger Fluoreszenz. Wenn Mikrowellenstrahlung bei der Resonanzfrequenz (~2,87 GHz) angewendet wird, verursacht sie Übergänge zwischen Quantenspinzuständen, was zu einer messbaren Abnahme der Fluoreszenzintensität führt.",
+        key_concept: "Schlüsselkonzept:",
+        zeeman_effect_text: "Externe Magnetfelder verschieben die Resonanzfrequenzen durch den Zeeman-Effekt, wodurch präzise Magnetfeldmessungen ermöglicht werden.",
+        applications_title: "Moderne Anwendungen",
+        app_biomedical: "Biomedizinische Bildgebung",
+        app_biomedical_desc: "Kartierung von Magnetfeldern in lebenden Zellen und Geweben",
+        app_materials: "Materialwissenschaft",
+        app_materials_desc: "Untersuchung magnetischer Domänen und Spintransport",
+        app_quantum: "Quanteninformation",
+        app_quantum_desc: "Bausteine für Quantencomputer und -netzwerke",
+        app_physics: "Fundamentale Physik",
+        app_physics_desc: "Test der Quantenmechanik und Messung von Fundamentalkonstanten",
+        setup_overview_title: "Versuchsaufbau",
+        setup_overview_text: "Der ODMR-Aufbau folgt konfokalen Mikroskopieprinzipien und kombiniert optische Anregung, Mikrowellenmanipulation und Fluoreszenzdetektion für hochpräzise Quantensensing.",
+        components_needed: "Benötigte Komponenten:",
+        component_1: "• Grundplatte für Montage",
+        component_2: "• Grüne Laserdiode (532 nm)",
+        component_3: "• 45° Spiegel für Strahlführung",
+        component_4: "• Strahlteiler mit Filter",
+        component_5: "• Konvergente Linse",
+        component_6: "• Lichtsensor (Photodiode)",
+        component_7: "• Elektronik-Box mit Mikrowellenerzeugung",
+        component_8: "• XY-Bühnensystem mit NV-Diamant",
+        component_9: "• Magnet für externes Magnetfeld",
+        component_10: "• Mikrowellenantenne",
+        safety_title: "⚠️ Sicherheitshinweise",
+        safety_laser: "Niemals direkt in den Laser blicken",
+        safety_magnet: "Vorsicht bei Implantaten und elektronischen Geräten",
+        safety_power: "Stromversorgung vor Verkabelungsänderungen trennen",
+        quantumminilabs_title: "Das QuantumMiniLabs Projekt",
+        quantumminilabs_text: "Das QuantumMiniLabs-Projekt entwickelt ein Open-Source-Ökosystem, das kostengünstige, skalierbare, modulare und reparable Quantentechnologie-Experimente ermöglicht. Das Ziel ist es, das System an 100 Bildungsstandorten in Deutschland einzusetzen.",
+        quantumminilabs_vision: "QuantumMiniLabs bietet die erste erschwingliche DIY-Plattform für Experimente mit Quantensystemen der zweiten Generation. NV-Diamanten ermöglichen stabile Experimente bei Raumtemperatur."
       },
       en: {
         nav_start: "Start",
@@ -164,12 +350,54 @@
         nav_alignment: "Alignment",
         nav_info: "More Info",
         title: "NV Experiments / ODMR",
-        welcome_title: "Welcome to NV Experiments",
-        welcome_text: "This web interface enables conducting experiments with nitrogen-vacancy centers (NV centers) in diamonds.",
+        welcome_title: "Low-Cost Experiments with NV Centers",
+        odmr_intro_title: "Tutorial: Building an ODMR Setup",
+        odmr_intro_text: "In this workshop, we will construct an ODMR (Optically Detected Magnetic Resonance) system using the UC2 modular microscope toolbox and NV (Nitrogen-Vacancy) diamonds. ODMR is a quantum sensing technique that allows us to measure magnetic fields by observing changes in fluorescence from quantum systems.",
+        quick_start: "Quick Start",
+        start_measurement: "Start Measurement",
+        alignment: "Align Setup",
+        theory_title: "Theoretical Background",
         nv_centers_title: "What are NV Centers?",
-        nv_centers_text: "NV centers form when a carbon atom in a diamond lattice is replaced by nitrogen and a vacancy (empty space) is created directly adjacent to it.",
-        applications_title: "Applications",
-        applications_text: "This emission can be used to measure magnetic fields. Furthermore, the 2- or 3-state system resulting from the spin states can be used to build a simple quantum computer."
+        nv_centers_text: "NV centers are point defects in diamond consisting of a nitrogen atom adjacent to a vacant lattice site. These quantum systems have unique properties that make them ideal for sensing applications:",
+        nv_property_1: "Spin-1 ground state with three possible projections",
+        nv_property_2: "Optical excitation at 532 nm (green)",
+        nv_property_3: "Fluorescence in red spectral range",
+        nv_property_4: "Room-temperature stable quantum coherence",
+        nv_structure_alt: "NV Center Structure",
+        nv_structure_caption: "Structure of NV center in diamond lattice",
+        odmr_principle_title: "ODMR Principle",
+        odmr_principle_text: "The ODMR effect relies on spin-dependent fluorescence. When microwave radiation at the resonant frequency (~2.87 GHz) is applied, it causes transitions between quantum spin states, resulting in a measurable decrease in fluorescence intensity.",
+        key_concept: "Key Concept:",
+        zeeman_effect_text: "External magnetic fields shift these resonance frequencies via the Zeeman effect, allowing precise magnetic field measurements.",
+        applications_title: "Modern Applications",
+        app_biomedical: "Biomedical Imaging",
+        app_biomedical_desc: "Mapping magnetic fields in living cells and tissues",
+        app_materials: "Materials Science",
+        app_materials_desc: "Studying magnetic domains and spin transport",
+        app_quantum: "Quantum Information",
+        app_quantum_desc: "Building blocks for quantum computers and networks",
+        app_physics: "Fundamental Physics",
+        app_physics_desc: "Testing quantum mechanics and measuring fundamental constants",
+        setup_overview_title: "Experimental Setup",
+        setup_overview_text: "The ODMR setup follows confocal microscopy principles and combines optical excitation, microwave manipulation, and fluorescence detection for high-precision quantum sensing.",
+        components_needed: "Required Components:",
+        component_1: "• Base plate for mounting",
+        component_2: "• Green laser diode (532 nm)",
+        component_3: "• 45° mirrors for beam steering",
+        component_4: "• Beam splitter with filter",
+        component_5: "• Converging lens",
+        component_6: "• Light sensor (photodiode)",
+        component_7: "• Electronics box with microwave generation",
+        component_8: "• XY-stage with NV diamond sample",
+        component_9: "• Magnet for external magnetic field",
+        component_10: "• Microwave antenna",
+        safety_title: "⚠️ Safety Instructions",
+        safety_laser: "Never look directly into the laser",
+        safety_magnet: "Caution with implants and electronic devices",
+        safety_power: "Disconnect power before changing connections",
+        quantumminilabs_title: "The QuantumMiniLabs Project",
+        quantumminilabs_text: "The QuantumMiniLabs project is developing an open-source ecosystem that enables low-cost, scalable, modular, and repairable quantum tech experiments. The goal is to deploy the system at 100 educational locations across Germany.",
+        quantumminilabs_vision: "QuantumMiniLabs offer the first affordable DIY platform for experimenting with second-generation quantum systems. NV diamonds allow for stable experiments at room temperature."
       }
     };
     
@@ -201,6 +429,44 @@
     document.addEventListener('DOMContentLoaded', function() {
       const savedLang = localStorage.getItem('language') || 'de';
       setLanguage(savedLang);
+      
+      // Hide WebSerial navigation item if on ESP32
+      const isLocalDevice = window.location.hostname === '192.168.4.1' || 
+                           window.location.hostname.includes('ODMR_') || 
+                           window.location.protocol === 'file:';
+      
+      if (isLocalDevice) {
+        const webSerialNavItem = document.getElementById('webSerialNavItem');
+        if (webSerialNavItem) {
+          webSerialNavItem.style.display = 'none';
+        }
+      }
+      
+      // Fetch and display version information
+      fetch('/version')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Version endpoint not available');
+          }
+          return response.json();
+        })
+        .then(data => {
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = 'Version: ESP32 ODMR Server';
+          }
+        });
     });
   </script>
 </body>

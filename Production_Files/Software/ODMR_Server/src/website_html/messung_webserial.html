@@ -72,7 +72,7 @@
       
       .grid-container {
           display: grid;
-          grid-template-columns: 1fr 300px;
+          grid-template-columns: 1fr 350px;
           gap: 1rem;
           margin: auto;
           padding: 0;
@@ -84,9 +84,11 @@
           padding: 1rem;
           height: 100%;
           min-height: 0;
+          overflow: hidden;
       }
       .grid2, .grid3, .grid4, .grid5, .grid6 {
           padding: 1rem;
+          min-width: 0;
       }
       
       /* Fixed height containers for measurement sections */
@@ -194,10 +196,25 @@
       }
       
       /* Responsive design improvements */
+      @media (max-width: 1200px) {
+          .grid-container {
+              grid-template-columns: 1fr 300px;
+          }
+      }
+      
+      @media (max-width: 992px) {
+          .grid-container {
+              grid-template-columns: 1fr 280px;
+          }
+      }
+      
       @media (max-width: 768px) {
           .grid-container {
               grid-template-columns: 1fr;
               height: auto;
+          }
+          .grid1 {
+              grid-area: auto;
           }
           .input-group .btn {
               padding: 0.25rem 0.5rem;
@@ -284,15 +301,27 @@
         prepareFreqs();
         prepareXSkala(fBegin, fEnd);
         
+        let skippedCount = 0;
         while (Frequenzen.length != 0 && MessungRunning) {
           var response = await freqMessung(Frequenzen.shift());
           if (!MessungRunning) break; // Check if stopped during measurement
+          
+          // Skip null responses (timeouts)
+          if (response[1] === null || response[2] === null) {
+            skippedCount++;
+            console.warn(`Skipped measurement at ${response[0]} MHz (${skippedCount} total skipped)`);
+            continue;
+          }
           
           Messreihe.push(response);
           _YMin = Math.min(_YMin, response[1] - 100);
           _YMax = Math.max(_YMax, response[1] + 100);
           autoScale();
           drawCircle(response, +200, "black");
+        }
+        
+        if (skippedCount > 0) {
+          addSerialMessage(`⚠ Warnung: ${skippedCount} Messungen wurden wegen Timeout übersprungen`);
         }
         
         if (MessungRunning) { // Only add data if measurement completed
@@ -848,6 +877,22 @@
       
       // Select all functionality
       document.addEventListener('DOMContentLoaded', function() {
+      // Fetch and display version information
+      fetch('/version')
+        .then(response => response.json())
+        .then(data => {
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = '';
+          }
+        });
         const selectAllCheckbox = document.getElementById('selectAll');
         if (selectAllCheckbox) {
           selectAllCheckbox.addEventListener('change', function() {
@@ -871,12 +916,21 @@
 
         <div class="collapse navbar-collapse" id="nvNav">
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item"><a class="nav-link" href="index.html">Start</a></li>
-            <li class="nav-item"><a class="nav-link" href="messung.html">Messung (on Device)</a></li>
-            <li class="nav-item"><a class="nav-link active" href="messung_webserial.html">Messung (WebSerial)</a></li>
-            <li class="nav-item"><a class="nav-link" href="justage.html">Justage (folgt)</a></li>
-            <li class="nav-item"><a class="nav-link" href="infos.html">Weitere Infos</a></li>
-          </ul>
+            <li class="nav-item"><a class="nav-link" href="index.html" data-lang-key="nav_start">Start</a></li>
+            <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+            <li class="nav-item"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+            <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
+            <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
+                    <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              🌐 DE
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="langDropdown">
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('de'); return false;">🇩🇪 Deutsch</a></li>
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('en'); return false;">🇺🇸 English</a></li>
+            </ul>
+          </li>
+        </ul>
         </div>
       </div>
     </nav>
@@ -1140,6 +1194,13 @@
                 id="AutoMessung"
                 value="Einzelmessung"
               />
+              <!-- Serial Status Indicator -->
+              <div id="serialStatus" class="mt-2 p-2 border rounded" style="background-color: #f8f9fa; font-size: 12px; max-height: 150px; overflow-y: auto;">
+                <div class="fw-bold mb-1">Serial Status:</div>
+                <div id="serialMessages" style="font-family: monospace; font-size: 11px;">
+                  <span class="text-muted">Nicht verbunden</span>
+                </div>
+              </div>
             </div>
 
             <div class="gridb1"></div>
@@ -1639,6 +1700,12 @@
               .getReader();
             readLoop();
             document.getElementById("ConnectSerial").value = "Verbunden";
+            
+            // Update serial status
+            const messagesDiv = document.getElementById('serialMessages');
+            if (messagesDiv) {
+              messagesDiv.innerHTML = '<span class="text-success">✓ Serial verbunden</span>';
+            }
           } catch (error) {
             console.error('Error connecting to serial:', error);
             alert('Fehler beim Verbinden mit dem seriellen Port: ' + error.message);
@@ -1653,6 +1720,9 @@
             value.split("\n").forEach((raw) => {
               const line = raw.trim(); // remove \r or extra blanks
               console.log(line);
+              
+              // Display all serial messages in the status area
+              addSerialMessage(line);
               if (!line.startsWith("DATA")) return;
 
               // DATA <freq> <adc> <b-field>
@@ -1667,6 +1737,43 @@
                 pending.delete(f);
               }
             });
+          }
+        }
+
+
+        
+        function addSerialMessage(message) {
+          if (!message) return;
+          
+          const messagesDiv = document.getElementById('serialMessages');
+          if (!messagesDiv) return;
+          
+          const timestamp = new Date().toLocaleTimeString('de-DE');
+          const messageElement = document.createElement('div');
+          messageElement.className = 'mb-1';
+          
+          // Color code different message types
+          let messageClass = 'text-dark';
+          if (message.startsWith('DATA')) {
+            messageClass = 'text-success';
+          } else if (message.includes('ERROR') || message.includes('FAIL')) {
+            messageClass = 'text-danger';
+          } else if (message.includes('OK') || message.includes('SUCCESS')) {
+            messageClass = 'text-primary';
+          }
+          
+          messageElement.innerHTML = `<span class="text-muted">[${timestamp}]</span> <span class="${messageClass}">${message}</span>`;
+          messagesDiv.appendChild(messageElement);
+          
+          // Keep only last 50 messages
+          while (messagesDiv.children.length > 50) {
+            messagesDiv.removeChild(messagesDiv.firstChild);
+          }
+          
+          // Auto-scroll to bottom
+          const statusDiv = document.getElementById('serialStatus');
+          if (statusDiv) {
+            statusDiv.scrollTop = statusDiv.scrollHeight;
           }
         }
 
@@ -1691,9 +1798,27 @@
           .addEventListener("click", connectSerial);
 
         async function freqMessung(f) {
-          return new Promise(async (resolve) => {
-            pending.set(f, resolve);
-            await writer.write(enc.encode(`MEASURE ${f}\n`));
+          return new Promise(async (resolve, reject) => {
+            const timeout = setTimeout(() => {
+              pending.delete(f);
+              console.warn(`Timeout for frequency ${f}, skipping...`);
+              // Return null values instead of rejecting to allow sweep to continue
+              resolve([f, null, null]);
+            }, 3000); // 3 second timeout
+            
+            pending.set(f, (data) => {
+              clearTimeout(timeout);
+              resolve(data);
+            });
+            
+            try {
+              await writer.write(enc.encode(`MEASURE ${f}\n`));
+            } catch (error) {
+              clearTimeout(timeout);
+              pending.delete(f);
+              console.error(`Error sending MEASURE command for ${f}:`, error);
+              resolve([f, null, null]);
+            }
           });
         }
 
@@ -1825,8 +1950,9 @@
     <!-- ░░ Footer ░░----------------------------------------------------------- -->
     <footer class="py-3 mt-auto">
       <div class="container text-center small">
-        Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a>
-      </div>
+      <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
+    </div>
     </footer>
 
     <!-- Bootstrap JS -->
@@ -1846,5 +1972,75 @@
         }
       })();
     </script>
-  </body>
+  
+  <script>
+    // Multi-language support
+    const translations = {
+      de: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Messung (on Device)",
+        "nav_measurement_webserial": "Messung (WebSerial)",
+        "nav_alignment": "Justage",
+        "nav_info": "Weitere Infos",
+        "title": "NV Experimente - Messung durchführen",
+        "page_title": "Messung der Lichtintensität in Abhängigkeit von der Frequenz",
+        "freq_sweep": "Frequenz-Sweep",
+        "live_monitor": "Live Monitor",
+        "connect_serial": "Serial verbinden",
+        "start_measurement": "Messung starten",
+        "stop_measurement": "Messung stoppen",
+        "serial_status": "Serial Status:",
+        "not_connected": "Nicht verbunden"
+      },
+      en: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Measurement (on Device)",
+        "nav_measurement_webserial": "Measurement (WebSerial)",
+        "nav_alignment": "Alignment",
+        "nav_info": "More Info",
+        "title": "NV Experiments - Perform Measurement",
+        "page_title": "Measurement of Light Intensity as a Function of Frequency",
+        "freq_sweep": "Frequency Sweep",
+        "live_monitor": "Live Monitor",
+        "connect_serial": "Connect Serial",
+        "start_measurement": "Start Measurement",
+        "stop_measurement": "Stop Measurement",
+        "serial_status": "Serial Status:",
+        "not_connected": "Not connected"
+      }
+    };
+    
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      updateLanguage(lang);
+      
+      // Update dropdown display
+      const langDropdown = document.getElementById('langDropdown');
+      if (langDropdown) {
+        langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;
+      }
+    }
+    
+    function updateLanguage(lang) {
+      const elements = document.querySelectorAll('[data-lang-key]');
+      elements.forEach(element => {
+        const key = element.getAttribute('data-lang-key');
+        if (translations[lang] && translations[lang][key]) {
+          element.textContent = translations[lang][key];
+        }
+      });
+      
+      // Update title
+      if (translations[lang] && translations[lang].title) {
+        document.title = translations[lang].title;
+      }
+    }
+    
+    // Initialize language on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedLang = localStorage.getItem('language') || 'de';
+      setLanguage(savedLang);
+    });
+  </script>
+</body>
 </html>

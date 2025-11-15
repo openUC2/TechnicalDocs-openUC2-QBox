@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 // #include <SPIFFS.h>  // No longer needed - using header files
 #include <SPI.h>
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
@@ -18,7 +19,7 @@
 #include "website/infos_html.h"
 #include "website/bootstrap_css.h"
 #include "website/bootstrap_js.h"
-// #include "website/nvgitter_png.h"  // Excluded for size reasons
+#include "website/nvgitter_png.h"
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
 #define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
@@ -86,8 +87,16 @@ ADF4351 adf(clock, data, LE, CE);
 // TSL2591 sensor
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
 
+// TSL2591 settings storage
+tsl2591Gain_t currentGain = TSL2591_GAIN_MAX;
+tsl2591IntegrationTime_t currentIntegrationTime = TSL2591_INTEGRATIONTIME_100MS;
+
 // WebServer on port 80
 WebServer server(80);
+
+// DNS Server for captive portal
+DNSServer dnsServer;
+const byte DNS_PORT = 53;
 
 // Neopixel settings
 long firstPixelHue = 0;
@@ -209,8 +218,10 @@ void handleFileRequest(const String &path)
   }
   else if (actualPath == "/NVGitter.png")
   {
-    // Image not included in header version for size reasons
-    server.send(404, "text/plain", "Image not available in header version");
+    // Serve optimized image from header file
+    contentType = NVGITTER_PNG_CONTENT_TYPE;
+    server.send(200, contentType, "");
+    server.sendContent_P((const char*)NVGITTER_PNG_DATA, NVGITTER_PNG_SIZE);
     return;
   }
 
@@ -220,7 +231,11 @@ void handleFileRequest(const String &path)
   }
   else
   {
-    server.send(404, "text/plain", "Not found");
+    // Captive portal behavior: redirect unknown requests to index page
+    // This helps when users connect to WiFi and browser tries to detect captive portal
+    Serial.print("Unknown path redirected to index: ");
+    Serial.println(actualPath);
+    server.send_P(200, "text/html", INDEX_HTML);
   }
 }
 
@@ -231,6 +246,7 @@ uint32_t readTSL2591()
   tsl.getEvent(&event);
   // event.light is in lux, but you can read raw channels as well
   uint32_t lux = (uint32_t)event.light;
+  Serial.println("Light: " + String(lux) + " lux");
   return lux;
 }
 
@@ -353,6 +369,103 @@ void handleIntensity()
   server.send(200, "application/json", response);
 }
 
+// Get current TSL2591 settings
+void handleGetTSLSettings()
+{
+  String response = "{\"gain\":";
+  response += String((int)currentGain);
+  response += ",\"integration_time\":";
+  response += String((int)currentIntegrationTime);
+  response += "}";
+  server.send(200, "application/json", response);
+}
+
+// Set TSL2591 gain
+void handleSetTSLGain()
+{
+  if (!server.hasArg("gain"))
+  {
+    server.send(400, "application/json", "{\"error\":\"no gain parameter\"}");
+    return;
+  }
+  
+  int gainValue = server.arg("gain").toInt();
+  tsl2591Gain_t newGain;
+  
+  switch(gainValue) {
+    case 0x00:
+      newGain = TSL2591_GAIN_LOW;
+      break;
+    case 0x10:
+      newGain = TSL2591_GAIN_MED;
+      break;
+    case 0x20:
+      newGain = TSL2591_GAIN_HIGH;
+      break;
+    case 0x30:
+      newGain = TSL2591_GAIN_MAX;
+      break;
+    default:
+      server.send(400, "application/json", "{\"error\":\"invalid gain value\"}");
+      return;
+  }
+  
+  currentGain = newGain;
+  tsl.setGain(currentGain);
+  Serial.printf("TSL2591 Gain set to: 0x%02X\n", (int)currentGain);
+  
+  String response = "{\"status\":\"ok\",\"gain\":";
+  response += String((int)currentGain);
+  response += "}";
+  server.send(200, "application/json", response);
+}
+
+// Set TSL2591 integration time
+void handleSetTSLIntegrationTime()
+{
+  if (!server.hasArg("integration_time"))
+  {
+    server.send(400, "application/json", "{\"error\":\"no integration_time parameter\"}");
+    return;
+  }
+  
+  int timeValue = server.arg("integration_time").toInt();
+  tsl2591IntegrationTime_t newTime;
+  
+  switch(timeValue) {
+    case 0x00:
+      newTime = TSL2591_INTEGRATIONTIME_100MS;
+      break;
+    case 0x01:
+      newTime = TSL2591_INTEGRATIONTIME_200MS;
+      break;
+    case 0x02:
+      newTime = TSL2591_INTEGRATIONTIME_300MS;
+      break;
+    case 0x03:
+      newTime = TSL2591_INTEGRATIONTIME_400MS;
+      break;
+    case 0x04:
+      newTime = TSL2591_INTEGRATIONTIME_500MS;
+      break;
+    case 0x05:
+      newTime = TSL2591_INTEGRATIONTIME_600MS;
+      break;
+    default:
+      server.send(400, "application/json", "{\"error\":\"invalid integration time value\"}");
+      return;
+  }
+  
+  currentIntegrationTime = newTime;
+  tsl.setTiming(currentIntegrationTime);
+  Serial.printf("TSL2591 Integration Time set to: 0x%02X\n", (int)currentIntegrationTime);
+  
+  String response = "{\"status\":\"ok\",\"integration_time\":";
+  response += String((int)currentIntegrationTime);
+  response += "}";
+  server.send(200, "application/json", response);
+}
+
 // Check if WebSerial should be enabled (not on local AP interface)
 void handleWebSerialCheck()
 {
@@ -403,17 +516,17 @@ void setup()
 
 // only for esp32s3
 #ifdef ESP32S3
-  disableCore1WDT(); // Deactivate Watchdog for core 1
+  //disableCore1WDT(); // Deactivate Watchdog for core 1
 #endif
-  disableLoopWDT(); // Deactivate Watchdog for loop
 
-  pinMode(LASER_PIN, OUTPUT);
-  digitalWrite(LASER_PIN, LOW);
+pinMode(LASER_PIN, OUTPUT);
+digitalWrite(LASER_PIN, LOW);
 
-  Serial.begin(115200);
-  delay(1500); // Allow time to connect
-  Serial.println("Booting...");
-  
+Serial.begin(115200);
+delay(1500); // Allow time to connect
+Serial.println("Booting...");
+
+disableLoopWDT(); // Deactivate Watchdog for loop
   // Check WiFi capabilities
   Serial.print("WiFi Mode capabilities: ");
   Serial.println(WiFi.getMode());
@@ -425,7 +538,7 @@ void setup()
   WiFi.macAddress(mac);
   String macID = String(mac[3], HEX) + String(mac[4], HEX) + String(mac[5], HEX);
   macID.toUpperCase();
-  String dynamicSSID = "ODMR_" + macID;
+  String dynamicSSID = "openUC2_ODMR_" + macID;
   Serial.print("SSID: ");
   Serial.println(dynamicSSID);
 
@@ -469,6 +582,11 @@ void setup()
     }
   }
 
+  // Start DNS server for captive portal
+  // This will redirect all DNS requests to our IP (192.168.4.1)
+  dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
+  Serial.println("DNS Server started for captive portal");
+
   Serial.println("Using header files for website content");
 
   // I2C initialization for TSL2591
@@ -489,11 +607,12 @@ void setup()
   }
   else
   {
-    tsl.setGain(TSL2591_GAIN_MAX);
-    tsl.setTiming(TSL2591_INTEGRATIONTIME_100MS);
+    tsl.setGain(currentGain);
+    tsl.setTiming(currentIntegrationTime);
     // turn off led on TSL2591
     tsl.enableAutoRange(true);
     Serial.println("TSL2591 initialized");
+    Serial.printf("TSL2591 Gain: 0x%02X, Integration Time: 0x%02X\n", (int)currentGain, (int)currentIntegrationTime);
     
   }
 
@@ -504,12 +623,40 @@ void setup()
   // adf.updateFrequency(2.2e9); // 2.2 GHz // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
+  // Explicit root handler to ensure proper routing
+  server.on("/", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  
+  // Captive portal detection endpoints for various OS
+  // Android
+  server.on("/generate_204", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  // Microsoft
+  server.on("/connecttest.txt", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  server.on("/ncsi.txt", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  // Apple
+  server.on("/hotspot-detect.html", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  server.on("/library/test/success.html", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
   server.on("/measure", HTTP_GET, handleMeasure);
   server.on("/intensity", HTTP_GET, handleIntensity);
   server.on("/webserial_check", HTTP_GET, handleWebSerialCheck);
+  server.on("/tsl/settings", HTTP_GET, handleGetTSLSettings);
+  server.on("/tsl/gain", HTTP_POST, handleSetTSLGain);
+  server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
 
   server.begin();
   // TODO: Need a function that disables the adf4351 output
@@ -518,6 +665,9 @@ void setup()
 
 void loop()
 {
+  // Process DNS requests for captive portal
+  dnsServer.processNextRequest();
+  
   server.handleClient();
   
   // Update LED status indicators
