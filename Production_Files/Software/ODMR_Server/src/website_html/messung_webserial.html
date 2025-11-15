@@ -301,15 +301,27 @@
         prepareFreqs();
         prepareXSkala(fBegin, fEnd);
         
+        let skippedCount = 0;
         while (Frequenzen.length != 0 && MessungRunning) {
           var response = await freqMessung(Frequenzen.shift());
           if (!MessungRunning) break; // Check if stopped during measurement
+          
+          // Skip null responses (timeouts)
+          if (response[1] === null || response[2] === null) {
+            skippedCount++;
+            console.warn(`Skipped measurement at ${response[0]} MHz (${skippedCount} total skipped)`);
+            continue;
+          }
           
           Messreihe.push(response);
           _YMin = Math.min(_YMin, response[1] - 100);
           _YMax = Math.max(_YMax, response[1] + 100);
           autoScale();
           drawCircle(response, +200, "black");
+        }
+        
+        if (skippedCount > 0) {
+          addSerialMessage(`⚠ Warnung: ${skippedCount} Messungen wurden wegen Timeout übersprungen`);
         }
         
         if (MessungRunning) { // Only add data if measurement completed
@@ -1786,9 +1798,27 @@
           .addEventListener("click", connectSerial);
 
         async function freqMessung(f) {
-          return new Promise(async (resolve) => {
-            pending.set(f, resolve);
-            await writer.write(enc.encode(`MEASURE ${f}\n`));
+          return new Promise(async (resolve, reject) => {
+            const timeout = setTimeout(() => {
+              pending.delete(f);
+              console.warn(`Timeout for frequency ${f}, skipping...`);
+              // Return null values instead of rejecting to allow sweep to continue
+              resolve([f, null, null]);
+            }, 3000); // 3 second timeout
+            
+            pending.set(f, (data) => {
+              clearTimeout(timeout);
+              resolve(data);
+            });
+            
+            try {
+              await writer.write(enc.encode(`MEASURE ${f}\n`));
+            } catch (error) {
+              clearTimeout(timeout);
+              pending.delete(f);
+              console.error(`Error sending MEASURE command for ${f}:`, error);
+              resolve([f, null, null]);
+            }
           });
         }
 

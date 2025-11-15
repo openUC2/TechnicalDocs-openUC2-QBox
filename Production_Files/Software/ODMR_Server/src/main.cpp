@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 // #include <SPIFFS.h>  // No longer needed - using header files
 #include <SPI.h>
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
@@ -92,6 +93,10 @@ tsl2591IntegrationTime_t currentIntegrationTime = TSL2591_INTEGRATIONTIME_100MS;
 
 // WebServer on port 80
 WebServer server(80);
+
+// DNS Server for captive portal
+DNSServer dnsServer;
+const byte DNS_PORT = 53;
 
 // Neopixel settings
 long firstPixelHue = 0;
@@ -226,7 +231,11 @@ void handleFileRequest(const String &path)
   }
   else
   {
-    server.send(404, "text/plain", "Not found");
+    // Captive portal behavior: redirect unknown requests to index page
+    // This helps when users connect to WiFi and browser tries to detect captive portal
+    Serial.print("Unknown path redirected to index: ");
+    Serial.println(actualPath);
+    server.send_P(200, "text/html", INDEX_HTML);
   }
 }
 
@@ -573,6 +582,11 @@ disableLoopWDT(); // Deactivate Watchdog for loop
     }
   }
 
+  // Start DNS server for captive portal
+  // This will redirect all DNS requests to our IP (192.168.4.1)
+  dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
+  Serial.println("DNS Server started for captive portal");
+
   Serial.println("Using header files for website content");
 
   // I2C initialization for TSL2591
@@ -614,6 +628,26 @@ disableLoopWDT(); // Deactivate Watchdog for loop
     server.send_P(200, "text/html", INDEX_HTML);
   });
   
+  // Captive portal detection endpoints for various OS
+  // Android
+  server.on("/generate_204", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  // Microsoft
+  server.on("/connecttest.txt", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  server.on("/ncsi.txt", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  // Apple
+  server.on("/hotspot-detect.html", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  server.on("/library/test/success.html", HTTP_GET, []() {
+    server.send_P(200, "text/html", INDEX_HTML);
+  });
+  
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
@@ -631,6 +665,9 @@ disableLoopWDT(); // Deactivate Watchdog for loop
 
 void loop()
 {
+  // Process DNS requests for captive portal
+  dnsServer.processNextRequest();
+  
   server.handleClient();
   
   // Update LED status indicators
