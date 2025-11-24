@@ -5,10 +5,10 @@
 #define __VERSION_INFO_H__
 
 #define FIRMWARE_VERSION "1.0.0"
-#define BUILD_DATE "2025-11-15"
-#define BUILD_TIME "11:16:50"
-#define BUILD_TIMESTAMP "20251115111650"
-#define GIT_HASH "534ccea"
+#define BUILD_DATE "2025-11-23"
+#define BUILD_TIME "22:44:30"
+#define BUILD_TIMESTAMP "20251123224430"
+#define GIT_HASH "c6fc3cf"
 #define GIT_BRANCH "copilot/fix-website-redirects"
 
 // Combined version string

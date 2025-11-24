@@ -629,23 +629,43 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   });
   
   // Captive portal detection endpoints for various OS
-  // Android
+  // These endpoints help trigger the captive portal popup on different devices
+  
+  // Android captive portal detection
   server.on("/generate_204", HTTP_GET, []() {
-    server.send_P(200, "text/html", INDEX_HTML);
+    // Android expects a redirect to trigger captive portal
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/plain", "");
   });
-  // Microsoft
+  
+  // Microsoft Windows captive portal detection
   server.on("/connecttest.txt", HTTP_GET, []() {
-    server.send_P(200, "text/html", INDEX_HTML);
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/plain", "");
   });
   server.on("/ncsi.txt", HTTP_GET, []() {
-    server.send_P(200, "text/html", INDEX_HTML);
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/plain", "");
   });
-  // Apple
+  
+  // Apple iOS/MacOS captive portal detection
   server.on("/hotspot-detect.html", HTTP_GET, []() {
-    server.send_P(200, "text/html", INDEX_HTML);
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/html", "");
   });
   server.on("/library/test/success.html", HTTP_GET, []() {
-    server.send_P(200, "text/html", INDEX_HTML);
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/html", "");
+  });
+  
+  // Additional endpoints for better captive portal detection
+  server.on("/success.txt", HTTP_GET, []() {
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/plain", "");
+  });
+  server.on("/canonical.html", HTTP_GET, []() {
+    server.sendHeader("Location", "http://192.168.4.1/", true);
+    server.send(302, "text/html", "");
   });
   
   server.onNotFound([]()
