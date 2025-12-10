@@ -15,11 +15,11 @@
 #include "website/index_html.h"
 #include "website/messung_html.h"
 #include "website/messung_webserial_html.h"
+#include "website/ratio_html.h"
 #include "website/justage_html.h"
 #include "website/infos_html.h"
 #include "website/bootstrap_css.h"
 #include "website/bootstrap_js.h"
-#include "website/nvgitter_png.h"
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
 #define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
@@ -191,6 +191,11 @@ void handleFileRequest(const String &path)
     contentType = "text/html";
     content = MESSUNG_WEBSERIAL_HTML;
   }
+  else if (actualPath == "/ratio.html")
+  {
+    contentType = "text/html";
+    content = RATIO_HTML;
+  }
   else if (actualPath == "/justage.html")
   {
     contentType = "text/html";
@@ -215,14 +220,6 @@ void handleFileRequest(const String &path)
   {
     contentType = "application/javascript";
     content = BOOTSTRAP_JS;
-  }
-  else if (actualPath == "/NVGitter.png")
-  {
-    // Serve optimized image from header file
-    contentType = NVGITTER_PNG_CONTENT_TYPE;
-    server.send(200, contentType, "");
-    server.sendContent_P((const char*)NVGITTER_PNG_DATA, NVGITTER_PNG_SIZE);
-    return;
   }
 
   if (content != nullptr)
@@ -511,6 +508,108 @@ void i2c_scan()
     Serial.println("done\n");
 }
 
+// Messen der IR-Intensität bei einer gegebenen Frequenz (in MHz)
+uint32_t measureIntensityAtFrequency(float freqMHz,
+                                     uint8_t averages = 3,
+                                     uint16_t settle_ms = 10)
+{
+  if (freqMHz < ADF_FREQ_MIN || freqMHz > ADF_FREQ_MAX) {
+    Serial.printf("ERR measureIntensityAtFrequency: %.3f MHz out of range\n", freqMHz);
+    return 0;
+  }
+
+  adf.updateFrequency(freqMHz * 1e6);  // MHz -> Hz
+  delay(settle_ms);                    // PLL settle
+
+  uint64_t sum = 0;
+  for (uint8_t i = 0; i < averages; ++i) {
+    sum += readIR();
+    delay(1);
+  }
+  return (uint32_t)(sum / averages);
+}
+
+// /ratio?f1=2865&f2=2875[&f3=2855][&avg=5]
+// Liefert Intensitäten und normierte Ratios als JSON
+void handleMeasureRatio()
+{
+  if (!server.hasArg("f1") || !server.hasArg("f2")) {
+    server.send(400, "application/json",
+                "{\"error\":\"need f1 and f2 in MHz\"}");
+    return;
+  }
+
+  float f1 = server.arg("f1").toFloat();
+  float f2 = server.arg("f2").toFloat();
+
+  bool hasF3 = server.hasArg("f3");
+  float f3 = hasF3 ? server.arg("f3").toFloat() : 0.0f;
+
+  uint8_t averages = 3;
+  if (server.hasArg("avg")) {
+    int tmp = server.arg("avg").toInt();
+    if (tmp < 1)  tmp = 1;
+    if (tmp > 20) tmp = 20;
+    averages = (uint8_t)tmp;
+  }
+
+  setLEDStatus(LED_MEASURING);
+
+  uint32_t I1 = measureIntensityAtFrequency(f1, averages);
+  uint32_t I2 = measureIntensityAtFrequency(f2, averages);
+  uint32_t I3 = 0;
+  Serial.printf("Measured intensities: I1= %u @ %.3f MHz, I2= %u @ %.3f MHz",
+                I1, f1, I2, f2);
+  if (hasF3) {
+    I3 = measureIntensityAtFrequency(f3, averages);
+  }
+
+  float r12 = 0.0f;
+  if (I1 + I2 > 0) {
+    r12 = ((float)I1 - (float)I2) / ((float)I1 + (float)I2);
+  }
+  Serial.printf(", I3= %u @ %.3f MHz\n", I3, f3);
+
+  float r13 = 0.0f;
+  float r23 = 0.0f;
+  if (hasF3) {
+    if (I1 + I3 > 0)
+      r13 = ((float)I1 - (float)I3) / ((float)I1 + (float)I3);
+    if (I2 + I3 > 0)
+      r23 = ((float)I2 - (float)I3) / ((float)I2 + (float)I3);
+  }
+  Serial.printf("Ratios: r12= %.6f", r12);
+  if (hasF3) {
+    Serial.printf(", r13= %.6f, r23= %.6f", r13, r23);
+  }
+  Serial.println();
+
+  String json = "{";
+  json += "\"status\":\"ok\",";
+  json += "\"avg\":" + String(averages) + ",";
+  json += "\"points\":[";
+  json += "{\"f\":" + String(f1, 3) + ",\"I\":" + String(I1) + "},";
+  json += "{\"f\":" + String(f2, 3) + ",\"I\":" + String(I2) + "}";
+  if (hasF3) {
+    json += ",{\"f\":" + String(f3, 3) + ",\"I\":" + String(I3) + "}";
+  }
+  json += "],";
+  json += "\"ratio\":{";
+  json += "\"type\":\"diff_over_sum\",";
+  json += "\"r12\":" + String(r12, 6);
+  if (hasF3) {
+    json += ",\"r13\":" + String(r13, 6);
+    json += ",\"r23\":" + String(r23, 6);
+  }
+  json += "}";
+  json += "}";
+  Serial.println("JSON response: " + json);
+
+  server.send(200, "application/json", json);
+
+  setLEDStatus(LED_CONNECTED);
+}
+
 void setup()
 {
 
@@ -525,6 +624,7 @@ digitalWrite(LASER_PIN, LOW);
 Serial.begin(115200);
 delay(1500); // Allow time to connect
 Serial.println("Booting...");
+
 
 disableLoopWDT(); // Deactivate Watchdog for loop
   // Check WiFi capabilities
@@ -542,6 +642,12 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   Serial.print("SSID: ");
   Serial.println(dynamicSSID);
 
+  // choose random channel between 1 and 11
+  randomSeed(micros());
+  int wifiChannel = random(1, 12);
+  Serial.print("Using WiFi channel: ");
+  Serial.println(wifiChannel);
+  WiFi.channel(wifiChannel);
   // Ensure WiFi is completely disconnected and reset
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -677,6 +783,7 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   server.on("/tsl/settings", HTTP_GET, handleGetTSLSettings);
   server.on("/tsl/gain", HTTP_POST, handleSetTSLGain);
   server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
+  server.on("/ratio", HTTP_GET, handleMeasureRatio);   
 
   server.begin();
   // TODO: Need a function that disables the adf4351 output
@@ -757,6 +864,30 @@ void loop()
         {
           Serial.printf("ERR unknown command: %s\n", rxBuf.c_str());
         }
+        else if (rxBuf.startsWith("RATIO "))
+        {
+          // Format: RATIO f1 f2
+          int sp1 = rxBuf.indexOf(' ');
+          int sp2 = rxBuf.indexOf(' ', sp1 + 1);
+          if (sp2 > sp1) {
+            float f1 = rxBuf.substring(sp1 + 1, sp2).toFloat();
+            float f2 = rxBuf.substring(sp2 + 1).toFloat();
+
+            setLEDStatus(LED_MEASURING);
+            uint32_t I1 = measureIntensityAtFrequency(f1);
+            uint32_t I2 = measureIntensityAtFrequency(f2);
+            float r12 = (I1 + I2 > 0)
+                        ? ((float)I1 - (float)I2) / ((float)I1 + (float)I2)
+                        : 0.0f;
+            setLEDStatus(LED_CONNECTED);
+
+            Serial.printf("RATIO %.3f %.3f %lu %lu %.6f\n",
+                          f1, f2, I1, I2, r12);
+          } else {
+            Serial.println("ERR RATIO syntax");
+          }
+        }
+
       }
       rxBuf = "";
     }

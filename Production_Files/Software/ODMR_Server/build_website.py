@@ -82,6 +82,7 @@ def main():
         "index.html": ("index_html.h", "INDEX_HTML"),
         "messung.html": ("messung_html.h", "MESSUNG_HTML"),
         "messung_webserial.html": ("messung_webserial_html.h", "MESSUNG_WEBSERIAL_HTML"),
+        "ratio.html": ("ratio_html.h", "RATIO_HTML"),
         "justage.html": ("justage_html.h", "JUSTAGE_HTML"),
         "infos.html": ("infos_html.h", "INFOS_HTML"),
         "style.css": ("style_css.h", "STYLE_CSS")

@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NV Experimente - B-Field Monitoring (Ratio Mode)</title>
+
+  <!-- Bootstrap 5 -->
+  <script>
+    // Automatic Bootstrap loading: Use CDN for development, local for ESP32
+    (function() {
+      const isLocalDevice = window.location.hostname === '192.168.4.1' || 
+                           window.location.hostname.includes('ODMR_') || 
+                           window.location.protocol === 'file:';
+      
+      if (isLocalDevice) {
+        // Load from ESP32 local server
+        document.write('<link href="/bootstrap.min.css" rel="stylesheet">');
+      } else {
+        // Load from CDN for development
+        document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">');
+        document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">');
+      }
+    })();
+  </script>
+
+  <!-- Brand palette ---------------------------------------------------------->
+  <style>
+    :root{
+      --uc2-blue:       #023773;  /* primary   */
+      --uc2-green:      #85b918;  /* success   */
+      --uc2-turquoise:  #1f9c7c;  /* info      */
+      --uc2-light:      #faf9f9;  /* body bg   */
+      --uc2-grey:       #999999;  /* muted txt */
+    }
+    body           { background: var(--uc2-light); color: var(--uc2-grey); }
+    h1,h2,h3,h4,h5 { color: var(--uc2-blue); }
+    /* navbar */
+    .navbar         { background: var(--uc2-blue); }
+    .navbar-brand,
+    .navbar-nav .nav-link { color:#fff; }
+    .navbar-nav .nav-link.active{ color: var(--uc2-green); }
+    .navbar-nav .nav-link:hover{ color: var(--uc2-turquoise); }
+    /* links in text */
+    a{ color: var(--uc2-blue); }
+    a:hover{ color: var(--uc2-turquoise); }
+    footer{ background: var(--uc2-blue); color:#fff; }
+    
+    /* Custom styles for ratio monitoring */
+    .ratio-display {
+      font-size: 3rem;
+      font-weight: bold;
+      color: var(--uc2-blue);
+      text-align: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 10px;
+      margin: 10px 0;
+    }
+    .ratio-display.positive { color: var(--uc2-green); }
+    .ratio-display.negative { color: #dc3545; }
+    
+    .intensity-value {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--uc2-grey);
+    }
+    
+    .frequency-input {
+      max-width: 150px;
+    }
+    
+    .monitoring-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .status-indicator {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: #6c757d;
+      border: 2px solid #dee2e6;
+    }
+    
+    .status-indicator.running {
+      background-color: var(--uc2-green);
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    
+    /* Strip chart canvas */
+    #ratioPlot {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      background: #fff;
+    }
+    
+    .data-table {
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+    
+    .data-table td, .data-table th {
+      padding: 8px 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ░░ Navbar ░░----------------------------------------------------------- -->
+  <nav class="navbar navbar-expand-lg shadow-sm mb-4">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html">NV-Experimente</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#nvNav" aria-controls="nvNav" aria-expanded="false">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="nvNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="index.html" data-lang-key="nav_start">Start</a></li>
+          <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+          <li class="nav-item" id="webSerialNavItem"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+          <li class="nav-item"><a class="nav-link active" href="ratio.html" data-lang-key="nav_ratio">B-Field Monitor</a></li>
+          <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
+          <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              🌐 DE
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="langDropdown">
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('de'); return false;">🇩🇪 Deutsch</a></li>
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('en'); return false;">🇺🇸 English</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ░░ Main content ░░------------------------------------------------------ -->
+  <div class="container-fluid">
+    <h1 class="display-6 mb-4 text-center" data-lang-key="page_title">Fast B-Field Monitoring (Ratio Mode)</h1>
+    
+    <div class="row">
+      <!-- Left column: Controls -->
+      <div class="col-lg-4">
+        <!-- Frequency Settings Card -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-broadcast"></i> <span data-lang-key="freq_settings">Frequenz-Einstellungen</span></h5>
+          </div>
+          <div class="card-body">
+            <!-- Mode Toggle -->
+            <div class="mb-3">
+              <label class="form-label" data-lang-key="mode_label">Modus:</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="modeSelect" id="mode2pt" value="2" checked>
+                <label class="btn btn-outline-primary" for="mode2pt" data-lang-key="mode_2pt">2-Punkt</label>
+                <input type="radio" class="btn-check" name="modeSelect" id="mode3pt" value="3">
+                <label class="btn btn-outline-primary" for="mode3pt" data-lang-key="mode_3pt">3-Punkt</label>
+              </div>
+            </div>
+            
+            <!-- Frequency 1 -->
+            <div class="mb-3">
+              <label for="freq1" class="form-label">f₁ (MHz)</label>
+              <div class="input-group">
+                <input type="number" class="form-control text-center" id="freq1" 
+                       value="2865" min="2200" max="4400" step="0.1"
+                       title="Erste Messfrequenz (linke Flanke)" data-bs-toggle="tooltip">
+                <span class="input-group-text">MHz</span>
+              </div>
+              <small class="text-muted" data-lang-key="freq1_hint">Linke Flanke des Dips</small>
+            </div>
+            
+            <!-- Frequency 2 -->
+            <div class="mb-3">
+              <label for="freq2" class="form-label">f₂ (MHz)</label>
+              <div class="input-group">
+                <input type="number" class="form-control text-center" id="freq2" 
+                       value="2875" min="2200" max="4400" step="0.1"
+                       title="Zweite Messfrequenz (rechte Flanke)" data-bs-toggle="tooltip">
+                <span class="input-group-text">MHz</span>
+              </div>
+              <small class="text-muted" data-lang-key="freq2_hint">Rechte Flanke des Dips</small>
+            </div>
+            
+            <!-- Frequency 3 (optional) -->
+            <div class="mb-3" id="freq3Container" style="display: none;">
+              <label for="freq3" class="form-label">f₃ (MHz)</label>
+              <div class="input-group">
+                <input type="number" class="form-control text-center" id="freq3" 
+                       value="2870" min="2200" max="4400" step="0.1"
+                       title="Dritte Messfrequenz (Zentrum/Referenz)" data-bs-toggle="tooltip">
+                <span class="input-group-text">MHz</span>
+              </div>
+              <small class="text-muted" data-lang-key="freq3_hint">Zentrum oder Referenz</small>
+            </div>
+            
+            <!-- Averaging -->
+            <div class="mb-3">
+              <label for="avgCount" class="form-label" data-lang-key="avg_label">Mittelungen pro Punkt:</label>
+              <input type="range" class="form-range" id="avgCount" min="1" max="10" value="3">
+              <div class="d-flex justify-content-between">
+                <small>1</small>
+                <small id="avgValue">3</small>
+                <small>10</small>
+              </div>
+            </div>
+            
+            <!-- Interval -->
+            <div class="mb-3">
+              <label for="intervalMs" class="form-label" data-lang-key="interval_label">Messintervall (ms):</label>
+              <input type="number" class="form-control text-center" id="intervalMs" 
+                     value="100" min="50" max="5000" step="50">
+            </div>
+          </div>
+        </div>
+        
+        <!-- Control Buttons Card -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-controller"></i> <span data-lang-key="controls">Steuerung</span></h5>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-success btn-lg" id="startMonitoring">
+                <i class="bi bi-play-fill"></i> <span data-lang-key="start_monitoring">Monitoring starten</span>
+              </button>
+              <button type="button" class="btn btn-danger btn-lg" id="stopMonitoring" disabled>
+                <i class="bi bi-stop-fill"></i> <span data-lang-key="stop_monitoring">Monitoring stoppen</span>
+              </button>
+            </div>
+            
+            <!-- Status indicator -->
+            <div class="monitoring-status mt-3 justify-content-center">
+              <div class="status-indicator" id="statusIndicator"></div>
+              <span id="statusText" data-lang-key="status_ready">Bereit</span>
+            </div>
+            
+            <!-- Measurement counter -->
+            <div class="text-center mt-2">
+              <small class="text-muted"><span data-lang-key="measurements">Messungen</span>: <span id="measurementCount">0</span></small>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Use Sweep Peaks Button -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-graph-up"></i> <span data-lang-key="calibration">Kalibrierung</span></h5>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted" data-lang-key="calibration_hint">
+              Führen Sie zuerst einen Sweep auf der Messungsseite durch, um die ODMR-Dips zu finden.
+            </p>
+            <button type="button" class="btn btn-outline-primary w-100" id="useSweepPeaks" disabled>
+              <i class="bi bi-magic"></i> <span data-lang-key="use_sweep_peaks">Sweep-Peaks verwenden</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Right column: Display -->
+      <div class="col-lg-8">
+        <!-- Current Values Card -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-speedometer2"></i> <span data-lang-key="current_values">Aktuelle Werte</span></h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <!-- Main Ratio Display -->
+              <div class="col-md-6">
+                <div class="text-center">
+                  <small class="text-muted" data-lang-key="ratio_label">Ratio r₁₂ = (I₁-I₂)/(I₁+I₂)</small>
+                  <div class="ratio-display" id="ratioDisplay">---</div>
+                </div>
+              </div>
+              
+              <!-- Intensity Values -->
+              <div class="col-md-6">
+                <table class="table table-sm data-table">
+                  <tbody>
+                    <tr>
+                      <td><strong>I₁</strong> @ <span id="f1Display">---</span> MHz</td>
+                      <td class="intensity-value" id="i1Display">---</td>
+                    </tr>
+                    <tr>
+                      <td><strong>I₂</strong> @ <span id="f2Display">---</span> MHz</td>
+                      <td class="intensity-value" id="i2Display">---</td>
+                    </tr>
+                    <tr id="i3Row" style="display: none;">
+                      <td><strong>I₃</strong> @ <span id="f3Display">---</span> MHz</td>
+                      <td class="intensity-value" id="i3Display">---</td>
+                    </tr>
+                  </tbody>
+                </table>
+                
+                <!-- Additional ratios for 3-point mode -->
+                <div id="additionalRatios" style="display: none;">
+                  <hr>
+                  <div class="row">
+                    <div class="col-6 text-center">
+                      <small class="text-muted">r₁₃</small>
+                      <div id="r13Display" class="h5">---</div>
+                    </div>
+                    <div class="col-6 text-center">
+                      <small class="text-muted">r₂₃</small>
+                      <div id="r23Display" class="h5">---</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Live Plot Card -->
+        <div class="card mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> <span data-lang-key="live_plot">Live-Plot</span></h5>
+            <div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="clearPlot">
+                <i class="bi bi-eraser"></i> <span data-lang-key="clear_plot">Leeren</span>
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-primary" id="downloadData">
+                <i class="bi bi-download"></i> CSV
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <canvas id="ratioPlot"></canvas>
+            <div class="row mt-2">
+              <div class="col-6">
+                <small class="text-muted" data-lang-key="time_window">Zeitfenster:</small>
+                <select id="timeWindow" class="form-select form-select-sm">
+                  <option value="10">10 s</option>
+                  <option value="30" selected>30 s</option>
+                  <option value="60">60 s</option>
+                  <option value="120">120 s</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <small class="text-muted" data-lang-key="y_range">Y-Bereich:</small>
+                <select id="yRange" class="form-select form-select-sm">
+                  <option value="auto" selected>Auto</option>
+                  <option value="0.1">±0.1</option>
+                  <option value="0.5">±0.5</option>
+                  <option value="1">±1.0</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Theory Card -->
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-info-circle"></i> <span data-lang-key="how_it_works">So funktioniert es</span></h5>
+          </div>
+          <div class="card-body">
+            <p class="small" data-lang-key="theory_text">
+              Der Ratio-Modus ermöglicht schnelle Magnetfeldmessungen, indem die Intensitäten an zwei Frequenzpunkten 
+              auf gegenüberliegenden Flanken eines ODMR-Dips verglichen werden. Das normalisierte Verhältnis 
+              <strong>r = (I₁-I₂)/(I₁+I₂)</strong> ist direkt proportional zur Verschiebung der Resonanzfrequenz 
+              und damit zum Magnetfeld.
+            </p>
+            <div class="alert alert-info small mb-0">
+              <i class="bi bi-lightbulb"></i> <span data-lang-key="tip">Tipp</span>: 
+              <span data-lang-key="tip_text">Wählen Sie f₁ und f₂ symmetrisch um das Minimum des ODMR-Dips für beste Empfindlichkeit.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ░░ Footer ░░----------------------------------------------------------- -->
+  <footer class="py-3 mt-auto">
+    <div class="container text-center small">
+      <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
+    </div>
+  </footer>
+
+  <!-- Bootstrap JS -->
+  <script>
+    // Automatic Bootstrap JS loading: Use CDN for development, local for ESP32
+    (function() {
+      const isLocalDevice = window.location.hostname === '192.168.4.1' || 
+                           window.location.hostname.includes('ODMR_') || 
+                           window.location.protocol === 'file:';
+      
+      if (isLocalDevice) {
+        // Load from ESP32 local server
+        document.write('<script src="/bootstrap.bundle.min.js"><\/script>');
+      } else {
+        // Load from CDN for development
+        document.write('<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"><\/script>');
+      }
+    })();
+  </script>
+
+  <!-- Ratio Monitoring JavaScript -->
+  <script>
+    // ========================================================================
+    // Global State
+    // ========================================================================
+    let monitoringInterval = null;
+    let measurementCount = 0;
+    let ratioData = [];       // Array of {time, r12, r13, r23, I1, I2, I3}
+    let startTime = null;
+    let canvas, ctx;
+    
+    // Configuration
+    const MAX_DATA_POINTS = 1000;  // Maximum stored data points
+    
+    // ========================================================================
+    // DOM Elements
+    // ========================================================================
+    const ById = (id) => document.getElementById(id);
+    
+    // ========================================================================
+    // Initialization
+    // ========================================================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize canvas
+      canvas = ById('ratioPlot');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      
+      // Initialize plot
+      drawPlot();
+      
+      // Event Listeners
+      ById('startMonitoring').addEventListener('click', startMonitoring);
+      ById('stopMonitoring').addEventListener('click', stopMonitoring);
+      ById('clearPlot').addEventListener('click', clearPlot);
+      ById('downloadData').addEventListener('click', downloadCSV);
+      
+      // Mode toggle
+      document.querySelectorAll('input[name="modeSelect"]').forEach(radio => {
+        radio.addEventListener('change', handleModeChange);
+      });
+      
+      // Averaging slider
+      ById('avgCount').addEventListener('input', function() {
+        ById('avgValue').textContent = this.value;
+      });
+      
+      // Time window and Y-range changes
+      ById('timeWindow').addEventListener('change', drawPlot);
+      ById('yRange').addEventListener('change', drawPlot);
+      
+      // Hide WebSerial nav item on ESP32
+      const isLocalDevice = window.location.hostname === '192.168.4.1' || 
+                           window.location.hostname.includes('ODMR_') || 
+                           window.location.protocol === 'file:';
+      if (isLocalDevice) {
+        const webSerialNavItem = ById('webSerialNavItem');
+        if (webSerialNavItem) webSerialNavItem.style.display = 'none';
+      }
+      
+      // Load version info
+      loadVersionInfo();
+      
+      // Initialize tooltips
+      if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+      }
+    });
+    
+    // ========================================================================
+    // Mode Handling
+    // ========================================================================
+    function handleModeChange() {
+      const is3pt = ById('mode3pt').checked;
+      ById('freq3Container').style.display = is3pt ? 'block' : 'none';
+      ById('i3Row').style.display = is3pt ? 'table-row' : 'none';
+      ById('additionalRatios').style.display = is3pt ? 'block' : 'none';
+    }
+    
+    // ========================================================================
+    // Monitoring Control
+    // ========================================================================
+    function startMonitoring() {
+      const f1 = parseFloat(ById('freq1').value);
+      const f2 = parseFloat(ById('freq2').value);
+      const avg = parseInt(ById('avgCount').value);
+      const interval = parseInt(ById('intervalMs').value);
+      
+      // Validate frequencies
+      if (isNaN(f1) || isNaN(f2) || f1 < 2200 || f1 > 4400 || f2 < 2200 || f2 > 4400) {
+        alert('Ungültige Frequenzwerte! Bereich: 2200-4400 MHz');
+        return;
+      }
+      
+      // Update UI
+      ById('startMonitoring').disabled = true;
+      ById('stopMonitoring').disabled = false;
+      ById('statusIndicator').classList.add('running');
+      ById('statusText').textContent = 'Läuft...';
+      
+      // Reset state
+      startTime = Date.now();
+      measurementCount = 0;
+      
+      // Start periodic measurements
+      monitoringInterval = setInterval(() => {
+        fetchRatioData();
+      }, interval);
+      
+      // Immediate first measurement
+      fetchRatioData();
+    }
+    
+    function stopMonitoring() {
+      if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+      }
+      
+      // Update UI
+      ById('startMonitoring').disabled = false;
+      ById('stopMonitoring').disabled = true;
+      ById('statusIndicator').classList.remove('running');
+      ById('statusText').textContent = 'Gestoppt';
+    }
+    
+    // ========================================================================
+    // Data Fetching
+    // ========================================================================
+    async function fetchRatioData() {
+      const f1 = parseFloat(ById('freq1').value);
+      const f2 = parseFloat(ById('freq2').value);
+      const avg = parseInt(ById('avgCount').value);
+      const is3pt = ById('mode3pt').checked;
+      
+      let url = `/ratio?f1=${f1}&f2=${f2}&avg=${avg}`;
+      
+      if (is3pt) {
+        const f3 = parseFloat(ById('freq3').value);
+        url += `&f3=${f3}`;
+      }
+      
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+          processRatioData(data);
+          measurementCount++;
+          ById('measurementCount').textContent = measurementCount;
+        }
+      } catch (error) {
+        console.error('Error fetching ratio data:', error);
+        ById('statusText').textContent = 'Fehler: ' + error.message;
+      }
+    }
+    
+    // ========================================================================
+    // Data Processing
+    // ========================================================================
+    function processRatioData(data) {
+      const points = data.points;
+      const ratio = data.ratio;
+      const timestamp = (Date.now() - startTime) / 1000;  // Seconds since start
+      
+      // Extract intensities
+      const I1 = points[0].I;
+      const I2 = points[1].I;
+      const I3 = points.length > 2 ? points[2].I : null;
+      
+      // Store data point
+      const dataPoint = {
+        time: timestamp,
+        r12: ratio.r12,
+        r13: ratio.r13 || null,
+        r23: ratio.r23 || null,
+        I1: I1,
+        I2: I2,
+        I3: I3,
+        f1: points[0].f,
+        f2: points[1].f,
+        f3: points.length > 2 ? points[2].f : null
+      };
+      
+      ratioData.push(dataPoint);
+      
+      // Limit stored data
+      if (ratioData.length > MAX_DATA_POINTS) {
+        ratioData.shift();
+      }
+      
+      // Update display
+      updateDisplay(dataPoint);
+      drawPlot();
+    }
+    
+    // ========================================================================
+    // Display Update
+    // ========================================================================
+    function updateDisplay(data) {
+      // Update ratio display
+      const ratioDisplay = ById('ratioDisplay');
+      ratioDisplay.textContent = data.r12.toFixed(4);
+      ratioDisplay.classList.remove('positive', 'negative');
+      if (data.r12 > 0.01) ratioDisplay.classList.add('positive');
+      else if (data.r12 < -0.01) ratioDisplay.classList.add('negative');
+      
+      // Update frequency labels
+      ById('f1Display').textContent = data.f1.toFixed(1);
+      ById('f2Display').textContent = data.f2.toFixed(1);
+      
+      // Update intensity values
+      ById('i1Display').textContent = data.I1;
+      ById('i2Display').textContent = data.I2;
+      
+      // 3-point mode updates
+      if (data.I3 !== null) {
+        ById('f3Display').textContent = data.f3.toFixed(1);
+        ById('i3Display').textContent = data.I3;
+        ById('r13Display').textContent = data.r13.toFixed(4);
+        ById('r23Display').textContent = data.r23.toFixed(4);
+      }
+    }
+    
+    // ========================================================================
+    // Canvas Drawing
+    // ========================================================================
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = 300;
+      drawPlot();
+    }
+    
+    function drawPlot() {
+      if (!ctx) return;
+      
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = { top: 20, right: 20, bottom: 40, left: 60 };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      
+      // Clear canvas
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      
+      // Get time window
+      const timeWindow = parseInt(ById('timeWindow').value);
+      const currentTime = ratioData.length > 0 ? ratioData[ratioData.length - 1].time : 0;
+      const minTime = Math.max(0, currentTime - timeWindow);
+      
+      // Filter data to time window
+      const visibleData = ratioData.filter(d => d.time >= minTime);
+      
+      // Get Y range
+      const yRangeSetting = ById('yRange').value;
+      let yMin, yMax;
+      
+      if (yRangeSetting === 'auto' && visibleData.length > 0) {
+        const ratios = visibleData.map(d => d.r12);
+        const margin = 0.1;
+        yMin = Math.min(...ratios) - margin;
+        yMax = Math.max(...ratios) + margin;
+        // Ensure at least some range
+        if (yMax - yMin < 0.1) {
+          const mid = (yMax + yMin) / 2;
+          yMin = mid - 0.05;
+          yMax = mid + 0.05;
+        }
+      } else {
+        const range = yRangeSetting === 'auto' ? 1 : parseFloat(yRangeSetting);
+        yMin = -range;
+        yMax = range;
+      }
+      
+      // Draw grid
+      ctx.strokeStyle = '#e9ecef';
+      ctx.lineWidth = 1;
+      
+      // Horizontal grid lines
+      const ySteps = 5;
+      for (let i = 0; i <= ySteps; i++) {
+        const y = padding.top + (plotHeight * i / ySteps);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+      }
+      
+      // Vertical grid lines
+      const xSteps = 6;
+      for (let i = 0; i <= xSteps; i++) {
+        const x = padding.left + (plotWidth * i / xSteps);
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, height - padding.bottom);
+        ctx.stroke();
+      }
+      
+      // Draw zero line
+      if (yMin < 0 && yMax > 0) {
+        const zeroY = padding.top + plotHeight * (yMax / (yMax - yMin));
+        ctx.strokeStyle = '#6c757d';
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, zeroY);
+        ctx.lineTo(width - padding.right, zeroY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      
+      // Draw axes
+      ctx.strokeStyle = '#023773';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, padding.top);
+      ctx.lineTo(padding.left, height - padding.bottom);
+      ctx.lineTo(width - padding.right, height - padding.bottom);
+      ctx.stroke();
+      
+      // Draw axis labels
+      ctx.fillStyle = '#023773';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      
+      // X-axis labels (time)
+      for (let i = 0; i <= xSteps; i++) {
+        const x = padding.left + (plotWidth * i / xSteps);
+        const time = minTime + (timeWindow * i / xSteps);
+        ctx.fillText(time.toFixed(1) + 's', x, height - 10);
+      }
+      
+      // Y-axis labels (ratio)
+      ctx.textAlign = 'right';
+      for (let i = 0; i <= ySteps; i++) {
+        const y = padding.top + (plotHeight * i / ySteps);
+        const value = yMax - ((yMax - yMin) * i / ySteps);
+        ctx.fillText(value.toFixed(2), padding.left - 10, y + 4);
+      }
+      
+      // Draw data line
+      if (visibleData.length > 1) {
+        ctx.strokeStyle = '#023773';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        let firstPoint = true;
+        for (const point of visibleData) {
+          const x = padding.left + plotWidth * ((point.time - minTime) / timeWindow);
+          const y = padding.top + plotHeight * ((yMax - point.r12) / (yMax - yMin));
+          
+          if (firstPoint) {
+            ctx.moveTo(x, y);
+            firstPoint = false;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+        
+        // Draw current point
+        if (visibleData.length > 0) {
+          const lastPoint = visibleData[visibleData.length - 1];
+          const x = padding.left + plotWidth * ((lastPoint.time - minTime) / timeWindow);
+          const y = padding.top + plotHeight * ((yMax - lastPoint.r12) / (yMax - yMin));
+          
+          ctx.fillStyle = '#85b918';
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      
+      // Draw "no data" message if empty
+      if (visibleData.length === 0) {
+        ctx.fillStyle = '#999999';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Keine Daten - Monitoring starten', width / 2, height / 2);
+      }
+    }
+    
+    // ========================================================================
+    // Data Management
+    // ========================================================================
+    function clearPlot() {
+      ratioData = [];
+      measurementCount = 0;
+      ById('measurementCount').textContent = '0';
+      ById('ratioDisplay').textContent = '---';
+      ById('ratioDisplay').classList.remove('positive', 'negative');
+      ById('i1Display').textContent = '---';
+      ById('i2Display').textContent = '---';
+      ById('i3Display').textContent = '---';
+      ById('f1Display').textContent = '---';
+      ById('f2Display').textContent = '---';
+      ById('f3Display').textContent = '---';
+      ById('r13Display').textContent = '---';
+      ById('r23Display').textContent = '---';
+      startTime = Date.now();
+      drawPlot();
+    }
+    
+    function downloadCSV() {
+      if (ratioData.length === 0) {
+        alert('Keine Daten zum Herunterladen vorhanden.');
+        return;
+      }
+      
+      // Build CSV content
+      let csv = 'Zeit_s;f1_MHz;I1;f2_MHz;I2;r12';
+      if (ratioData[0].f3 !== null) {
+        csv += ';f3_MHz;I3;r13;r23';
+      }
+      csv += '\n';
+      
+      for (const point of ratioData) {
+        csv += `${point.time.toFixed(3)};${point.f1};${point.I1};${point.f2};${point.I2};${point.r12.toFixed(6)}`;
+        if (point.f3 !== null) {
+          csv += `;${point.f3};${point.I3};${point.r13.toFixed(6)};${point.r23.toFixed(6)}`;
+        }
+        csv += '\n';
+      }
+      
+      // Download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `ratio_monitoring_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`;
+      link.click();
+    }
+    
+    // ========================================================================
+    // Version Info
+    // ========================================================================
+    function loadVersionInfo() {
+      fetch('/version')
+        .then(response => {
+          if (!response.ok) throw new Error('Version endpoint not available');
+          return response.json();
+        })
+        .then(data => {
+          const versionInfo = ById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          const versionInfo = ById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = 'Version: ESP32 ODMR Server';
+          }
+        });
+    }
+    
+    // ========================================================================
+    // Multi-language Support
+    // ========================================================================
+    const translations = {
+      de: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Messung (on Device)",
+        "nav_measurement_webserial": "Messung (WebSerial)",
+        "nav_ratio": "B-Field Monitor",
+        "nav_alignment": "Justage",
+        "nav_info": "Weitere Infos",
+        "page_title": "Fast B-Field Monitoring (Ratio Mode)",
+        "freq_settings": "Frequenz-Einstellungen",
+        "mode_label": "Modus:",
+        "mode_2pt": "2-Punkt",
+        "mode_3pt": "3-Punkt",
+        "freq1_hint": "Linke Flanke des Dips",
+        "freq2_hint": "Rechte Flanke des Dips",
+        "freq3_hint": "Zentrum oder Referenz",
+        "avg_label": "Mittelungen pro Punkt:",
+        "interval_label": "Messintervall (ms):",
+        "controls": "Steuerung",
+        "start_monitoring": "Monitoring starten",
+        "stop_monitoring": "Monitoring stoppen",
+        "status_ready": "Bereit",
+        "measurements": "Messungen",
+        "calibration": "Kalibrierung",
+        "calibration_hint": "Führen Sie zuerst einen Sweep auf der Messungsseite durch, um die ODMR-Dips zu finden.",
+        "use_sweep_peaks": "Sweep-Peaks verwenden",
+        "current_values": "Aktuelle Werte",
+        "ratio_label": "Ratio r₁₂ = (I₁-I₂)/(I₁+I₂)",
+        "live_plot": "Live-Plot",
+        "clear_plot": "Leeren",
+        "time_window": "Zeitfenster:",
+        "y_range": "Y-Bereich:",
+        "how_it_works": "So funktioniert es",
+        "theory_text": "Der Ratio-Modus ermöglicht schnelle Magnetfeldmessungen, indem die Intensitäten an zwei Frequenzpunkten auf gegenüberliegenden Flanken eines ODMR-Dips verglichen werden. Das normalisierte Verhältnis r = (I₁-I₂)/(I₁+I₂) ist direkt proportional zur Verschiebung der Resonanzfrequenz und damit zum Magnetfeld.",
+        "tip": "Tipp",
+        "tip_text": "Wählen Sie f₁ und f₂ symmetrisch um das Minimum des ODMR-Dips für beste Empfindlichkeit."
+      },
+      en: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Measurement (on Device)",
+        "nav_measurement_webserial": "Measurement (WebSerial)",
+        "nav_ratio": "B-Field Monitor",
+        "nav_alignment": "Alignment",
+        "nav_info": "More Info",
+        "page_title": "Fast B-Field Monitoring (Ratio Mode)",
+        "freq_settings": "Frequency Settings",
+        "mode_label": "Mode:",
+        "mode_2pt": "2-Point",
+        "mode_3pt": "3-Point",
+        "freq1_hint": "Left flank of the dip",
+        "freq2_hint": "Right flank of the dip",
+        "freq3_hint": "Center or reference",
+        "avg_label": "Averages per point:",
+        "interval_label": "Measurement interval (ms):",
+        "controls": "Controls",
+        "start_monitoring": "Start Monitoring",
+        "stop_monitoring": "Stop Monitoring",
+        "status_ready": "Ready",
+        "measurements": "Measurements",
+        "calibration": "Calibration",
+        "calibration_hint": "First perform a sweep on the measurement page to find the ODMR dips.",
+        "use_sweep_peaks": "Use Sweep Peaks",
+        "current_values": "Current Values",
+        "ratio_label": "Ratio r₁₂ = (I₁-I₂)/(I₁+I₂)",
+        "live_plot": "Live Plot",
+        "clear_plot": "Clear",
+        "time_window": "Time window:",
+        "y_range": "Y-Range:",
+        "how_it_works": "How It Works",
+        "theory_text": "The ratio mode enables fast magnetic field measurements by comparing intensities at two frequency points on opposite flanks of an ODMR dip. The normalized ratio r = (I₁-I₂)/(I₁+I₂) is directly proportional to the shift in resonance frequency and thus to the magnetic field.",
+        "tip": "Tip",
+        "tip_text": "Choose f₁ and f₂ symmetrically around the ODMR dip minimum for best sensitivity."
+      }
+    };
+    
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      updateLanguage(lang);
+      
+      const langDropdown = ById('langDropdown');
+      if (langDropdown) {
+        langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;
+      }
+    }
+    
+    function updateLanguage(lang) {
+      const elements = document.querySelectorAll('[data-lang-key]');
+      elements.forEach(element => {
+        const key = element.getAttribute('data-lang-key');
+        if (translations[lang] && translations[lang][key]) {
+          element.textContent = translations[lang][key];
+        }
+      });
+      
+      if (translations[lang] && translations[lang].title) {
+        document.title = translations[lang].title;
+      }
+    }
+    
+    // Initialize language on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedLang = localStorage.getItem('language') || 'de';
+      setLanguage(savedLang);
+    });
+  </script>
+</body>
+</html>
