@@ -6,9 +6,9 @@
 
 #define FIRMWARE_VERSION "1.0.0"
 #define BUILD_DATE "2025-12-10"
-#define BUILD_TIME "16:53:26"
-#define BUILD_TIMESTAMP "20251210165326"
-#define GIT_HASH "82b97e5"
+#define BUILD_TIME "22:27:13"
+#define BUILD_TIMESTAMP "20251210222713"
+#define GIT_HASH "d6fa7cc"
 #define GIT_BRANCH "main"
 
 // Combined version string

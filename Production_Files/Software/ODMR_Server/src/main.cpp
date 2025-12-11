@@ -18,8 +18,7 @@
 #include "website/ratio_html.h"
 #include "website/justage_html.h"
 #include "website/infos_html.h"
-#include "website/bootstrap_css.h"
-#include "website/bootstrap_js.h"
+// Bootstrap CSS/JS removed to save flash - using CDN only
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
 #define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
@@ -211,16 +210,7 @@ void handleFileRequest(const String &path)
     contentType = "text/css";
     content = STYLE_CSS;
   }
-  else if (actualPath == "/bootstrap.min.css")
-  {
-    contentType = "text/css";
-    content = BOOTSTRAP_CSS;
-  }
-  else if (actualPath == "/bootstrap.bundle.min.js")
-  {
-    contentType = "application/javascript";
-    content = BOOTSTRAP_JS;
-  }
+  // Bootstrap CSS/JS removed to save flash - pages use CDN only
 
   if (content != nullptr)
   {
