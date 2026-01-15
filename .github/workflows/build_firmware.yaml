@@ -52,7 +52,7 @@ jobs:
           repository: ${{ env.ODMR_REPO }}
           fetch-depth: 0
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.API_TOKEN_GITHUB }}
 
       # ---------------- PYTHON TOOLCHAIN ---------------
       - name: Set up Python 3.9
@@ -171,7 +171,7 @@ jobs:
         with:
           repository: ${{ env.WEB_REPO }}
           path: dest
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.API_TOKEN_GITHUB }}
 
       # ---------------- COPY & COMMIT ------------------
       - name: Copy binaries & commit
