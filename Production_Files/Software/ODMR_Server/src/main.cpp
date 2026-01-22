@@ -37,7 +37,7 @@
 #define LE D7
 #define CE 0
 #define PIN_NEOPIXEL D6
-
+#define IS_WIFI_AP_MODE 1
 /*
 XIAO pin	XIAO ESP32S3 pin	Board Function	Test Point
 D0	GPIO_01	Not used	TP310
@@ -102,11 +102,12 @@ long firstPixelHue = 0;
 int pixelWait = 1;
 
 // LED status management
-enum LEDStatus {
-  LED_NO_CLIENT,     // white
-  LED_CONNECTED,     // rainbow
-  LED_MEASURING,     // red
-  LED_INTENSITY      // blue
+enum LEDStatus
+{
+  LED_NO_CLIENT, // white
+  LED_CONNECTED, // rainbow
+  LED_MEASURING, // red
+  LED_INTENSITY  // blue
 };
 
 LEDStatus currentLEDStatus = LED_NO_CLIENT;
@@ -116,49 +117,58 @@ unsigned long lastIntensityRequest = 0;
 const unsigned long INTENSITY_TIMEOUT = 2000; // 2 seconds timeout
 
 // LED control functions
-void setLEDStatus(LEDStatus status) {
+void setLEDStatus(LEDStatus status)
+{
   currentLEDStatus = status;
 }
 
-void updateLEDs() {
-  if (millis() - lastLEDUpdate < LED_UPDATE_INTERVAL) return;
+void updateLEDs()
+{
+  if (millis() - lastLEDUpdate < LED_UPDATE_INTERVAL)
+    return;
   lastLEDUpdate = millis();
 
-  strip.setBrightness(100); // Set to 50% brightness 
-  
-  switch (currentLEDStatus) {
-    case LED_NO_CLIENT:
-      // White color for no client connected
-      for (int i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(100,100,100)); // TODO: Make it glowing?
-      }
-      break;
-      
-    case LED_CONNECTED:
-      // Rainbow effect when client connected but idle
-      for (int i = 0; i < strip.numPixels(); i++) {
-        int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
-        strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
-      }
-      firstPixelHue += 256;
-      if (firstPixelHue > 5 * 65536) firstPixelHue = 0;
-      break;
-      
-    case LED_MEASURING:
-      // Red color when measuring frequency sweep
-      for (int i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(100, 0, 0));// TODO: Make it glowing?
-      }
-      break;
-      
-    case LED_INTENSITY:
-      // Blue color when monitoring intensity for alignment
-      for (int i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, strip.Color(0, 0, 100));// TODO: Make it glowing?
-      }
-      break;
+  strip.setBrightness(100); // Set to 50% brightness
+
+  switch (currentLEDStatus)
+  {
+  case LED_NO_CLIENT:
+    // White color for no client connected
+    for (int i = 0; i < strip.numPixels(); i++)
+    {
+      strip.setPixelColor(i, strip.Color(100, 100, 100)); // TODO: Make it glowing?
+    }
+    break;
+
+  case LED_CONNECTED:
+    // Rainbow effect when client connected but idle
+    for (int i = 0; i < strip.numPixels(); i++)
+    {
+      int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
+      strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
+    }
+    firstPixelHue += 256;
+    if (firstPixelHue > 5 * 65536)
+      firstPixelHue = 0;
+    break;
+
+  case LED_MEASURING:
+    // Red color when measuring frequency sweep
+    for (int i = 0; i < strip.numPixels(); i++)
+    {
+      strip.setPixelColor(i, strip.Color(100, 0, 0)); // TODO: Make it glowing?
+    }
+    break;
+
+  case LED_INTENSITY:
+    // Blue color when monitoring intensity for alignment
+    for (int i = 0; i < strip.numPixels(); i++)
+    {
+      strip.setPixelColor(i, strip.Color(0, 0, 100)); // TODO: Make it glowing?
+    }
+    break;
   }
-  
+
   strip.show();
 }
 
@@ -172,7 +182,7 @@ void handleFileRequest(const String &path)
   }
 
   String contentType = "text/html";
-  const char* content = nullptr;
+  const char *content = nullptr;
 
   // Route specific files to their header file content
   if (actualPath == "/index.html")
@@ -270,14 +280,14 @@ void handleLaserAct()
 
   // Set LED to measuring mode (red)
   setLEDStatus(LED_MEASURING);
-  
+
   for (int iFrequencyRequested = 2200; iFrequencyRequested <= 4400; iFrequencyRequested += 100)
   {
     adf.updateFrequency(iFrequencyRequested * 1e6); // Set frequency in Hz
     delay(200);                                     // Wait for the frequency to stabilize
     Serial.println("Set frequency: " + String(iFrequencyRequested * 1e6) + " Hz");
   }
-  
+
   // Return to connected mode (rainbow) after measurement
   setLEDStatus(LED_CONNECTED);
 }
@@ -323,7 +333,7 @@ void handleMeasure()
 
   // Set the frequency on the ADF4351
   Serial.println("Setting frequency: " + String(freqRequested, 1));
-  setLEDStatus(LED_MEASURING); // Set LED to red while measuring
+  setLEDStatus(LED_MEASURING);              // Set LED to red while measuring
   adf.updateFrequency(freqRequested * 1e6); // Set frequency in Hz
 
   // Read intensity
@@ -336,10 +346,10 @@ void handleMeasure()
   // Return space-separated: freq intensity magnetfield
   // or however your front-end expects it
   String reply = String(freqRequested, 1) + " " + intensity + " " + exampleMagVal;
-  //Serial.println("Intensity: " + String(intensity) + " Mag: " + String(exampleMagVal));
-  //Serial.println("Reply: " + reply);
+  // Serial.println("Intensity: " + String(intensity) + " Mag: " + String(exampleMagVal));
+  // Serial.println("Reply: " + reply);
   server.send(200, "text/plain", reply);
-  
+
   // Return to connected status after measurement
   setLEDStatus(LED_CONNECTED);
 }
@@ -350,7 +360,7 @@ void handleIntensity()
   // Set LED to blue for intensity monitoring mode and track timestamp
   setLEDStatus(LED_INTENSITY);
   lastIntensityRequest = millis();
-  
+
   uint32_t intensity = readIR(); // Read photodiode intensity
   String response = String("{\"intensity\":") + intensity + "}";
   server.send(200, "application/json", response);
@@ -375,32 +385,33 @@ void handleSetTSLGain()
     server.send(400, "application/json", "{\"error\":\"no gain parameter\"}");
     return;
   }
-  
+
   int gainValue = server.arg("gain").toInt();
   tsl2591Gain_t newGain;
-  
-  switch(gainValue) {
-    case 0x00:
-      newGain = TSL2591_GAIN_LOW;
-      break;
-    case 0x10:
-      newGain = TSL2591_GAIN_MED;
-      break;
-    case 0x20:
-      newGain = TSL2591_GAIN_HIGH;
-      break;
-    case 0x30:
-      newGain = TSL2591_GAIN_MAX;
-      break;
-    default:
-      server.send(400, "application/json", "{\"error\":\"invalid gain value\"}");
-      return;
+
+  switch (gainValue)
+  {
+  case 0x00:
+    newGain = TSL2591_GAIN_LOW;
+    break;
+  case 0x10:
+    newGain = TSL2591_GAIN_MED;
+    break;
+  case 0x20:
+    newGain = TSL2591_GAIN_HIGH;
+    break;
+  case 0x30:
+    newGain = TSL2591_GAIN_MAX;
+    break;
+  default:
+    server.send(400, "application/json", "{\"error\":\"invalid gain value\"}");
+    return;
   }
-  
+
   currentGain = newGain;
   tsl.setGain(currentGain);
   Serial.printf("TSL2591 Gain set to: 0x%02X\n", (int)currentGain);
-  
+
   String response = "{\"status\":\"ok\",\"gain\":";
   response += String((int)currentGain);
   response += "}";
@@ -415,38 +426,39 @@ void handleSetTSLIntegrationTime()
     server.send(400, "application/json", "{\"error\":\"no integration_time parameter\"}");
     return;
   }
-  
+
   int timeValue = server.arg("integration_time").toInt();
   tsl2591IntegrationTime_t newTime;
-  
-  switch(timeValue) {
-    case 0x00:
-      newTime = TSL2591_INTEGRATIONTIME_100MS;
-      break;
-    case 0x01:
-      newTime = TSL2591_INTEGRATIONTIME_200MS;
-      break;
-    case 0x02:
-      newTime = TSL2591_INTEGRATIONTIME_300MS;
-      break;
-    case 0x03:
-      newTime = TSL2591_INTEGRATIONTIME_400MS;
-      break;
-    case 0x04:
-      newTime = TSL2591_INTEGRATIONTIME_500MS;
-      break;
-    case 0x05:
-      newTime = TSL2591_INTEGRATIONTIME_600MS;
-      break;
-    default:
-      server.send(400, "application/json", "{\"error\":\"invalid integration time value\"}");
-      return;
+
+  switch (timeValue)
+  {
+  case 0x00:
+    newTime = TSL2591_INTEGRATIONTIME_100MS;
+    break;
+  case 0x01:
+    newTime = TSL2591_INTEGRATIONTIME_200MS;
+    break;
+  case 0x02:
+    newTime = TSL2591_INTEGRATIONTIME_300MS;
+    break;
+  case 0x03:
+    newTime = TSL2591_INTEGRATIONTIME_400MS;
+    break;
+  case 0x04:
+    newTime = TSL2591_INTEGRATIONTIME_500MS;
+    break;
+  case 0x05:
+    newTime = TSL2591_INTEGRATIONTIME_600MS;
+    break;
+  default:
+    server.send(400, "application/json", "{\"error\":\"invalid integration time value\"}");
+    return;
   }
-  
+
   currentIntegrationTime = newTime;
   tsl.setTiming(currentIntegrationTime);
   Serial.printf("TSL2591 Integration Time set to: 0x%02X\n", (int)currentIntegrationTime);
-  
+
   String response = "{\"status\":\"ok\",\"integration_time\":";
   response += String((int)currentIntegrationTime);
   response += "}";
@@ -459,10 +471,9 @@ void handleWebSerialCheck()
   // Check if request is coming from the local AP (192.168.4.x)
   IPAddress clientIP = server.client().remoteIP();
   bool isLocalAP = (clientIP[0] == 192 && clientIP[1] == 168 && clientIP[2] == 4);
-  
+
   String response = String("{\"webserial_enabled\":") + (!isLocalAP ? "true" : "false") + "}";
   server.send(200, "application/json", response);
-
 }
 
 void i2c_scan()
@@ -503,16 +514,18 @@ uint32_t measureIntensityAtFrequency(float freqMHz,
                                      uint8_t averages = 3,
                                      uint16_t settle_ms = 10)
 {
-  if (freqMHz < ADF_FREQ_MIN || freqMHz > ADF_FREQ_MAX) {
+  if (freqMHz < ADF_FREQ_MIN || freqMHz > ADF_FREQ_MAX)
+  {
     Serial.printf("ERR measureIntensityAtFrequency: %.3f MHz out of range\n", freqMHz);
     return 0;
   }
 
-  adf.updateFrequency(freqMHz * 1e6);  // MHz -> Hz
-  delay(settle_ms);                    // PLL settle
+  adf.updateFrequency(freqMHz * 1e6); // MHz -> Hz
+  delay(settle_ms);                   // PLL settle
 
   uint64_t sum = 0;
-  for (uint8_t i = 0; i < averages; ++i) {
+  for (uint8_t i = 0; i < averages; ++i)
+  {
     sum += readIR();
     delay(1);
   }
@@ -523,7 +536,8 @@ uint32_t measureIntensityAtFrequency(float freqMHz,
 // Liefert Intensitäten und normierte Ratios als JSON
 void handleMeasureRatio()
 {
-  if (!server.hasArg("f1") || !server.hasArg("f2")) {
+  if (!server.hasArg("f1") || !server.hasArg("f2"))
+  {
     server.send(400, "application/json",
                 "{\"error\":\"need f1 and f2 in MHz\"}");
     return;
@@ -536,10 +550,13 @@ void handleMeasureRatio()
   float f3 = hasF3 ? server.arg("f3").toFloat() : 0.0f;
 
   uint8_t averages = 3;
-  if (server.hasArg("avg")) {
+  if (server.hasArg("avg"))
+  {
     int tmp = server.arg("avg").toInt();
-    if (tmp < 1)  tmp = 1;
-    if (tmp > 20) tmp = 20;
+    if (tmp < 1)
+      tmp = 1;
+    if (tmp > 20)
+      tmp = 20;
     averages = (uint8_t)tmp;
   }
 
@@ -550,26 +567,30 @@ void handleMeasureRatio()
   uint32_t I3 = 0;
   Serial.printf("Measured intensities: I1= %u @ %.3f MHz, I2= %u @ %.3f MHz",
                 I1, f1, I2, f2);
-  if (hasF3) {
+  if (hasF3)
+  {
     I3 = measureIntensityAtFrequency(f3, averages);
   }
 
   float r12 = 0.0f;
-  if (I1 + I2 > 0) {
+  if (I1 + I2 > 0)
+  {
     r12 = ((float)I1 - (float)I2) / ((float)I1 + (float)I2);
   }
   Serial.printf(", I3= %u @ %.3f MHz\n", I3, f3);
 
   float r13 = 0.0f;
   float r23 = 0.0f;
-  if (hasF3) {
+  if (hasF3)
+  {
     if (I1 + I3 > 0)
       r13 = ((float)I1 - (float)I3) / ((float)I1 + (float)I3);
     if (I2 + I3 > 0)
       r23 = ((float)I2 - (float)I3) / ((float)I2 + (float)I3);
   }
   Serial.printf("Ratios: r12= %.6f", r12);
-  if (hasF3) {
+  if (hasF3)
+  {
     Serial.printf(", r13= %.6f, r23= %.6f", r13, r23);
   }
   Serial.println();
@@ -580,14 +601,16 @@ void handleMeasureRatio()
   json += "\"points\":[";
   json += "{\"f\":" + String(f1, 3) + ",\"I\":" + String(I1) + "},";
   json += "{\"f\":" + String(f2, 3) + ",\"I\":" + String(I2) + "}";
-  if (hasF3) {
+  if (hasF3)
+  {
     json += ",{\"f\":" + String(f3, 3) + ",\"I\":" + String(I3) + "}";
   }
   json += "],";
   json += "\"ratio\":{";
   json += "\"type\":\"diff_over_sum\",";
   json += "\"r12\":" + String(r12, 6);
-  if (hasF3) {
+  if (hasF3)
+  {
     json += ",\"r13\":" + String(r13, 6);
     json += ",\"r23\":" + String(r23, 6);
   }
@@ -605,18 +628,17 @@ void setup()
 
 // only for esp32s3
 #ifdef ESP32S3
-  //disableCore1WDT(); // Deactivate Watchdog for core 1
+  // disableCore1WDT(); // Deactivate Watchdog for core 1
 #endif
 
-pinMode(LASER_PIN, OUTPUT);
-digitalWrite(LASER_PIN, LOW);
+  pinMode(LASER_PIN, OUTPUT);
+  digitalWrite(LASER_PIN, LOW);
 
-Serial.begin(115200);
-delay(1500); // Allow time to connect
-Serial.println("Booting...");
+  Serial.begin(115200);
+  delay(1500); // Allow time to connect
+  Serial.println("Booting...");
 
-
-disableLoopWDT(); // Deactivate Watchdog for loop
+  disableLoopWDT(); // Deactivate Watchdog for loop
   // Check WiFi capabilities
   Serial.print("WiFi Mode capabilities: ");
   Serial.println(WiFi.getMode());
@@ -642,48 +664,74 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   delay(1000);
-  
-  Serial.println("Starting WiFi Access Point...");
 
-  // Wi-Fi Access Point starting
-  WiFi.mode(WIFI_AP);
-  
-  // Try setting WiFi configuration first
-  WiFi.softAPConfig(
-    IPAddress(192, 168, 4, 1),   // IP address of the AP
-    IPAddress(192, 168, 4, 1),   // Gateway
-    IPAddress(255, 255, 255, 0)  // Subnet mask
-  );
-  
-  // Start the Access Point with better error checking
-  bool apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD);
-  
-  if (apResult) {
-    Serial.print("Access Point started successfully with SSID: ");
-    Serial.println(dynamicSSID);
-    Serial.print("AP IP address: ");
-    Serial.println(WiFi.softAPIP());
-  } else {
-    Serial.println("Failed to start Access Point!");
-    Serial.println("Trying alternative configuration...");
-    
-    // Try with a different channel and explicit parameters
-    apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, 1, 0, 4);
-    if (apResult) {
-      Serial.println("Access Point started with alternative config");
+  Serial.println("Starting WiFi Access Point...");
+  if (IS_WIFI_AP_MODE)
+  {
+    // Wi-Fi Access Point starting
+    WiFi.mode(WIFI_AP);
+
+    // Try setting WiFi configuration first
+    WiFi.softAPConfig(
+        IPAddress(192, 168, 4, 1),  // IP address of the AP
+        IPAddress(192, 168, 4, 1),  // Gateway
+        IPAddress(255, 255, 255, 0) // Subnet mask
+    );
+
+    // Start the Access Point with better error checking
+    bool apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD);
+
+    if (apResult)
+    {
+      Serial.print("Access Point started successfully with SSID: ");
+      Serial.println(dynamicSSID);
       Serial.print("AP IP address: ");
       Serial.println(WiFi.softAPIP());
-    } else {
-      Serial.println("Access Point startup failed completely!");
     }
+    else
+    {
+      Serial.println("Failed to start Access Point!");
+      Serial.println("Trying alternative configuration...");
+
+      // Try with a different channel and explicit parameters
+      apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, 1, 0, 4);
+      if (apResult)
+      {
+        Serial.println("Access Point started with alternative config");
+        Serial.print("AP IP address: ");
+        Serial.println(WiFi.softAPIP());
+      }
+      else
+      {
+        Serial.println("Access Point startup failed completely!");
+      }
+    }
+
+    // Start DNS server for captive portal
+    // This will redirect all DNS requests to our IP (192.168.4.1)
+    dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
+    Serial.println("DNS Server started for captive portal");
   }
+  else
+  {
+    // use ssid/password mode instead  (SSID: openUC2; Password: Wifi So You Can See Too)
+    // connect to the available network
+    WiFi.mode(WIFI_STA);
+    Serial.println("Connecting to WiFi network...");
+    WiFi.begin("openUC2", "Wifi So You Can See Too");
+    // Wait for connection
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected.");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
 
-  // Start DNS server for captive portal
-  // This will redirect all DNS requests to our IP (192.168.4.1)
-  dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
-  Serial.println("DNS Server started for captive portal");
-
-  Serial.println("Using header files for website content");
+    Serial.println("Using header files for website content");
+  }
 
   // I2C initialization for TSL2591
   Wire.begin(SDA_PIN, SCL_PIN);
@@ -709,7 +757,6 @@ disableLoopWDT(); // Deactivate Watchdog for loop
     tsl.enableAutoRange(true);
     Serial.println("TSL2591 initialized");
     Serial.printf("TSL2591 Gain: 0x%02X, Integration Time: 0x%02X\n", (int)currentGain, (int)currentIntegrationTime);
-    
   }
 
   // ADF4351 init
@@ -720,50 +767,49 @@ disableLoopWDT(); // Deactivate Watchdog for loop
 
   // Setup routes
   // Explicit root handler to ensure proper routing
-  server.on("/", HTTP_GET, []() {
-    server.send_P(200, "text/html", INDEX_HTML);
-  });
-  
+  server.on("/", HTTP_GET, []()
+            { server.send_P(200, "text/html", INDEX_HTML); });
+
   // Captive portal detection endpoints for various OS
   // These endpoints help trigger the captive portal popup on different devices
-  
+
   // Android captive portal detection
-  server.on("/generate_204", HTTP_GET, []() {
+  server.on("/generate_204", HTTP_GET, []()
+            {
     // Android expects a redirect to trigger captive portal
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", "");
-  });
-  
+    server.send(302, "text/plain", ""); });
+
   // Microsoft Windows captive portal detection
-  server.on("/connecttest.txt", HTTP_GET, []() {
+  server.on("/connecttest.txt", HTTP_GET, []()
+            {
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", "");
-  });
-  server.on("/ncsi.txt", HTTP_GET, []() {
+    server.send(302, "text/plain", ""); });
+  server.on("/ncsi.txt", HTTP_GET, []()
+            {
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", "");
-  });
-  
+    server.send(302, "text/plain", ""); });
+
   // Apple iOS/MacOS captive portal detection
-  server.on("/hotspot-detect.html", HTTP_GET, []() {
+  server.on("/hotspot-detect.html", HTTP_GET, []()
+            {
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/html", "");
-  });
-  server.on("/library/test/success.html", HTTP_GET, []() {
+    server.send(302, "text/html", ""); });
+  server.on("/library/test/success.html", HTTP_GET, []()
+            {
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/html", "");
-  });
-  
+    server.send(302, "text/html", ""); });
+
   // Additional endpoints for better captive portal detection
-  server.on("/success.txt", HTTP_GET, []() {
+  server.on("/success.txt", HTTP_GET, []()
+            {
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", "");
-  });
-  server.on("/canonical.html", HTTP_GET, []() {
+    server.send(302, "text/plain", ""); });
+  server.on("/canonical.html", HTTP_GET, []()
+            {
     server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/html", "");
-  });
-  
+    server.send(302, "text/html", ""); });
+
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
@@ -773,7 +819,7 @@ disableLoopWDT(); // Deactivate Watchdog for loop
   server.on("/tsl/settings", HTTP_GET, handleGetTSLSettings);
   server.on("/tsl/gain", HTTP_POST, handleSetTSLGain);
   server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
-  server.on("/ratio", HTTP_GET, handleMeasureRatio);   
+  server.on("/ratio", HTTP_GET, handleMeasureRatio);
 
   server.begin();
   // TODO: Need a function that disables the adf4351 output
@@ -784,26 +830,31 @@ void loop()
 {
   // Process DNS requests for captive portal
   dnsServer.processNextRequest();
-  
+
   server.handleClient();
-  
+
   // Update LED status indicators
   updateLEDs();
-  
+
   // Check if any clients are connected to determine LED status
-  if (WiFi.softAPgetStationNum() > 0) {
-    if (currentLEDStatus == LED_NO_CLIENT) {
+  if (WiFi.softAPgetStationNum() > 0)
+  {
+    if (currentLEDStatus == LED_NO_CLIENT)
+    {
       setLEDStatus(LED_CONNECTED);
     }
     // Check if intensity monitoring has timed out
-    if (currentLEDStatus == LED_INTENSITY && 
-        (millis() - lastIntensityRequest) > INTENSITY_TIMEOUT) {
+    if (currentLEDStatus == LED_INTENSITY &&
+        (millis() - lastIntensityRequest) > INTENSITY_TIMEOUT)
+    {
       setLEDStatus(LED_CONNECTED);
     }
-  } else {
+  }
+  else
+  {
     setLEDStatus(LED_NO_CLIENT);
   }
-  
+
   // Read TSL2591 sensor (light intensity)
   // uint32_t lux = readTSL2591();
   // uint32_t lux = readIR(); // Read IR instead of light for demonstration
@@ -817,7 +868,8 @@ void loop()
     char c = Serial.read();
     if (c == '\n' || c == '\r')
     {
-      if (rxBuf.length() > 0) {
+      if (rxBuf.length() > 0)
+      {
         rxBuf.trim();
 
         if (rxBuf.startsWith("MEASURE"))
@@ -826,29 +878,29 @@ void loop()
           float f = rxBuf.substring(7).toFloat();
           if (f >= ADF_FREQ_MIN && f <= ADF_FREQ_MAX)
           {
-            setLEDStatus(LED_MEASURING); // Set LED to red
+            setLEDStatus(LED_MEASURING);  // Set LED to red
             adf.updateFrequency(f * 1e6); // tune synthesiser
-            delay(10); // Allow settling time
+            delay(10);                    // Allow settling time
             uint32_t i = readIR();        // intensity
             Serial.printf("DATA %.1f %lu\n", f, i);
             setLEDStatus(LED_CONNECTED); // Return to connected state
-            adf.stop(); // Disable output after measurement
+            adf.stop();                  // Disable output after measurement
           }
           else
-            {
+          {
             setLEDStatus(LED_MEASURING); // Set LED to red
-            uint32_t i = readIR();        // intensity
+            uint32_t i = readIR();       // intensity
             Serial.printf("DATA %.1f %lu\n", f, i);
-                        setLEDStatus(LED_CONNECTED); // Return to connected state
+            setLEDStatus(LED_CONNECTED); // Return to connected state
 
-            //Serial.printf("ERR range: %.1f not in [%.1f, %.1f] MHz\n", f, ADF_FREQ_MIN, ADF_FREQ_MAX);
+            // Serial.printf("ERR range: %.1f not in [%.1f, %.1f] MHz\n", f, ADF_FREQ_MIN, ADF_FREQ_MAX);
           }
         }
         else if (rxBuf == "STATUS")
         {
           // Add status command for debugging
-          Serial.printf("STATUS connected:%d freq_range:[%.1f,%.1f] led:%d\n", 
-                       WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus);
+          Serial.printf("STATUS connected:%d freq_range:[%.1f,%.1f] led:%d\n",
+                        WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus);
         }
         else if (rxBuf.length() > 0)
         {
@@ -859,7 +911,8 @@ void loop()
           // Format: RATIO f1 f2
           int sp1 = rxBuf.indexOf(' ');
           int sp2 = rxBuf.indexOf(' ', sp1 + 1);
-          if (sp2 > sp1) {
+          if (sp2 > sp1)
+          {
             float f1 = rxBuf.substring(sp1 + 1, sp2).toFloat();
             float f2 = rxBuf.substring(sp2 + 1).toFloat();
 
@@ -867,25 +920,29 @@ void loop()
             uint32_t I1 = measureIntensityAtFrequency(f1);
             uint32_t I2 = measureIntensityAtFrequency(f2);
             float r12 = (I1 + I2 > 0)
-                        ? ((float)I1 - (float)I2) / ((float)I1 + (float)I2)
-                        : 0.0f;
+                            ? ((float)I1 - (float)I2) / ((float)I1 + (float)I2)
+                            : 0.0f;
             setLEDStatus(LED_CONNECTED);
 
             Serial.printf("RATIO %.3f %.3f %lu %lu %.6f\n",
                           f1, f2, I1, I2, r12);
-          } else {
+          }
+          else
+          {
             Serial.println("ERR RATIO syntax");
           }
         }
-
       }
       rxBuf = "";
     }
     else if (c >= 32 && c <= 126) // Only accept printable characters
     {
-      if (rxBuf.length() < MAX_SERIAL_BUFFER) {
+      if (rxBuf.length() < MAX_SERIAL_BUFFER)
+      {
         rxBuf += c;
-      } else {
+      }
+      else
+      {
         // Buffer overflow protection
         Serial.println("ERR buffer overflow");
         rxBuf = "";
