@@ -111,12 +111,13 @@ pio run -e seeed_xiao_esp32s3 --target upload
 - Ensures clean URLs without "/static/" prefix
 - Improved routing reliability for direct IP access (192.168.4.1)
 
-#### Image Optimization and Embedding
+#### Image Optimization and Storage
 - Created image optimization pipeline using Pillow
-- Reduced NVGitter.png from 515KB to 118KB (77% reduction)
-- Converted optimized image to C header file format
-- Images now served directly from PROGMEM (no filesystem required)
-- Automated image conversion in build_website.py script
+- Reduced NVGitter.png from 515KB to 43KB (92% reduction)
+- Images now served from SPIFFS partition instead of PROGMEM
+- Prevents boot loops on ESP32C3 caused by large header files
+- Reduces firmware size by 260KB
+- SPIFFS upload required: `pio run -e <env> --target uploadfs`
 
 ## 🔄 System Architecture
 
@@ -190,8 +191,11 @@ cd Production_Files/Software/ODMR_Server
 # Optimize images (if needed)
 python3 optimize_image.py
 
-# Convert HTML and images to headers  
+# Convert HTML to headers  
 python3 build_website.py  
+
+# Upload SPIFFS data (images)
+pio run -e seeed_xiao_esp32s3 --target uploadfs
 
 # Flash firmware
 pio run -e seeed_xiao_esp32s3 --target upload
