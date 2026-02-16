@@ -2,7 +2,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
-// #include <SPIFFS.h>  // No longer needed - using header files
+#include <SPIFFS.h>  // Used for serving NV-Center image
 #include <SPI.h>
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
 #include <Adafruit_NeoPixel.h> // Neopixel-Bibliothek einbinden
@@ -733,6 +733,16 @@ void setup()
     Serial.println("Using header files for website content");
   }
 
+  // Initialize SPIFFS for serving images
+  if (!SPIFFS.begin(true))
+  {
+    Serial.println("SPIFFS Mount Failed - continuing without it");
+  }
+  else
+  {
+    Serial.println("SPIFFS Mounted Successfully");
+  }
+
   // I2C initialization for TSL2591
   Wire.begin(SDA_PIN, SCL_PIN);
 
@@ -809,6 +819,19 @@ void setup()
             {
     server.sendHeader("Location", "http://192.168.4.1/", true);
     server.send(302, "text/html", ""); });
+
+  // Serve NVGitter.png from SPIFFS
+  server.on("/NVGitter.png", HTTP_GET, []()
+            {
+    File file = SPIFFS.open("/NVGitter.png", "r");
+    if (!file)
+    {
+      Serial.println("Failed to open NVGitter.png from SPIFFS");
+      server.send(404, "text/plain", "Image not found");
+      return;
+    }
+    server.streamFile(file, "image/png");
+    file.close(); });
 
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
