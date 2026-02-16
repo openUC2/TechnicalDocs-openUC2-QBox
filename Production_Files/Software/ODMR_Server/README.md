@@ -166,20 +166,34 @@ python3 build_website.py
 This script automatically:
 - Converts all HTML and CSS files to header files
 - Generates version information with build date and git hash
-- Optimizes and converts images to header files
 - Creates PROGMEM arrays for efficient ESP32 memory usage
+
+**Note**: Images are now served from SPIFFS instead of header files to prevent boot loops on ESP32C3.
 
 ### 2a. Image Optimization (Optional)
 If you need to optimize images manually:
 
 ```bash
 python3 optimize_image.py  # Optimizes NVGitter.png to 300px (43KB)
-python3 convert_image.py   # Converts optimized image to header file
 ```
 
-Images are automatically optimized to 300px width and converted to RGB format to reduce size for ESP32C3 compatibility.
+Images are automatically optimized to 300px width and converted to RGB format for ESP32C3 compatibility.
 
-### 3. Flash Firmware
+### 3. Upload SPIFFS Data
+Upload the images and other static files to the SPIFFS partition:
+
+```bash
+# For ESP32-S3
+pio run -e seeed_xiao_esp32s3 --target uploadfs
+
+# For ESP32-C3
+pio run -e seeed_xiao_esp32c3 --target uploadfs
+```
+
+The `data/` directory contains:
+- `NVGitter.png` - Optimized NV-Center diamond lattice image (43KB)
+
+### 4. Flash Firmware
 Use PlatformIO to build and flash the firmware:
 
 ```bash
@@ -198,6 +212,6 @@ pio run -e seeed_xiao_esp32c3 --target upload
 - ✅ **Live Intensity Monitoring**: Real-time photodiode readings for optical alignment
 - ✅ **Multi-Language Support**: German/English with localStorage persistence
 - ✅ **Automated Build System**: HTML→Header conversion with Python script
-- ✅ **Image Support**: Optimized PNG images served from header files (43KB, ESP32C3 compatible)
+- ✅ **Image Support**: NV-Center image served from SPIFFS partition to prevent boot loops
 - ✅ **Root Path Handling**: Explicit "/" route to prevent redirection issues
 - ✅ **Version Information**: Build date, git hash displayed on website and available via /version endpoint

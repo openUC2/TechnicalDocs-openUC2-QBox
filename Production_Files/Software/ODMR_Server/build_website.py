@@ -113,13 +113,11 @@ def main():
     if result.stderr:
         print(result.stderr)
     
-    # Also run image conversion
-    print("\nConverting images...")
-    result = subprocess.run([sys.executable, str(script_dir / "convert_image.py")], 
-                          capture_output=True, text=True)
-    print(result.stdout)
-    if result.stderr:
-        print(result.stderr)
+    # Image conversion skipped - using SPIFFS instead
+    # Images are served from the data/ directory via SPIFFS partition
+    # to prevent boot loops on ESP32C3 caused by large header files
+    print("\nNote: Images are served from SPIFFS (data/ directory)")
+    print("Use 'pio run --target uploadfs' to upload SPIFFS data")
     
     return True
 
