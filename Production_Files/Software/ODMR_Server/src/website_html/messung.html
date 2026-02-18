@@ -127,10 +127,6 @@
                     led.style.backgroundColor = '#dc3545'; // Red
                     led.style.animation = 'none';
                     break;
-                case 'laser_on':
-                    led.style.backgroundColor = '#ffc107'; // Yellow
-                    led.style.animation = 'none';
-                    break;
                 default:
                     led.style.backgroundColor = '#6c757d';
                     led.style.animation = 'none';
@@ -211,30 +207,6 @@
             ById("f_end").value=2920;
             ById("f_step").value=2;
             randbedingungenUebernehmen();
-        }
-        function LaserOn(){
-            if(confirm("Laserdiode wirklich einschalten?")){
-                var xhr=new XMLHttpRequest();
-                xhr.open("POST","/Laser_An",true);
-                xhr.send();
-                let Laser=ById("Laser");
-                Laser.innerHTML = '<i class="bi bi-lightbulb-fill"></i> Laserdiode ausschalten';
-                Laser.className = "btn btn-danger btn-lg";
-                Laser.removeEventListener("click", LaserOn);
-                Laser.addEventListener("click", LaserOff);
-                setLEDStatus('laser_on', 'Laser aktiv');
-            }
-        }
-        function LaserOff(){
-            var xhr=new XMLHttpRequest();
-            xhr.open("POST","/Laser_Aus",true);
-            xhr.send();
-            let Laser=ById("Laser");
-            Laser.innerHTML = '<i class="bi bi-lightbulb"></i> Laserdiode einschalten';
-            Laser.className = "btn btn-warning btn-lg";
-            Laser.removeEventListener("click", LaserOff);
-            Laser.addEventListener("click", LaserOn);
-            setLEDStatus('ready', 'Bereit');
         }
         function ToggleStart(OnOff){
             let StartButton=ById("StartStop");
@@ -565,20 +537,6 @@
                     plot.setAttribute("viewBox", PlotViewBox);
                 </script>
             </svg>
-        </div>
-        <div class="grid2">
-            <div class="d-grid gap-2">
-              <button type="button" class="btn btn-warning btn-lg" id="Laser"
-                      title="Schaltet die Laserdiode ein/aus für die Anregung der NV-Zentren" 
-                      data-bs-toggle="tooltip">
-                <i class="bi bi-lightbulb"></i> Laserdiode einschalten
-              </button>
-              <!-- LED Status Indicator -->
-              <div class="d-flex align-items-center justify-content-center mt-2">
-                <div id="statusLED" class="me-2" style="width: 12px; height: 12px; border-radius: 50%; background-color: #6c757d; border: 2px solid #dee2e6;"></div>
-                <small id="statusText" class="text-muted">Bereit</small>
-              </div>
-            </div>
         </div>
         <div class="grid3">
             <div class="inputField inputFieldWide" id="Y-Controll" style="background-color: #fff;"> 
@@ -938,7 +896,6 @@
                 ["fE100",()=>addValue("100","f_end")],
                 ["fs-1",()=>addValue("-1","f_step")],
                 ["fs1",()=>addValue("1","f_step")],
-                ["Laser", LaserOn],
                 ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=36000;}],
                 ["MessreiheHerunterladen",DownloadCSV],
             ];
