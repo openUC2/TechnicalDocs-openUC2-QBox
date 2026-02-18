@@ -76,10 +76,6 @@ const char *PASSWORD = ""; // Empty password for open network
 String rxBuf;
 const size_t MAX_SERIAL_BUFFER = 256; // Prevent buffer overflow
 
-// Laser pin example
-static const int LASER_PIN = 10;
-bool laserState = false;
-
 // canans ADF Library modified by bene
 ADF4351 adf(clock, data, LE, CE);
 
@@ -252,44 +248,6 @@ uint16_t readIR()
 {
   uint16_t x = tsl.getLuminosity(TSL2591_INFRARED);
   return x;
-}
-
-// Example /laser_act handler for JSON:
-// {"task": "/laser_act", "LASERid":1, "LASERval": 0 or 1}
-void handleLaserAct()
-{
-  if (!server.hasArg("plain"))
-  {
-    server.send(400, "application/json", "{\"error\":\"no JSON body\"}");
-    return;
-  }
-  String body = server.arg("plain");
-  // Minimal parse for demonstration
-  // (Use ArduinoJson if you need more robust parsing)
-  if (body.indexOf("\"LASERval\":1") >= 0)
-  {
-    laserState = true;
-    digitalWrite(LASER_PIN, HIGH);
-  }
-  else
-  {
-    laserState = false;
-    digitalWrite(LASER_PIN, LOW);
-  }
-  server.send(200, "application/json", "{\"status\":\"ok\"}");
-
-  // Set LED to measuring mode (red)
-  setLEDStatus(LED_MEASURING);
-
-  for (int iFrequencyRequested = 2200; iFrequencyRequested <= 4400; iFrequencyRequested += 100)
-  {
-    adf.updateFrequency(iFrequencyRequested * 1e6); // Set frequency in Hz
-    delay(200);                                     // Wait for the frequency to stabilize
-    Serial.println("Set frequency: " + String(iFrequencyRequested * 1e6) + " Hz");
-  }
-
-  // Return to connected mode (rainbow) after measurement
-  setLEDStatus(LED_CONNECTED);
 }
 
 // Example /odmr_act handler for JSON:
@@ -630,9 +588,6 @@ void setup()
 #ifdef ESP32S3
   // disableCore1WDT(); // Deactivate Watchdog for core 1
 #endif
-
-  pinMode(LASER_PIN, OUTPUT);
-  digitalWrite(LASER_PIN, LOW);
 
   Serial.begin(115200);
   delay(1500); // Allow time to connect
