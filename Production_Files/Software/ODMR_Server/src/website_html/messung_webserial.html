@@ -1037,14 +1037,14 @@
                 </script>
               </svg>
             </div>
-            <div class="grid2">
+<!--            <div class="grid2">
               <input
                 type="button"
                 class="Button Laserbutton"
                 id="Laser"
                 value="Laserdiode einschalten"
               />
-            </div>
+            </div> -->
             <div class="grid3">
               <div
                 class="inputField inputFieldWide"
@@ -1755,7 +1755,7 @@
           });
         }
 
-        async function LaserOn() {
+/*        async function LaserOn() {
           if (confirm("Laserdiode wirklich einschalten?")) {
             await writer.write(enc.encode("LASER ON\n"));
             let Laser = ById("Laser");
@@ -1771,7 +1771,7 @@
           Laser.value = "Laserdiode einschalten";
           Laser.removeEventListener("click", LaserOff);
           Laser.addEventListener("click", LaserOn);
-        }
+        } */
         /* ---------- end of webserial stuff ---------- */
 
         function YMidContr(_this) {
@@ -1848,7 +1848,7 @@
           ["f_Reset", fReset],
           ["StartStop", MessungStarten],
           ["AutoMessung", AutoToggle],
-          ["Laser", LaserOn],
+          //["Laser", LaserOn],
           ["startLiveBtn", startLiveMonitor],
           ["resetLiveBtn", resetLiveData],
           ["setFreqBtn", setFrequency],
