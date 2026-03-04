@@ -10,6 +10,9 @@
 #include "adf4351.h"
 #include <SPI.h>
 
+// Version info (auto-generated)
+#include "version_info.h"
+
 // website
 #include "website/style_css.h"
 #include "website/index_html.h"
@@ -18,7 +21,6 @@
 #include "website/ratio_html.h"
 #include "website/justage_html.h"
 #include "website/infos_html.h"
-// Bootstrap CSS/JS removed to save flash - using CDN only
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
 #define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
@@ -89,6 +91,11 @@ Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
 // TSL2591 settings storage
 tsl2591Gain_t currentGain = TSL2591_GAIN_MAX;
 tsl2591IntegrationTime_t currentIntegrationTime = TSL2591_INTEGRATIONTIME_100MS;
+
+// Cached sensor value for non-blocking reads (P0 #6)
+volatile uint16_t cachedIR = 0;
+unsigned long lastSensorRead = 0;
+const unsigned long SENSOR_READ_INTERVAL = 100; // Read sensor every 100ms
 
 // WebServer on port 80
 WebServer server(80);
@@ -228,11 +235,21 @@ void handleFileRequest(const String &path)
   }
   else
   {
-    // Captive portal behavior: redirect unknown requests to index page
-    // This helps when users connect to WiFi and browser tries to detect captive portal
-    Serial.print("Unknown path redirected to index: ");
-    Serial.println(actualPath);
-    server.send_P(200, "text/html", INDEX_HTML);
+    // Return 404 for unknown assets to prevent browser retries (P0 #3)
+    // Only serve index for HTML navigation requests
+    String accept = server.header("Accept");
+    if (actualPath.endsWith(".html") || accept.indexOf("text/html") >= 0)
+    {
+      Serial.print("Unknown HTML path redirected to index: ");
+      Serial.println(actualPath);
+      server.send_P(200, "text/html", INDEX_HTML);
+    }
+    else
+    {
+      Serial.print("404 Not Found: ");
+      Serial.println(actualPath);
+      server.send(404, "text/plain", "Not found");
+    }
   }
 }
 
@@ -354,14 +371,15 @@ void handleMeasure()
   setLEDStatus(LED_CONNECTED);
 }
 
-// Live intensity reading for photodiode alignment
+// Live intensity reading for photodiode alignment - uses cached value (P0 #6)
 void handleIntensity()
 {
   // Set LED to blue for intensity monitoring mode and track timestamp
   setLEDStatus(LED_INTENSITY);
   lastIntensityRequest = millis();
 
-  uint32_t intensity = readIR(); // Read photodiode intensity
+  // Return cached value for instant response
+  uint32_t intensity = cachedIR;
   String response = String("{\"intensity\":") + intensity + "}";
   server.send(200, "application/json", response);
 }
@@ -659,7 +677,7 @@ void setup()
   int wifiChannel = random(1, 12);
   Serial.print("Using WiFi channel: ");
   Serial.println(wifiChannel);
-  WiFi.channel(wifiChannel);
+  // Note: channel is passed to WiFi.softAP() directly (P1 #7)
   // Ensure WiFi is completely disconnected and reset
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -678,8 +696,8 @@ void setup()
         IPAddress(255, 255, 255, 0) // Subnet mask
     );
 
-    // Start the Access Point with better error checking
-    bool apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD);
+    // Start the Access Point with channel parameter (P1 #7)
+    bool apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, wifiChannel, 0, 4);
 
     if (apResult)
     {
@@ -687,13 +705,15 @@ void setup()
       Serial.println(dynamicSSID);
       Serial.print("AP IP address: ");
       Serial.println(WiFi.softAPIP());
+      Serial.print("AP WiFi channel: ");
+      Serial.println(wifiChannel);
     }
     else
     {
       Serial.println("Failed to start Access Point!");
-      Serial.println("Trying alternative configuration...");
+      Serial.println("Trying alternative configuration with channel 1...");
 
-      // Try with a different channel and explicit parameters
+      // Try with channel 1 as fallback
       apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, 1, 0, 4);
       if (apResult)
       {
@@ -770,45 +790,34 @@ void setup()
   server.on("/", HTTP_GET, []()
             { server.send_P(200, "text/html", INDEX_HTML); });
 
-  // Captive portal detection endpoints for various OS
-  // These endpoints help trigger the captive portal popup on different devices
+  // Captive portal detection endpoints - return "success" responses (P0 #1)
+  // This prevents OS from thinking it's a captive portal and keeps devices connected
 
-  // Android captive portal detection
+  // Android captive portal detection - expects 204
   server.on("/generate_204", HTTP_GET, []()
-            {
-    // Android expects a redirect to trigger captive portal
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", ""); });
+            { server.send(204, "text/plain", ""); });
 
   // Microsoft Windows captive portal detection
   server.on("/connecttest.txt", HTTP_GET, []()
-            {
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", ""); });
+            { server.send(200, "text/plain", "Microsoft Connect Test"); });
   server.on("/ncsi.txt", HTTP_GET, []()
-            {
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", ""); });
+            { server.send(200, "text/plain", "Microsoft NCSI"); });
 
   // Apple iOS/MacOS captive portal detection
   server.on("/hotspot-detect.html", HTTP_GET, []()
-            {
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/html", ""); });
+            { server.send(200, "text/html", "Success"); });
   server.on("/library/test/success.html", HTTP_GET, []()
-            {
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/html", ""); });
+            { server.send(200, "text/html", "Success"); });
 
-  // Additional endpoints for better captive portal detection
+  // Additional OS probe endpoints
   server.on("/success.txt", HTTP_GET, []()
-            {
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/plain", ""); });
+            { server.send(200, "text/plain", "success"); });
   server.on("/canonical.html", HTTP_GET, []()
-            {
-    server.sendHeader("Location", "http://192.168.4.1/", true);
-    server.send(302, "text/html", ""); });
+            { server.send(200, "text/html", "Success"); });
+
+  // Favicon: return 204 to stop browsers retrying (P0 #3)
+  server.on("/favicon.ico", HTTP_GET, []()
+            { server.send(204, "image/x-icon", ""); });
 
   server.onNotFound([]()
                     { handleFileRequest(server.uri()); });
@@ -821,8 +830,32 @@ void setup()
   server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
   server.on("/ratio", HTTP_GET, handleMeasureRatio);
 
+  // ADF4351 enable/disable endpoints (P1 #9)
+  server.on("/ADF_Enable", HTTP_POST, []()
+            {
+    adf.begin();
+    server.send(200, "application/json", "{\"status\":\"ok\",\"adf\":\"enabled\"}"); });
+  server.on("/ADF_Disable", HTTP_POST, []()
+            {
+    adf.stop();
+    server.send(200, "application/json", "{\"status\":\"ok\",\"adf\":\"disabled\"}"); });
+
+  // Version endpoint (P1 #10) - returns firmware version as JSON
+  server.on("/version", HTTP_GET, []()
+            {
+    String json = "{";
+    json += "\"version\":\"" + String(FIRMWARE_VERSION) + "\",";
+    json += "\"build_date\":\"" + String(BUILD_DATE) + "\",";
+    json += "\"build_time\":\"" + String(BUILD_TIME) + "\",";
+    json += "\"git_hash\":\"" + String(GIT_HASH) + "\",";
+    json += "\"git_branch\":\"" + String(GIT_BRANCH) + "\"";
+    json += "}";
+    server.send(200, "application/json", json); });
+
+  // Collect Accept header for 404 logic
+  server.collectHeaders("Accept");
+
   server.begin();
-  // TODO: Need a function that disables the adf4351 output
   adf.stop(); // Disable output initially
 }
 
@@ -832,6 +865,13 @@ void loop()
   dnsServer.processNextRequest();
 
   server.handleClient();
+
+  // Periodic sensor read for cached value (P0 #6)
+  if (millis() - lastSensorRead >= SENSOR_READ_INTERVAL)
+  {
+    lastSensorRead = millis();
+    cachedIR = readIR();
+  }
 
   // Update LED status indicators
   updateLEDs();

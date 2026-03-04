@@ -28,9 +28,11 @@
         var fBegin=2820, fEnd=2920, fStep=2, N_freq=0; 
         var _fBegin=2820, _fEnd=2920, _fStep=2; 
         var YMax=0, YMin=0;      
-        var _YMax=0, _YMin=36000;
+        var _YMax=0, _YMin=65535;
         const fMin=2200, fMax=4400, stepMin=0.2, stepMax=5; 
-        const IntMin=0, IntMax=36000, IntRangeMin=200;  
+        const IntMin=0, IntMax=65535, IntRangeMin=200;
+        var stopRequested = false;  // Global stop flag (P0 #5)
+        var continuousTimeout = null; // Track setTimeout for continuous mode  
         const XPlotSize=1600, YPlotSize=800; 
         var AutoMessung=0;  
         const PlotViewBox="-200 -" + (YPlotSize+75) + " " + (XPlotSize+200+150) + " " + (YPlotSize+75+150);
@@ -50,34 +52,50 @@
     
     <script> 
         async function MessungStarten(){ 
+            stopRequested = false;
             ToggleStart(0);
             setLEDStatus('measuring', 'Messung läuft');
             enableADF();
             
             deleteScaleGroup("DataGroupID");    
             AngezeigteDatenpunkte=[];
-            _YMax=0, _YMin=36000;
+            _YMax=0, _YMin=65535;
             prepareFreqs();             
             prepareXSkala(fBegin,fEnd);
-            while(Frequenzen.length!=0){   
-                var response=await freqMessung(Frequenzen.shift()); 
-                Messreihe.push(response);  
-                _YMin=Math.min(_YMin,response[1]-100);
-                _YMax=Math.max(_YMax,response[1]+100);
-                autoScale();
-                drawCircle(response,+200,"black");  
+            while(Frequenzen.length!=0 && !stopRequested){   
+                try {
+                    var response=await freqMessung(Frequenzen.shift()); 
+                    Messreihe.push(response);  
+                    _YMin=Math.min(_YMin,response[1]-100);
+                    _YMax=Math.max(_YMax,response[1]+100);
+                    autoScale();
+                    drawCircle(response,+200,"black");
+                } catch(e) {
+                    console.warn('Skipped point:', e);
+                    Messreihe.push([NaN, NaN, NaN]);
+                }
             }
             addDataGroup(); 
             Messreihe=[];
             
             setLEDStatus('ready', 'Messungen abgeschlossen');
             
-            if(AutoMessung){
-                setTimeout(MessungStarten, 600);
+            if(AutoMessung && !stopRequested){
+                continuousTimeout = setTimeout(MessungStarten, 600);
             } else {
                 ToggleStart(1);
                 disableADF();
+                stopRequested = false;
             }  
+        }
+        // Stop measurement handler (P0 #5)
+        function MessungStoppen(){
+            stopRequested = true;
+            if(continuousTimeout) { clearTimeout(continuousTimeout); continuousTimeout = null; }
+            AutoMessung = 0;
+            setLEDStatus('ready', 'Messung gestoppt');
+            ToggleStart(1);
+            disableADF();
         }
         function autoScale(){
             if(ById("YMidAuto").checked){
@@ -212,30 +230,7 @@
             ById("f_step").value=2;
             randbedingungenUebernehmen();
         }
-        function LaserOn(){
-            if(confirm("Laserdiode wirklich einschalten?")){
-                var xhr=new XMLHttpRequest();
-                xhr.open("POST","/Laser_An",true);
-                xhr.send();
-                let Laser=ById("Laser");
-                Laser.innerHTML = '<i class="bi bi-lightbulb-fill"></i> Laserdiode ausschalten';
-                Laser.className = "btn btn-danger btn-lg";
-                Laser.removeEventListener("click", LaserOn);
-                Laser.addEventListener("click", LaserOff);
-                setLEDStatus('laser_on', 'Laser aktiv');
-            }
-        }
-        function LaserOff(){
-            var xhr=new XMLHttpRequest();
-            xhr.open("POST","/Laser_Aus",true);
-            xhr.send();
-            let Laser=ById("Laser");
-            Laser.innerHTML = '<i class="bi bi-lightbulb"></i> Laserdiode einschalten';
-            Laser.className = "btn btn-warning btn-lg";
-            Laser.removeEventListener("click", LaserOff);
-            Laser.addEventListener("click", LaserOn);
-            setLEDStatus('ready', 'Bereit');
-        }
+        // Laser control removed (P2 #11) - laser is not user-controllable via UI
         function ToggleStart(OnOff){
             let StartButton=ById("StartStop");
             if(OnOff){
@@ -310,13 +305,25 @@
                 Messreihe.shift();              
             }
         }
+        // WiFi measurement with timeout + retry (P0 #4)
         async function freqMessung(f){
-            return new Promise(function(resolve){
-                var xhr =new XMLHttpRequest();
-                xhr.onreadystatechange=function() {if (this.readyState==4 && this.status ==200){resolve(this.responseText.split(" ").map(Number));}}
-                xhr.open("GET", "/measure?frequenz=" + f, true);
-                xhr.send();
-            });
+            const TIMEOUT_MS = 3000;
+            const MAX_RETRIES = 1;
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+                    const resp = await fetch('/measure?frequenz=' + f, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    return text.split(' ').map(Number);
+                } catch(e) {
+                    if (attempt < MAX_RETRIES) { console.warn('Retry point ' + f + ':', e); continue; }
+                    console.error('Skipped point ' + f + ':', e);
+                    throw e;
+                }
+            }
         }
         function getScalesteps(R){
             for(Step=1;R>Step;Step*=10){}                       
@@ -568,11 +575,6 @@
         </div>
         <div class="grid2">
             <div class="d-grid gap-2">
-              <button type="button" class="btn btn-warning btn-lg" id="Laser"
-                      title="Schaltet die Laserdiode ein/aus für die Anregung der NV-Zentren" 
-                      data-bs-toggle="tooltip">
-                <i class="bi bi-lightbulb"></i> Laserdiode einschalten
-              </button>
               <!-- LED Status Indicator -->
               <div class="d-flex align-items-center justify-content-center mt-2">
                 <div id="statusLED" class="me-2" style="width: 12px; height: 12px; border-radius: 50%; background-color: #6c757d; border: 2px solid #dee2e6;"></div>
@@ -601,6 +603,11 @@
                       title="Startet die ODMR-Messung über den gewählten Frequenzbereich" 
                       data-bs-toggle="tooltip">
                 <i class="bi bi-play-fill"></i> <span data-lang-key="start_measurement">Messung starten</span>
+              </button>
+              <button type="button" class="btn btn-danger btn-lg" id="StopMessung"
+                      title="Stoppt die laufende Messung" 
+                      data-bs-toggle="tooltip">
+                <i class="bi bi-stop-fill"></i> <span data-lang-key="stop_measurement">Messung stoppen</span>
               </button>
               <button type="button" class="btn btn-outline-primary" id="AutoMessung"
                       title="Wechselt zwischen Einzel- und Dauermessung" 
@@ -876,7 +883,7 @@
                 ById("YMid2").min=IntMin+_this.value/2; 
             }
             function YRangeContr2(_this){
-                let IntensitätswertLogarithmisch=Math.min(100*Math.floor(Math.pow(2, _this.value)),36000);
+                let IntensitätswertLogarithmisch=Math.min(100*Math.floor(Math.pow(2, _this.value)),65535);
                 if((ById("YMid1").value-IntMin)*2<IntensitätswertLogarithmisch){ById("YMid1").value=IntMin+IntensitätswertLogarithmisch/2;ById("YMid2").value=IntMin+IntensitätswertLogarithmisch/2;}
                 else if((IntMax-ById("YMid1").value)*2<IntensitätswertLogarithmisch){ById("YMid1").value=IntMax-IntensitätswertLogarithmisch/2;ById("YMid2").value=IntMax-IntensitätswertLogarithmisch/2;}
                 _this.previousElementSibling.value=IntensitätswertLogarithmisch; 
@@ -896,17 +903,18 @@
                 });
             }
 
-            // Hide WebSerial navigation item if on ESP32
-            const isLocalDevice = window.location.hostname === '192.168.4.1' || 
-                               window.location.hostname.includes('ODMR_') || 
-                               window.location.protocol === 'file:';
-            
-            if (isLocalDevice) {
-                const webSerialNavItem = document.getElementById('webSerialNavItem');
-                if (webSerialNavItem) {
-                    webSerialNavItem.style.display = 'none';
-                }
-            }
+            // WebSerial nav visibility: use /webserial_check + browser capability (P2 #12)
+            (async function(){
+                const wsNav = document.getElementById('webSerialNavItem');
+                if (!wsNav) return;
+                // Browser capability check first
+                if (!('serial' in navigator)) { wsNav.style.display = 'none'; return; }
+                try {
+                    const r = await fetch('/webserial_check');
+                    const d = await r.json();
+                    if (!d.webserial_enabled) wsNav.style.display = 'none';
+                } catch(e) { wsNav.style.display = 'none'; }
+            })();
             
             // Initialize parameter summary
             updateParameterSummary();
@@ -938,8 +946,8 @@
                 ["fE100",()=>addValue("100","f_end")],
                 ["fs-1",()=>addValue("-1","f_step")],
                 ["fs1",()=>addValue("1","f_step")],
-                ["Laser", LaserOn],
-                ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=36000;}],
+                ["StopMessung", MessungStoppen],
+                ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=65535;}],
                 ["MessreiheHerunterladen",DownloadCSV],
             ];
             ChangeListeners.forEach(element => ById(element[0]).addEventListener("change", element[1]));
@@ -958,8 +966,7 @@
     </div>
   </footer>
 
-  <!-- Bootstrap JS from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Bootstrap JS removed - offline AP mode (P0 #2) -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Fetch and display version information
@@ -1076,6 +1083,18 @@
       const savedLang = localStorage.getItem('language') || 'de';
       setLanguage(savedLang);
     });
+  </script>
+  <script>
+  /* Bootstrap-JS replacement: navbar collapse + dropdown */
+  (function(){
+    document.querySelectorAll('.navbar-toggler').forEach(function(b){
+      b.addEventListener('click',function(){var t=document.querySelector(b.getAttribute('data-bs-target'));if(t)t.classList.toggle('show');});
+    });
+    document.querySelectorAll('.dropdown-toggle').forEach(function(b){
+      b.addEventListener('click',function(e){e.preventDefault();var m=b.nextElementSibling;if(m&&m.classList.contains('dropdown-menu'))m.classList.toggle('show');});
+    });
+    document.addEventListener('click',function(e){if(!e.target.closest('.dropdown'))document.querySelectorAll('.dropdown-menu.show').forEach(function(m){m.classList.remove('show');});});
+  })();
   </script>
 </body>
 </html>

@@ -651,5 +651,17 @@
         .catch(() => {});
     }
   </script>
+  <script>
+  /* Bootstrap-JS replacement: navbar collapse + dropdown */
+  (function(){
+    document.querySelectorAll('.navbar-toggler').forEach(function(b){
+      b.addEventListener('click',function(){var t=document.querySelector(b.getAttribute('data-bs-target'));if(t)t.classList.toggle('show');});
+    });
+    document.querySelectorAll('.dropdown-toggle').forEach(function(b){
+      b.addEventListener('click',function(e){e.preventDefault();var m=b.nextElementSibling;if(m&&m.classList.contains('dropdown-menu'))m.classList.toggle('show');});
+    });
+    document.addEventListener('click',function(e){if(!e.target.closest('.dropdown'))document.querySelectorAll('.dropdown-menu.show').forEach(function(m){m.classList.remove('show');});});
+  })();
+  </script>
 </body>
 </html>

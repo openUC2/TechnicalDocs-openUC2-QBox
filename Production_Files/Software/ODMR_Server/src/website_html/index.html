@@ -378,17 +378,17 @@
       const savedLang = localStorage.getItem('language') || 'de';
       setLanguage(savedLang);
       
-      // Hide WebSerial navigation item if on ESP32
-      const isLocalDevice = window.location.hostname === '192.168.4.1' || 
-                           window.location.hostname.includes('ODMR_') || 
-                           window.location.protocol === 'file:';
-      
-      if (isLocalDevice) {
-        const webSerialNavItem = document.getElementById('webSerialNavItem');
-        if (webSerialNavItem) {
-          webSerialNavItem.style.display = 'none';
-        }
-      }
+      // WebSerial nav visibility: use /webserial_check + browser capability (P2 #12)
+      (async function(){
+          const wsNav = document.getElementById('webSerialNavItem');
+          if (!wsNav) return;
+          if (!('serial' in navigator)) { wsNav.style.display = 'none'; return; }
+          try {
+              const r = await fetch('/webserial_check');
+              const d = await r.json();
+              if (!d.webserial_enabled) wsNav.style.display = 'none';
+          } catch(e) { wsNav.style.display = 'none'; }
+      })();
       
       // Fetch and display version information
       fetch('/version')
@@ -416,6 +416,18 @@
           }
         });
     });
+  </script>
+  <script>
+  /* Bootstrap-JS replacement: navbar collapse + dropdown */
+  (function(){
+    document.querySelectorAll('.navbar-toggler').forEach(function(b){
+      b.addEventListener('click',function(){var t=document.querySelector(b.getAttribute('data-bs-target'));if(t)t.classList.toggle('show');});
+    });
+    document.querySelectorAll('.dropdown-toggle').forEach(function(b){
+      b.addEventListener('click',function(e){e.preventDefault();var m=b.nextElementSibling;if(m&&m.classList.contains('dropdown-menu'))m.classList.toggle('show');});
+    });
+    document.addEventListener('click',function(e){if(!e.target.closest('.dropdown'))document.querySelectorAll('.dropdown-menu.show').forEach(function(m){m.classList.remove('show');});});
+  })();
   </script>
 </body>
 </html>
