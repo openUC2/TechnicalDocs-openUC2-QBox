@@ -12,8 +12,10 @@ on:
   push:
     branches:
       - 'main'
+      - 'fix-listoferrors'
     paths:
-      - '.github/workflows/build-odmr-external.yaml'
+      - 'Production_Files/Software/ODMR_Server/**'
+      - '.github/workflows/build_firmware.yaml'
 
 env:
   ODMR_REPO: 'openUC2/TechnicalDocs-openUC2-QBox'
@@ -34,6 +36,7 @@ jobs:
             chip: esp32s3
             flash_size: 4MB
             partition_csv: custom_partition_esp32s3.csv
+            spiffs_offset: "0x291000"
             display_name: "ODMR Xiao ESP32S3"
             board_id: "odmr-xiao-esp32s3"
           # ---------- ESP32‑C3 ----------
@@ -41,6 +44,7 @@ jobs:
             chip: esp32c3
             flash_size: 4MB
             partition_csv: custom_partition_esp32c3.csv
+            spiffs_offset: "0x2B0000"
             display_name: "ODMR Xiao ESP32C3"
             board_id: "odmr-xiao-esp32c3"
 
@@ -82,8 +86,13 @@ jobs:
         run: pio run -v --environment ${{ matrix.env_name }}
         working-directory: ${{ env.PROJECT_DIR }}
 
+      # ---------------- BUILD SPIFFS IMAGE ---------------
+      - name: Build SPIFFS filesystem image – ${{ matrix.env_name }}
+        run: pio run -t buildfs --environment ${{ matrix.env_name }}
+        working-directory: ${{ env.PROJECT_DIR }}
+
       # ---------------- MERGE BINARIES ------------------
-      - name: Merge binaries
+      - name: Merge binaries (firmware + SPIFFS)
         shell: bash
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
@@ -102,16 +111,17 @@ jobs:
           # Find boot_app0.bin
           BOOT_APP0=$(find ~/.platformio -name "boot_app0.bin" | head -1)
 
-          # Merge all binaries (no filesystem - website embedded as headers)
+          # Merge firmware + SPIFFS filesystem into a single flashable binary
           python -m esptool --chip ${{ matrix.chip }} merge_bin \
             -o "${GITHUB_WORKSPACE}/build/fw-images/${{ matrix.board_id }}.bin" \
             --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} \
             $BOOT_ADDR bootloader.bin \
             0x8000 partitions.bin \
             0xe000 "$BOOT_APP0" \
-            0x10000 firmware.bin
+            0x10000 firmware.bin \
+            ${{ matrix.spiffs_offset }} spiffs.bin
 
-          echo "==> Merged binary created: ${{ matrix.board_id }}.bin"
+          echo "==> Merged binary (firmware+SPIFFS) created: ${{ matrix.board_id }}.bin"
 
       # ---------------- CREATE MANIFEST -----------------
       - name: Create ESP Web Tools manifest

@@ -2,25 +2,15 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
-// #include <SPIFFS.h>  // No longer needed - using header files
+#include <SPIFFS.h>
 #include <SPI.h>
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
 #include <Adafruit_NeoPixel.h> // Neopixel-Bibliothek einbinden
 
 #include "adf4351.h"
-#include <SPI.h>
 
 // Version info (auto-generated)
 #include "version_info.h"
-
-// website
-#include "website/style_css.h"
-#include "website/index_html.h"
-#include "website/messung_html.h"
-#include "website/messung_webserial_html.h"
-#include "website/ratio_html.h"
-#include "website/justage_html.h"
-#include "website/infos_html.h"
 
 #define ADF_FREQ_MIN 2200.0f // Min frequency for ADF4351 (2.2 GHz)
 #define ADF_FREQ_MAX 4400.0f // Max frequency for ADF4351 (4.4 GHz)
@@ -180,6 +170,20 @@ void updateLEDs()
 }
 
 // Utility to serve static files from header files
+// Determine MIME content type from file extension
+String getContentType(const String &path)
+{
+  if (path.endsWith(".html")) return "text/html";
+  if (path.endsWith(".css"))  return "text/css";
+  if (path.endsWith(".js"))   return "application/javascript";
+  if (path.endsWith(".png"))  return "image/png";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".ico"))  return "image/x-icon";
+  if (path.endsWith(".json")) return "application/json";
+  return "text/plain";
+}
+
+// Serve files from SPIFFS, fall back to index.html for SPA navigation
 void handleFileRequest(const String &path)
 {
   String actualPath = path;
@@ -187,69 +191,47 @@ void handleFileRequest(const String &path)
   {
     actualPath += "index.html";
   }
+  // Ensure leading slash for SPIFFS paths
+  if (!actualPath.startsWith("/"))
+  {
+    actualPath = "/" + actualPath;
+  }
 
-  String contentType = "text/html";
-  const char *content = nullptr;
-
-  // Route specific files to their header file content
-  if (actualPath == "/index.html")
+  // Try to serve from SPIFFS
+  if (SPIFFS.exists(actualPath))
   {
-    contentType = "text/html";
-    content = INDEX_HTML;
-  }
-  else if (actualPath == "/messung.html")
-  {
-    contentType = "text/html";
-    content = MESSUNG_HTML;
-  }
-  else if (actualPath == "/messung_webserial.html")
-  {
-    contentType = "text/html";
-    content = MESSUNG_WEBSERIAL_HTML;
-  }
-  else if (actualPath == "/ratio.html")
-  {
-    contentType = "text/html";
-    content = RATIO_HTML;
-  }
-  else if (actualPath == "/justage.html")
-  {
-    contentType = "text/html";
-    content = JUSTAGE_HTML;
-  }
-  else if (actualPath == "/infos.html")
-  {
-    contentType = "text/html";
-    content = INFOS_HTML;
-  }
-  else if (actualPath == "/style.css")
-  {
-    contentType = "text/css";
-    content = STYLE_CSS;
-  }
-  // Bootstrap CSS/JS removed to save flash - pages use CDN only
-
-  if (content != nullptr)
-  {
-    server.send_P(200, contentType.c_str(), content);
-  }
-  else
-  {
-    // Return 404 for unknown assets to prevent browser retries (P0 #3)
-    // Only serve index for HTML navigation requests
-    String accept = server.header("Accept");
-    if (actualPath.endsWith(".html") || accept.indexOf("text/html") >= 0)
+    File file = SPIFFS.open(actualPath, "r");
+    if (file)
     {
-      Serial.print("Unknown HTML path redirected to index: ");
-      Serial.println(actualPath);
-      server.send_P(200, "text/html", INDEX_HTML);
+      String ct = getContentType(actualPath);
+      server.streamFile(file, ct);
+      file.close();
+      return;
+    }
+  }
+
+  // File not found — for HTML navigation requests fall back to index.html
+  String accept = server.header("Accept");
+  if (actualPath.endsWith(".html") || accept.indexOf("text/html") >= 0)
+  {
+    Serial.print("Unknown HTML path -> index: ");
+    Serial.println(actualPath);
+    if (SPIFFS.exists("/index.html"))
+    {
+      File idx = SPIFFS.open("/index.html", "r");
+      server.streamFile(idx, "text/html");
+      idx.close();
     }
     else
     {
-      Serial.print("404 Not Found: ");
-      Serial.println(actualPath);
-      server.send(404, "text/plain", "Not found");
+      server.send(200, "text/html", "<h1>ODMR Server</h1><p>SPIFFS not mounted or index.html missing.</p>");
     }
+  }
+  else
+  {
+    Serial.print("404 Not Found: ");
+    Serial.println(actualPath);
+    server.send(404, "text/plain", "Not found");
   }
 }
 
@@ -749,8 +731,24 @@ void setup()
     Serial.println("WiFi connected.");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+  }
 
-    Serial.println("Using header files for website content");
+  // Mount SPIFFS filesystem (holds all web assets)
+  if (!SPIFFS.begin(true))
+  {
+    Serial.println("ERROR: SPIFFS mount failed!");
+  }
+  else
+  {
+    Serial.println("SPIFFS mounted successfully");
+    // List files for debug
+    File root = SPIFFS.open("/");
+    File f = root.openNextFile();
+    while (f)
+    {
+      Serial.printf("  SPIFFS: %-30s %6d bytes\n", f.name(), f.size());
+      f = root.openNextFile();
+    }
   }
 
   // I2C initialization for TSL2591
@@ -786,9 +784,9 @@ void setup()
   // adf.updateFrequency(2.2e9); // 2.2 GHz // 1.800 GHz ─ writes R5…R0
 
   // Setup routes
-  // Explicit root handler to ensure proper routing
+  // Root handler — serve index.html from SPIFFS
   server.on("/", HTTP_GET, []()
-            { server.send_P(200, "text/html", INDEX_HTML); });
+            { handleFileRequest("/index.html"); });
 
   // Captive portal detection endpoints - return "success" responses (P0 #1)
   // This prevents OS from thinking it's a captive portal and keeps devices connected
@@ -853,7 +851,8 @@ void setup()
     server.send(200, "application/json", json); });
 
   // Collect Accept header for 404 logic
-  server.collectHeaders("Accept");
+  const char* headerKeys[] = {"Accept"};
+  server.collectHeaders(headerKeys, 1);
 
   server.begin();
   adf.stop(); // Disable output initially
