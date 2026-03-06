@@ -788,30 +788,51 @@ void setup()
   server.on("/", HTTP_GET, []()
             { handleFileRequest("/index.html"); });
 
-  // Captive portal detection endpoints - return "success" responses (P0 #1)
-  // This prevents OS from thinking it's a captive portal and keeps devices connected
+  // Captive portal detection endpoints (P0 #1)
+  // Returning a non-"Success" HTML page triggers the OS captive portal popup,
+  // which displays a button letting users open http://192.168.4.1 directly.
+  static const char PORTAL_HTML[] =
+    "<!DOCTYPE html><html><head>"
+    "<meta charset='UTF-8'>"
+    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+    "<title>openUC2 ODMR</title>"
+    "<style>"
+    "body{font-family:sans-serif;text-align:center;padding:2.5rem 1rem;"
+    "background:#1a4fa0;color:#fff;margin:0}"
+    "h1{font-size:1.5rem;margin-bottom:.5rem}"
+    "p{opacity:.8;margin-bottom:2rem;font-size:.95rem}"
+    "a.btn{display:inline-block;background:#fff;color:#1a4fa0;"
+    "text-decoration:none;padding:.75rem 2.5rem;border-radius:8px;"
+    "font-weight:bold;font-size:1.1rem;box-shadow:0 2px 8px rgba(0,0,0,.2)}"
+    "</style></head><body>"
+    "<h1>&#128300; openUC2 ODMR</h1>"
+    "<p>Connected to NV-Experiment device.<br>Open the dashboard to start.</p>"
+    "<a class='btn' href='http://192.168.4.1'>Open Dashboard</a>"
+    "</body></html>";
 
-  // Android captive portal detection - expects 204
+  // Android: return 200 + HTML so Android shows captive portal notification
   server.on("/generate_204", HTTP_GET, []()
-            { server.send(204, "text/plain", ""); });
+            { server.send(200, "text/html", PORTAL_HTML); });
 
-  // Microsoft Windows captive portal detection
+  // Microsoft Windows captive portal detection (keep plain text – Windows does
+  // not show a popup browser; it just checks for internet connectivity)
   server.on("/connecttest.txt", HTTP_GET, []()
             { server.send(200, "text/plain", "Microsoft Connect Test"); });
   server.on("/ncsi.txt", HTTP_GET, []()
             { server.send(200, "text/plain", "Microsoft NCSI"); });
 
-  // Apple iOS/MacOS captive portal detection
+  // Apple iOS/macOS: body != "Success" triggers the captive portal mini-browser
   server.on("/hotspot-detect.html", HTTP_GET, []()
-            { server.send(200, "text/html", "Success"); });
+            { server.send(200, "text/html", PORTAL_HTML); });
   server.on("/library/test/success.html", HTTP_GET, []()
-            { server.send(200, "text/html", "Success"); });
+            { server.send(200, "text/html", PORTAL_HTML); });
 
   // Additional OS probe endpoints
   server.on("/success.txt", HTTP_GET, []()
-            { server.send(200, "text/plain", "success"); });
+            { server.send(200, "text/html", PORTAL_HTML); });
   server.on("/canonical.html", HTTP_GET, []()
-            { server.send(200, "text/html", "Success"); });
+            { server.send(200, "text/html", PORTAL_HTML); });
+
 
   // Favicon: return 204 to stop browsers retrying (P0 #3)
   server.on("/favicon.ico", HTTP_GET, []()

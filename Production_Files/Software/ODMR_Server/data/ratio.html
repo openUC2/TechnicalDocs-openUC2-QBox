@@ -59,23 +59,23 @@
   </nav>
   
   <div class="container">
-    <h1>Fast B-Field Monitoring (Ratio Mode)</h1>
+    <h1 data-lang-key="page_title">Fast B-Field Monitoring (Ratio Mode)</h1>
     
     <div class="row">
       <!-- Left column: Controls -->
       <div class="col-left">
         <!-- Frequency Settings -->
         <div class="card">
-          <div class="card-header">📡 Frequenz-Einstellungen</div>
+          <div class="card-header" data-lang-key="card_freq">📡 Frequenz-Einstellungen</div>
           <div class="card-body">
             <!-- Mode Toggle -->
             <div class="form-group">
-              <label>Modus:</label>
+              <label data-lang-key="mode_label">Modus:</label>
               <div class="btn-group">
                 <input type="radio" name="modeSelect" id="mode2pt" value="2" checked>
-                <label for="mode2pt">2-Punkt</label>
+                <label for="mode2pt" data-lang-key="mode_2pt">2-Punkt</label>
                 <input type="radio" name="modeSelect" id="mode3pt" value="3">
-                <label for="mode3pt">3-Punkt</label>
+                <label for="mode3pt" data-lang-key="mode_3pt">3-Punkt</label>
               </div>
             </div>
             
@@ -126,14 +126,14 @@
         
         <!-- Control Buttons -->
         <div class="card">
-          <div class="card-header">🎮 Steuerung</div>
+          <div class="card-header" data-lang-key="card_control">🎮 Steuerung</div>
           <div class="card-body">
-            <button class="btn btn-success" id="startMonitoring">▶ Monitoring starten</button>
-            <button class="btn btn-danger" id="stopMonitoring" disabled>⏹ Monitoring stoppen</button>
+            <button class="btn btn-success" id="startMonitoring" data-lang-key="btn_start">▶ Monitoring starten</button>
+            <button class="btn btn-danger" id="stopMonitoring" disabled data-lang-key="btn_stop">⏹ Monitoring stoppen</button>
             
             <div class="status-row">
               <div class="status-dot" id="statusIndicator"></div>
-              <span id="statusText">Bereit</span>
+              <span id="statusText" data-lang-key="status_ready">Bereit</span>
             </div>
             <div class="status-row">
               <small>Messungen: <span id="measurementCount">0</span> | Fehler: <span id="errorCount">0</span></small>
@@ -146,7 +146,7 @@
       <div class="col-right">
         <!-- Current Values -->
         <div class="card">
-          <div class="card-header">📊 Aktuelle Werte</div>
+          <div class="card-header" data-lang-key="card_values">📊 Aktuelle Werte</div>
           <div class="card-body">
             <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
               <!-- Main Ratio Display -->
@@ -184,9 +184,9 @@
         <!-- Live Plot -->
         <div class="card">
           <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <span>📈 Live-Plot</span>
+            <span data-lang-key="card_plot">📈 Live-Plot</span>
             <div>
-              <button class="btn btn-outline" style="width: auto; padding: 0.25rem 0.75rem; margin: 0;" id="clearPlot">Leeren</button>
+              <button class="btn btn-outline" style="width: auto; padding: 0.25rem 0.75rem; margin: 0;" id="clearPlot" data-lang-key="btn_clear">Leeren</button>
               <button class="btn btn-outline" style="width: auto; padding: 0.25rem 0.75rem; margin: 0;" id="downloadData">CSV ↓</button>
             </div>
           </div>
@@ -194,7 +194,7 @@
             <canvas id="ratioPlot"></canvas>
             <div class="plot-controls">
               <div>
-                <small>Zeitfenster:</small>
+                <small data-lang-key="time_window">Zeitfenster:</small>
                 <select id="timeWindow">
                   <option value="10">10 s</option>
                   <option value="30" selected>30 s</option>
@@ -651,6 +651,74 @@
         })
         .catch(() => {});
     }
+  </script>
+  <script>
+    // ====================================================================
+    // Language / i18n – ratio.html
+    // ====================================================================
+    const translations = {
+      de: {
+        nav_start: "Start",
+        nav_measurement_device: "Messung (on Device)",
+        nav_ratio: "B-Field Monitor",
+        nav_alignment: "Justage",
+        nav_info: "Weitere Infos",
+        title: "B-Feld Monitor",
+        page_title: "Fast B-Field Monitoring (Ratio Mode)",
+        card_freq: "📡 Frequenz-Einstellungen",
+        mode_label: "Modus:",
+        mode_2pt: "2-Punkt",
+        mode_3pt: "3-Punkt",
+        card_control: "🎮 Steuerung",
+        btn_start: "▶ Monitoring starten",
+        btn_stop: "⏹ Monitoring stoppen",
+        status_ready: "Bereit",
+        card_values: "📊 Aktuelle Werte",
+        card_plot: "📈 Live-Plot",
+        btn_clear: "Leeren",
+        time_window: "Zeitfenster:"
+      },
+      en: {
+        nav_start: "Start",
+        nav_measurement_device: "Measurement (on Device)",
+        nav_ratio: "B-Field Monitor",
+        nav_alignment: "Alignment",
+        nav_info: "More Info",
+        title: "B-Field Monitor",
+        page_title: "Fast B-Field Monitoring (Ratio Mode)",
+        card_freq: "📡 Frequency Settings",
+        mode_label: "Mode:",
+        mode_2pt: "2-Point",
+        mode_3pt: "3-Point",
+        card_control: "🎮 Control",
+        btn_start: "▶ Start Monitoring",
+        btn_stop: "⏹ Stop Monitoring",
+        status_ready: "Ready",
+        card_values: "📊 Current Values",
+        card_plot: "📈 Live Plot",
+        btn_clear: "Clear",
+        time_window: "Time Window:"
+      }
+    };
+
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      updateLanguage(lang);
+      const dd = document.getElementById('langDropdown');
+      if (dd) dd.innerHTML = `🌐 ${lang.toUpperCase()}`;
+    }
+
+    function updateLanguage(lang) {
+      document.querySelectorAll('[data-lang-key]').forEach(el => {
+        const key = el.getAttribute('data-lang-key');
+        if (translations[lang]?.[key]) el.textContent = translations[lang][key];
+      });
+      if (translations[lang]?.title) document.title = translations[lang].title;
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      setLanguage(localStorage.getItem('language') || 'de');
+    });
   </script>
   <script src="bootstrap.bundle.min.js"></script>
 </body>

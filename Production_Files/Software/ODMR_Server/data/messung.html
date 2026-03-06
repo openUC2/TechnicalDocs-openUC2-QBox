@@ -951,9 +951,10 @@
                 ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=65535;}],
                 ["MessreiheHerunterladen",DownloadCSV],
             ];
-            ChangeListeners.forEach(element => ById(element[0]).addEventListener("change", element[1]));
-            InputListeners.forEach(element => ById(element[0]).addEventListener("input", element[1]));
-            ClickListeners.forEach(element => ById(element[0]).addEventListener("click", element[1]));
+            // Null-guard: skip silently if element doesn't exist in DOM
+            ChangeListeners.forEach(([id, fn]) => { const el = ById(id); if (el) el.addEventListener("change", fn); });
+            InputListeners.forEach(([id, fn])  => { const el = ById(id); if (el) el.addEventListener("input",  fn); });
+            ClickListeners.forEach(([id, fn])   => { const el = ById(id); if (el) el.addEventListener("click",  fn); });
         </script>
 
         </main>

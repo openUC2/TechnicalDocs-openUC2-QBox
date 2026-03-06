@@ -141,9 +141,210 @@ MIT License—see `LICENSE` file for details.
 
 ---
 
-# ODMR Server Web Interface Build System
+# ODMR Server — Build, Flash & Development Guide
 
-This directory also contains the ODMR server firmware with an automated web interface build system.
+## Architecture
+
+All web assets (HTML, CSS, JS, images) live in `data/` and are served from the
+ESP32's **SPIFFS filesystem**. This keeps them out of the app partition and
+allows images + Bootstrap to be included without hitting flash limits.
+
+```
+ODMR_Server/
+├── src/
+│   └── main.cpp            ← Firmware (web server, sensor, ADF4351 control)
+├── data/                   ← SPIFFS root – served at http://192.168.4.1/
+│   ├── index.html
+│   ├── messung.html
+│   ├── messung_webserial.html
+│   ├── ratio.html
+│   ├── justage.html
+│   ├── infos.html
+│   ├── style.css
+│   ├── bootstrap.min.css       (offline, no CDN)
+│   ├── bootstrap.bundle.min.js (offline, includes Popper)
+│   └── NVGitter.png
+├── scripts/
+│   └── merge_espwebtools.py  ← PlatformIO post-script: builds merged .bin
+├── custom_partition_esp32c3.csv
+├── custom_partition_esp32s3.csv
+└── platformio.ini
+```
+
+---
+
+## Prerequisites
+
+```bash
+# Install PlatformIO core (if not already installed)
+pip install platformio
+
+# Or use the bundled binary:
+~/.platformio/penv/bin/pio --version
+```
+
+---
+
+## 1 — Build Firmware + SPIFFS Image
+
+```bash
+cd Production_Files/Software/ODMR_Server
+
+# Compile firmware
+pio run -e seeed_xiao_esp32c3        # or seeed_xiao_esp32s3
+
+# Build SPIFFS filesystem image from data/
+pio run -e seeed_xiao_esp32c3 -t buildfs
+```
+
+---
+
+## 2 — Create a Single Merged Binary (for Web Flasher / distribution)
+
+The `mergedbin` target (defined in `scripts/merge_espwebtools.py`) merges
+bootloader + partition table + boot_app0 + firmware + SPIFFS into **one file
+at offset 0x0**. The script reads flash parameters directly from the compiled
+bootloader so the header bytes are always correct.
+
+```bash
+# Run steps sequentially (order matters!)
+pio run -e seeed_xiao_esp32c3
+pio run -e seeed_xiao_esp32c3 -t buildfs
+pio run -e seeed_xiao_esp32c3 -t mergedbin
+
+# Output:
+#   build/fw-images/seeed_xiao_esp32c3.bin   ← flash this at offset 0x0
+```
+
+> **Why sequential?** PlatformIO does not guarantee build order when combining
+> `-t buildprog -t buildfs -t mergedbin` in one call. The merged step needs
+> `firmware.bin` and `spiffs.bin` to exist first.
+
+---
+
+## 3 — Flash via esptool (Serial / USB)
+
+### Find the serial port
+
+```bash
+ls /dev/cu.*          # macOS
+pio device list       # cross-platform
+```
+
+### Option A — Flash merged binary at 0x0 (recommended for initial install)
+
+```bash
+python -m esptool \
+  --chip esp32c3 \
+  -p /dev/cu.usbmodem101 \
+  -b 460800 \
+  write-flash \
+  --flash-mode keep \
+  --flash-freq keep \
+  --flash-size keep \
+  0x0 build/fw-images/seeed_xiao_esp32c3.bin
+```
+
+> **Always use `keep` flags.** The merged binary carries the correct flash
+> parameters baked in by ESP-IDF (DIO mode for the ROM bootloader stage).
+> Overriding them (e.g. forcing QIO) causes a bootloop at `ets_loader.c`.
+
+### Option B — Flash firmware + SPIFFS separately (faster during development)
+
+```bash
+# Upload firmware only
+pio run -e seeed_xiao_esp32c3 -t upload
+
+# Upload SPIFFS only (no firmware recompile needed for HTML/CSS changes)
+pio run -e seeed_xiao_esp32c3 -t uploadfs
+```
+
+### Option C — PlatformIO merged upload
+
+```bash
+pio run -e seeed_xiao_esp32c3 -t upload_merged \
+  --upload-port /dev/cu.usbmodem101
+```
+
+---
+
+## 4 — Flash via Browser (ESP Web Tools)
+
+1. Build the merged binary (Step 2 above).
+2. Serve it locally:
+
+   ```bash
+   python3 -m http.server 8000
+   ```
+
+3. Open any ESP Web Flasher (e.g. <https://espressif.github.io/esptool-js/>).
+4. Connect and set offset **`0x0`**, choose
+   `http://localhost:8000/build/fw-images/seeed_xiao_esp32c3.bin`.
+
+> Requires Chrome or Edge (WebSerial API).
+
+---
+
+## 5 — Monitor Serial Output
+
+```bash
+pio device monitor -p /dev/cu.usbmodem101 -b 115200
+# or
+screen /dev/cu.usbmodem101 115200
+```
+
+Expected boot output (no bootloop):
+
+```
+SPIFFS mounted OK
+Files on SPIFFS:
+  /index.html  /messung.html  /ratio.html  /justage.html
+  /infos.html  /messung_webserial.html  /style.css
+  /bootstrap.min.css  /bootstrap.bundle.min.js  /NVGitter.png
+DNS Server started for captive portal
+HTTP server started
+AP IP: 192.168.4.1
+```
+
+---
+
+## 6 — Modify Web Assets
+
+Edit files in `data/` directly. After changes:
+
+```bash
+# Re-build and upload SPIFFS only (no firmware compile needed)
+pio run -e seeed_xiao_esp32c3 -t buildfs
+pio run -e seeed_xiao_esp32c3 -t uploadfs
+```
+
+---
+
+## Partition Layout (ESP32-C3)
+
+| Name    | Type | Offset    | Size    | Notes                        |
+|---------|------|-----------|---------|------------------------------|
+| nvs     | data | 0x9000    | 16 KB   | Non-volatile storage         |
+| otadata | data | 0xD000    | 8 KB    | OTA slot selector            |
+| app0    | app  | 0x10000   | 1344 KB | Active firmware slot         |
+| app1    | app  | 0x160000  | 1344 KB | OTA update slot              |
+| spiffs  | data | 0x2B0000  | 1344 KB | Web assets (`data/` dir)     |
+
+*(S3 offsets differ — see `custom_partition_esp32s3.csv`)*
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Bootloop `TG0WDT_SYS_RST` at `ets_loader.c` | Merged binary has wrong flash mode (QIO instead of DIO) | Always use `--flash-mode keep` when flashing at 0x0 |
+| 404 for all pages | SPIFFS not flashed or mount failed | Run `pio run -t uploadfs` |
+| Mobile hamburger menu not visible | Dark navbar background + default Bootstrap icon is dark | Fixed in `style.css` — toggler icon overridden to white |
+| Captive portal shows "Success" | Old firmware with old portal responses | Reflash with merged binary |
+| Bootstrap not loading (no styles) | Files missing from SPIFFS | Check `data/` directory, re-run `buildfs` |
+| `mergedbin` error: "app .bin not found" | `firmware.bin` not yet built | Run `pio run` first, then `-t mergedbin` |
+
 
 ## Development Workflow
 
