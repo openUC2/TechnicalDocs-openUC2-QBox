@@ -104,7 +104,7 @@
             <div class="card-body">
               <p><strong>Minimal:</strong> 0</p>
               <p><strong>Maximal:</strong> 65535</p>
-              <p><strong>Optimal:</strong> > 50000</p>
+              <p><strong>Optimal:</strong> > 4000</p>
             </div>
           </div>
           
@@ -238,11 +238,11 @@
           intensityBar.setAttribute('aria-valuenow', percentage);
           
           // Update status based on intensity
-          if (intensity > 50000) {
+          if (intensity > 4000) {
             alignmentStatus.textContent = 'Optimal';
             alignmentStatus.className = 'badge bg-success';
             intensityBar.className = 'progress-bar bg-success';
-          } else if (intensity > 20000) {
+          } else if (intensity > 1500) {
             alignmentStatus.textContent = 'Gut';
             alignmentStatus.className = 'badge bg-warning';
             intensityBar.className = 'progress-bar bg-warning';

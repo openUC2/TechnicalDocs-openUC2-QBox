@@ -400,9 +400,10 @@ cd /Users/bene/Dropbox/Dokumente/Promotion/PROJECTS/TechnicalDocs-openUC2-QBox/P
 # Output: build/fw-images/seeed_xiao_esp32c3.bin  → direkt an 0x0 flashen
 /Users/bene/.platformio/penv/bin/pio run -e seeed_xiao_esp32c3 -t upload_merged --upload-port /dev/cu.usbmodem101 
 
+# Rather use this: (same as webserial)
 /Users/bene/.platformio/penv/bin/python -m esptool \
   --chip esp32c3 \
-  -p /dev/cu.usbmodem101 \
+  -p /dev/cu.usbmodem1101 \
   -b 460800 \
   write-flash \
   --flash-mode keep \
