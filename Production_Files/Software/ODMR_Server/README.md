@@ -388,19 +388,28 @@ Use PlatformIO to build and flash the firmware:
 pio run -e seeed_xiao_esp32s3 --target upload
 
 # For ESP32-C3 (with improved serial)
-pio run -e seeed_xiao_esp32c3 --target upload
-
-
+/Users/bene/.platformio/penv/bin/pio  run -e seeed_xiao_esp32c3 --target upload
 
 # 1. Alles bauen
-pio run -e seeed_xiao_esp32c3 && pio run -e seeed_xiao_esp32c3 -t buildfs
+cd /Users/bene/Dropbox/Dokumente/Promotion/PROJECTS/TechnicalDocs-openUC2-QBox/Production_Files/Software/ODMR_Server/
+/Users/bene/.platformio/penv/bin/pio  run -e seeed_xiao_esp32c3 && /Users/bene/.platformio/penv/bin/pio  run -e seeed_xiao_esp32c3 -t buildfs
 
 # 2. Mergen
-pio run -e seeed_xiao_esp32c3 -t mergedbin
+/Users/bene/.platformio/penv/bin/pio  run -e seeed_xiao_esp32c3 -t mergedbin
 
 # Output: build/fw-images/seeed_xiao_esp32c3.bin  → direkt an 0x0 flashen
 /Users/bene/.platformio/penv/bin/pio run -e seeed_xiao_esp32c3 -t upload_merged --upload-port /dev/cu.usbmodem101 
 
+/Users/bene/.platformio/penv/bin/python -m esptool \
+  --chip esp32c3 \
+  -p /dev/cu.usbmodem101 \
+  -b 460800 \
+  write-flash \
+  --flash-mode keep \
+  --flash-freq keep \
+  --flash-size keep \
+  0x0 /Users/bene/Dropbox/Dokumente/Promotion/PROJECTS/TechnicalDocs-openUC2-QBox/Production_Files/Software/ODMR_Server/build/fw-images/seeed_xiao_esp32c3.bin
+  
 /Users/bene/.platformio/penv/bin/python -m esptool \
   --chip esp32c3 -p /dev/cu.usbmodem101 -b 460800 \
   write-flash --flash-mode keep --flash-freq keep --flash-size keep \

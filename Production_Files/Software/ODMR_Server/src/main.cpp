@@ -79,7 +79,7 @@ ADF4351 adf(clock, data, LE, CE);
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591);
 
 // TSL2591 settings storage
-tsl2591Gain_t currentGain = TSL2591_GAIN_MAX;
+tsl2591Gain_t currentGain = TSL2591_GAIN_HIGH;
 tsl2591IntegrationTime_t currentIntegrationTime = TSL2591_INTEGRATIONTIME_100MS;
 
 // Cached sensor value for non-blocking reads (P0 #6)
@@ -623,6 +623,112 @@ void handleMeasureRatio()
   setLEDStatus(LED_CONNECTED);
 }
 
+// SSE (Server-Sent Events) endpoint for streaming frequency sweep.
+// The ESP32 loops through frequencies, measures each point, and streams
+// results back in real-time. Frontend uses EventSource to receive data.
+// Closing the EventSource connection stops the sweep immediately.
+void handleSweep()
+{
+  if (!server.hasArg("f_begin") || !server.hasArg("f_end") || !server.hasArg("f_step"))
+  {
+    server.send(400, "application/json", "{\"error\":\"need f_begin, f_end, f_step\"}");
+    return;
+  }
+
+  float fBegin = server.arg("f_begin").toFloat();
+  float fEnd = server.arg("f_end").toFloat();
+  float fStep = server.arg("f_step").toFloat();
+
+  uint8_t averages = 1;
+  if (server.hasArg("avg"))
+  {
+    int tmp = server.arg("avg").toInt();
+    averages = (uint8_t)constrain(tmp, 1, 20);
+  }
+  uint16_t settle_ms = 10;
+  if (server.hasArg("settle"))
+  {
+    settle_ms = (uint16_t)constrain(server.arg("settle").toInt(), 1, 200);
+  }
+
+  if (fBegin < ADF_FREQ_MIN || fEnd > ADF_FREQ_MAX || fStep <= 0 || fBegin >= fEnd)
+  {
+    server.send(400, "application/json", "{\"error\":\"invalid sweep parameters\"}");
+    return;
+  }
+
+  int totalPoints = (int)((fEnd - fBegin) / fStep) + 1;
+  if (totalPoints > 500)
+  {
+    server.send(400, "application/json", "{\"error\":\"too many points (max 500)\"}");
+    return;
+  }
+
+  Serial.printf("Sweep start: %.1f -> %.1f MHz, step %.1f, avg %d, settle %d ms, %d pts\n",
+                fBegin, fEnd, fStep, averages, settle_ms, totalPoints);
+
+  setLEDStatus(LED_MEASURING);
+  adf.begin();
+
+  // Send SSE response headers
+  server.sendHeader("Cache-Control", "no-cache");
+  server.sendHeader("Connection", "keep-alive");
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "text/event-stream", "");
+
+  WiFiClient client = server.client();
+  int pointIndex = 0;
+
+  for (float f = fBegin; f <= fEnd + 0.001f; f += fStep)
+  {
+    // Check if client disconnected (user pressed stop / closed page)
+    if (!client.connected())
+    {
+      Serial.println("Sweep: client disconnected, stopping");
+      break;
+    }
+
+    adf.updateFrequency(f * 1e6); // MHz -> Hz
+    delay(settle_ms);             // PLL settle time
+
+    // Average multiple readings for noise reduction
+    uint64_t sum = 0;
+    for (uint8_t i = 0; i < averages; i++)
+    {
+      sum += readIR();
+      if (averages > 1)
+        delay(1);
+    }
+    uint32_t intensity = (uint32_t)(sum / averages);
+
+    // Send data point as SSE event
+    String msg = "data: {\"f\":";
+    msg += String(f, 1);
+    msg += ",\"I\":";
+    msg += String(intensity);
+    msg += ",\"idx\":";
+    msg += String(pointIndex);
+    msg += ",\"total\":";
+    msg += String(totalPoints);
+    msg += "}\n\n";
+    server.sendContent(msg);
+
+    pointIndex++;
+
+    // Keep captive portal DNS responsive during long sweeps
+    dnsServer.processNextRequest();
+    updateLEDs();
+  }
+
+  // Signal sweep completion
+  server.sendContent("data: {\"done\":true}\n\n");
+  server.sendContent(""); // End chunked transfer
+
+  adf.stop();
+  setLEDStatus(LED_CONNECTED);
+  Serial.printf("Sweep complete: %d points measured\n", pointIndex);
+}
+
 void setup()
 {
 
@@ -789,8 +895,15 @@ void setup()
             { handleFileRequest("/index.html"); });
 
   // Captive portal detection endpoints (P0 #1)
-  // Returning a non-"Success" HTML page triggers the OS captive portal popup,
-  // which displays a button letting users open http://192.168.4.1 directly.
+  // Returning a non-"Success" HTML page triggers the OS captive portal popup.
+  // The page uses platform-specific tricks to open the real browser instead of
+  // staying inside the restricted captive-portal WebView:
+  //   Android : intent:// URI  → system fires an Intent → default browser opens
+  //   iOS CNA : window.open + location fallback; OS also shows its own "Done" /
+  //             "Open in Safari" controls in the status bar
+  // Portal page for Android captive portal WebView.
+  // Plain <a> link works reliably in all captive portal WebViews.
+  // No intent:// URIs or window.open() which fail in restricted contexts.
   static const char PORTAL_HTML[] =
     "<!DOCTYPE html><html><head>"
     "<meta charset='UTF-8'>"
@@ -800,36 +913,45 @@ void setup()
     "body{font-family:sans-serif;text-align:center;padding:2.5rem 1rem;"
     "background:#1a4fa0;color:#fff;margin:0}"
     "h1{font-size:1.5rem;margin-bottom:.5rem}"
-    "p{opacity:.8;margin-bottom:2rem;font-size:.95rem}"
-    "a.btn{display:inline-block;background:#fff;color:#1a4fa0;"
+    "p{opacity:.85;margin-bottom:1.5rem;font-size:.95rem}"
+    ".btn{display:inline-block;background:#fff;color:#1a4fa0;"
     "text-decoration:none;padding:.75rem 2.5rem;border-radius:8px;"
     "font-weight:bold;font-size:1.1rem;box-shadow:0 2px 8px rgba(0,0,0,.2)}"
+    ".hint{margin-top:1.5rem;font-size:.82rem;opacity:.6}"
     "</style></head><body>"
     "<h1>&#128300; openUC2 ODMR</h1>"
-    "<p>Connected to NV-Experiment device.<br>Open the dashboard to start.</p>"
-    "<a class='btn' href='http://192.168.4.1'>Open Dashboard</a>"
+    "<p>Connected to NV-Experiment device.</p>"
+    "<a class='btn' href='http://192.168.4.1/'>Open Dashboard</a>"
+    "<p class='hint'>If this page stays inside a small popup, open your<br>"
+    "browser and navigate to: <b>http://192.168.4.1</b></p>"
     "</body></html>";
 
-  // Android: return 200 + HTML so Android shows captive portal notification
+
+  // Android: return 200 + HTML so Android shows "Sign in to network" notification.
+  // When user taps it, the captive portal WebView opens and shows our portal page.
   server.on("/generate_204", HTTP_GET, []()
             { server.send(200, "text/html", PORTAL_HTML); });
 
-  // Microsoft Windows captive portal detection (keep plain text – Windows does
-  // not show a popup browser; it just checks for internet connectivity)
+  // Microsoft Windows captive portal detection – return expected plain-text
+  // responses so Windows does not flag the network as limited.
   server.on("/connecttest.txt", HTTP_GET, []()
             { server.send(200, "text/plain", "Microsoft Connect Test"); });
   server.on("/ncsi.txt", HTTP_GET, []()
             { server.send(200, "text/plain", "Microsoft NCSI"); });
+  server.on("/redirect", HTTP_GET, []()
+            { server.send(200, "text/html", PORTAL_HTML); });
 
-  // Apple iOS/macOS: body != "Success" triggers the captive portal mini-browser
+  // Apple iOS / macOS: returning "Success" tells the OS the network has internet.
+  // This prevents the CNA (Captive Network Assistant) mini-browser from opening
+  // and keeps the WiFi connection stable. Users open Safari and go to 192.168.4.1.
   server.on("/hotspot-detect.html", HTTP_GET, []()
-            { server.send(200, "text/html", PORTAL_HTML); });
+            { server.send(200, "text/html", "Success"); });
   server.on("/library/test/success.html", HTTP_GET, []()
-            { server.send(200, "text/html", PORTAL_HTML); });
+            { server.send(200, "text/html", "Success"); });
 
   // Additional OS probe endpoints
   server.on("/success.txt", HTTP_GET, []()
-            { server.send(200, "text/html", PORTAL_HTML); });
+            { server.send(200, "text/plain", "success"); });
   server.on("/canonical.html", HTTP_GET, []()
             { server.send(200, "text/html", PORTAL_HTML); });
 
@@ -838,8 +960,18 @@ void setup()
   server.on("/favicon.ico", HTTP_GET, []()
             { server.send(204, "image/x-icon", ""); });
 
-  server.onNotFound([]()
-                    { handleFileRequest(server.uri()); });
+  server.onNotFound([]() {
+    String uri = server.uri();
+    // Silently return 404 for known OS background requests (Windows Update, etc.)
+    // to avoid log spam from e.g. /msdownload/update/... certificate fetches
+    if (uri.startsWith("/msdownload/") || uri.endsWith(".cab") ||
+        uri.startsWith("/GTSLT") || uri.startsWith("/ocsp"))
+    {
+      server.send(404, "text/plain", "");
+      return;
+    }
+    handleFileRequest(uri);
+  });
   server.on("/odmr_act", HTTP_POST, handleOdmrAct);
   server.on("/measure", HTTP_GET, handleMeasure);
   server.on("/intensity", HTTP_GET, handleIntensity);
@@ -848,6 +980,7 @@ void setup()
   server.on("/tsl/gain", HTTP_POST, handleSetTSLGain);
   server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
   server.on("/ratio", HTTP_GET, handleMeasureRatio);
+  server.on("/sweep", HTTP_GET, handleSweep);
 
   // ADF4351 enable/disable endpoints (P1 #9)
   server.on("/ADF_Enable", HTTP_POST, []()
