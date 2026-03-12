@@ -58,18 +58,18 @@
   </nav>
   
   <div class="container">
-    <h1>Fast B-Field Monitoring (Ratio Mode)</h1>
+    <h1 data-lang-key="page_title">Fast B-Field Monitoring (Ratio Mode)</h1>
     
     <div class="row">
       <!-- Left column: Controls -->
       <div class="col-left">
         <!-- Frequency Settings -->
         <div class="card">
-          <div class="card-header">📡 Frequenz-Einstellungen</div>
+          <div class="card-header" data-lang-key="freq_settings">📡 Frequenz-Einstellungen</div>
           <div class="card-body">
             <!-- Mode Toggle -->
             <div class="form-group">
-              <label>Modus:</label>
+              <label data-lang-key="mode_label">Modus:</label>
               <div class="btn-group">
                 <input type="radio" name="modeSelect" id="mode2pt" value="2" checked>
                 <label for="mode2pt">2-Punkt</label>
@@ -85,7 +85,7 @@
                 <input type="number" id="freq1" value="2865" min="2200" max="4400" step="0.1">
                 <span class="suffix">MHz</span>
               </div>
-              <small>Linke Flanke des Dips</small>
+              <small data-lang-key="left_slope">Linke Flanke des Dips</small>
             </div>
             
             <!-- Frequency 2 -->
@@ -95,7 +95,7 @@
                 <input type="number" id="freq2" value="2875" min="2200" max="4400" step="0.1">
                 <span class="suffix">MHz</span>
               </div>
-              <small>Rechte Flanke des Dips</small>
+              <small data-lang-key="right_slope">Rechte Flanke des Dips</small>
             </div>
             
             <!-- Frequency 3 (optional) -->
@@ -105,12 +105,12 @@
                 <input type="number" id="freq3" value="2870" min="2200" max="4400" step="0.1">
                 <span class="suffix">MHz</span>
               </div>
-              <small>Zentrum oder Referenz</small>
+              <small data-lang-key="center_ref">Zentrum oder Referenz</small>
             </div>
             
             <!-- Averaging -->
             <div class="form-group">
-              <label>Mittelungen: <span id="avgValue">3</span></label>
+              <label><span data-lang-key="averages">Mittelungen</span>: <span id="avgValue">3</span></label>
               <input type="range" id="avgCount" min="1" max="10" value="3">
             </div>
             
@@ -118,17 +118,17 @@
             <div class="form-group">
               <label for="intervalMs">Messintervall (ms)</label>
               <input type="number" id="intervalMs" value="500" min="200" max="5000" step="100">
-              <small>Min. 200ms empfohlen</small>
+              <small data-lang-key="interval_hint">Min. 200ms empfohlen</small>
             </div>
           </div>
         </div>
         
         <!-- Control Buttons -->
         <div class="card">
-          <div class="card-header">🎮 Steuerung</div>
+          <div class="card-header" data-lang-key="controls">🎮 Steuerung</div>
           <div class="card-body">
-            <button class="btn btn-success" id="startMonitoring">▶ Monitoring starten</button>
-            <button class="btn btn-danger" id="stopMonitoring" disabled>⏹ Monitoring stoppen</button>
+            <button class="btn btn-success" id="startMonitoring" data-lang-key="start_monitoring">▶ Monitoring starten</button>
+            <button class="btn btn-danger" id="stopMonitoring" disabled data-lang-key="stop_monitoring">⏹ Monitoring stoppen</button>
             
             <div class="status-row">
               <div class="status-dot" id="statusIndicator"></div>
@@ -145,7 +145,7 @@
       <div class="col-right">
         <!-- Current Values -->
         <div class="card">
-          <div class="card-header">📊 Aktuelle Werte</div>
+          <div class="card-header" data-lang-key="current_values">📊 Aktuelle Werte</div>
           <div class="card-body">
             <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
               <!-- Main Ratio Display -->
@@ -216,9 +216,9 @@
         
         <!-- Theory -->
         <div class="info-box">
-          <strong>ℹ️ So funktioniert es:</strong><br>
-          Das normalisierte Verhältnis <strong>r = (I₁-I₂)/(I₁+I₂)</strong> ist proportional zur Magnetfeldverschiebung.
-          Wählen Sie f₁ und f₂ symmetrisch um das ODMR-Dip-Minimum.
+          <strong data-lang-key="info_title">ℹ️ So funktioniert es:</strong><br>
+          <span data-lang-key="info_text">Das normalisierte Verhältnis <strong>r = (I₁-I₂)/(I₁+I₂)</strong> ist proportional zur Magnetfeldverschiebung.
+          Wählen Sie f₁ und f₂ symmetrisch um das ODMR-Dip-Minimum.</span>
         </div>
       </div>
     </div>
@@ -650,6 +650,50 @@
         })
         .catch(() => {});
     }
+
+    // ==================================================================
+    // Bilingual support (DE + EN)
+    // ==================================================================
+    const translations = {
+      de:{
+        nav_start:"Start",nav_measurement_device:"Messung (on Device)",nav_ratio:"B-Field Monitor",
+        nav_alignment:"Justage",nav_info:"Weitere Infos",
+        page_title:"Fast B-Field Monitoring (Ratio Mode)",
+        freq_settings:"📡 Frequenz-Einstellungen",mode_label:"Modus:",
+        left_slope:"Linke Flanke des Dips",right_slope:"Rechte Flanke des Dips",
+        center_ref:"Zentrum oder Referenz",averages:"Mittelungen",
+        interval_hint:"Min. 200ms empfohlen",
+        controls:"🎮 Steuerung",start_monitoring:"▶ Monitoring starten",stop_monitoring:"⏹ Monitoring stoppen",
+        current_values:"📊 Aktuelle Werte",
+        info_title:"ℹ️ So funktioniert es:",
+        info_text:'Das normalisierte Verhältnis r = (I₁-I₂)/(I₁+I₂) ist proportional zur Magnetfeldverschiebung. Wählen Sie f₁ und f₂ symmetrisch um das ODMR-Dip-Minimum.'
+      },
+      en:{
+        nav_start:"Start",nav_measurement_device:"Measurement (on Device)",nav_ratio:"B-Field Monitor",
+        nav_alignment:"Alignment",nav_info:"More Info",
+        page_title:"Fast B-Field Monitoring (Ratio Mode)",
+        freq_settings:"📡 Frequency Settings",mode_label:"Mode:",
+        left_slope:"Left slope of the dip",right_slope:"Right slope of the dip",
+        center_ref:"Center or reference",averages:"Averages",
+        interval_hint:"Min. 200ms recommended",
+        controls:"🎮 Controls",start_monitoring:"▶ Start Monitoring",stop_monitoring:"⏹ Stop Monitoring",
+        current_values:"📊 Current Values",
+        info_title:"ℹ️ How it works:",
+        info_text:'The normalized ratio r = (I₁-I₂)/(I₁+I₂) is proportional to the magnetic field shift. Choose f₁ and f₂ symmetrically around the ODMR dip minimum.'
+      }
+    };
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      document.querySelectorAll('[data-lang-key]').forEach(el=>{
+        const k=el.getAttribute('data-lang-key');
+        if(translations[lang]&&translations[lang][k]) el.textContent=translations[lang][k];
+      });
+      const dd=ById('langDropdown'); if(dd) dd.innerHTML='🌐 '+lang.toUpperCase();
+    }
+    // Apply saved language on load
+    document.addEventListener('DOMContentLoaded', function() {
+      setLanguage(localStorage.getItem('language')||'de');
+    });
   </script>
   <script>
   /* Bootstrap-JS replacement: navbar collapse + dropdown */

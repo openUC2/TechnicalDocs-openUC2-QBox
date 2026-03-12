@@ -7,10 +7,16 @@
 
   <!-- Offline-capable CSS framework -->
   <link rel="stylesheet" href="style.css">
+  <style>
+    #intensityPlot { width:100%; height:220px; border:1px solid var(--uc2-border); border-radius:8px; background:#fff; }
+    .tutorial-step.active { border-color:var(--uc2-blue); background:#f0f6ff; }
+    .tutorial-step { cursor:pointer; transition:all .2s; }
+    .tutorial-step:hover { border-color:var(--uc2-turquoise); }
+  </style>
 </head>
 
 <body>
-  <!-- ░░ Navbar ░░----------------------------------------------------------- -->
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg shadow-sm mb-4">
     <div class="container">
       <a class="navbar-brand fw-bold" href="index.html">NV-Experimente</a>
@@ -27,7 +33,7 @@
           <li class="nav-item"><a class="nav-link" href="ratio.html" data-lang-key="nav_ratio">B-Field Monitor</a></li>
           <li class="nav-item"><a class="nav-link active" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
           <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
-                  <li class="nav-item dropdown">
+          <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               🌐 DE
             </a>
@@ -41,79 +47,90 @@
     </div>
   </nav>
 
-  <!-- ░░ Main content ░░------------------------------------------------------ -->
+  <!-- Main content -->
   <main class="container">
+    <!-- Intensity Monitor Section -->
     <section class="mb-5">
-      <h1 class="display-5 mb-3">Justage des Aufbaus</h1>
+      <h1 class="display-5 mb-3" data-lang-key="page_title">Justage des Aufbaus</h1>
       <div class="row">
         <div class="col-md-8">
-          <p class="lead">Live-Überwachung der Photodioden-Intensität zur Justage des optischen Pfads</p>
-          
+          <p class="lead" data-lang-key="page_subtitle">Live-Überwachung der Photodioden-Intensität zur Justage des optischen Pfads</p>
+
           <div class="card mb-4">
-            <div class="card-header">
-              <h3>Photodioden-Intensität (Live)</h3>
-            </div>
+            <div class="card-header"><h3 data-lang-key="intensity_live">Photodioden-Intensität (Live)</h3></div>
             <div class="card-body text-center">
               <div class="row">
                 <div class="col-md-6">
-                  <h4>Aktueller Wert</h4>
+                  <h4 data-lang-key="current_value">Aktueller Wert</h4>
                   <div class="display-4 text-primary" id="intensityValue">---</div>
                   <small class="text-muted">ADC Units</small>
                 </div>
                 <div class="col-md-6">
-                  <h4>Intensitäts-Anzeige</h4>
-                  <div class="progress mb-3" style="height: 30px;">
-                    <div class="progress-bar bg-info" role="progressbar" id="intensityBar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                  <h4 data-lang-key="intensity_bar_title">Intensitäts-Anzeige</h4>
+                  <div class="progress mb-3" style="height:30px;">
+                    <div class="progress-bar bg-info" role="progressbar" id="intensityBar" style="width:0%"></div>
                   </div>
                   <div>
-                    <button id="startIntensity" class="btn btn-success">Start Überwachung</button>
-                    <button id="stopIntensity" class="btn btn-danger" disabled>Stop Überwachung</button>
+                    <button id="startIntensity" class="btn btn-success" data-lang-key="start_monitoring">Start Überwachung</button>
+                    <button id="stopIntensity" class="btn btn-danger" disabled data-lang-key="stop_monitoring">Stop Überwachung</button>
                   </div>
                 </div>
               </div>
-              
               <div class="mt-4">
-                <h5>Status: <span id="alignmentStatus" class="badge bg-secondary">Bereit</span></h5>
-                <p class="text-muted">Justieren Sie den optischen Pfad für maximale Intensität</p>
+                <h5><span data-lang-key="status_label">Status:</span> <span id="alignmentStatus" class="badge bg-secondary" data-lang-key="status_ready">Bereit</span></h5>
+                <p class="text-muted" data-lang-key="alignment_hint">Justieren Sie den optischen Pfad für maximale Intensität</p>
               </div>
             </div>
           </div>
-          
-          <div class="card">
-            <div class="card-header">
-              <h4>Justage-Anleitung</h4>
+
+          <!-- Live intensity plot (canvas, like B-field monitor) -->
+          <div class="card mb-4">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <span data-lang-key="intensity_graph">📈 Intensitäts-Verlauf</span>
+              <button class="btn btn-outline btn-sm" id="clearIntensityPlot" data-lang-key="clear_plot">Leeren</button>
             </div>
             <div class="card-body">
-              <ol>
-                <li>Klicken Sie auf "Start Überwachung" um die Live-Anzeige zu aktivieren</li>
-                <li>Die LED am Board wird blau leuchten um zu zeigen, dass die Intensitätsmessung aktiv ist</li>
-                <li>Justieren Sie die optischen Komponenten (Laser, Linsen, Spiegel)</li>
-                <li>Beobachten Sie die Intensitätswerte und streben Sie maximale Werte an</li>
-                <li>Klicken Sie auf "Stop Überwachung" wenn die Justage abgeschlossen ist</li>
-              </ol>
+              <canvas id="intensityPlot"></canvas>
+              <div style="display:flex;gap:1rem;margin-top:.5rem;flex-wrap:wrap;">
+                <div><small data-lang-key="time_window">Zeitfenster:</small>
+                  <select id="plotTimeWindow">
+                    <option value="10">10 s</option>
+                    <option value="30" selected>30 s</option>
+                    <option value="60">60 s</option>
+                    <option value="120">120 s</option>
+                  </select>
+                </div>
+                <div><small data-lang-key="y_range_label">Y-Bereich:</small>
+                  <select id="plotYRange">
+                    <option value="auto" selected>Auto</option>
+                    <option value="full" data-lang-key="y_range_full">Voll (0-Max)</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        
+
+        <!-- Right sidebar: Sensor settings + Messbereich -->
         <div class="col-md-4">
           <div class="card">
-            <div class="card-header">
-              <h5>Messbereich</h5>
-            </div>
+            <div class="card-header"><h5 data-lang-key="measurement_range">Messbereich</h5></div>
             <div class="card-body">
               <p><strong>Minimal:</strong> 0</p>
-              <p><strong>Maximal:</strong> 65535</p>
-              <p><strong>Optimal:</strong> > 4000</p>
+              <p><strong>Maximal:</strong> <span id="maxRangeDisplay">65535</span></p>
+              <p><strong>Optimal:</strong> &gt; <span id="optimalThreshold">4000</span></p>
+              <p class="small text-muted" data-lang-key="range_hint">Werte hängen von Gain und Integrationszeit ab</p>
             </div>
           </div>
-          
+
           <div class="card mt-3">
-            <div class="card-header">
-              <h5>Sensor-Einstellungen</h5>
-            </div>
+            <div class="card-header"><h5 data-lang-key="sensor_settings">Sensor-Einstellungen</h5></div>
             <div class="card-body">
               <div class="mb-3">
-                <label for="gainSelect" class="form-label">Verstärkung (Gain)</label>
+                <label for="gainSelect" class="form-label uc2-tooltip" data-lang-key="gain_label">
+                  Verstärkung (Gain)
+                  <span class="uc2-tooltip-text" data-lang-key="gain_tooltip">Höhere Verstärkung = empfindlicher, aber schneller Sättigung bei starkem Licht. Starten Sie mit High (428x).</span>
+                </label>
                 <select class="form-select" id="gainSelect">
                   <option value="0x00">Low (1x)</option>
                   <option value="0x10">Medium (25x)</option>
@@ -121,9 +138,11 @@
                   <option value="0x30">Max (9876x)</option>
                 </select>
               </div>
-              
               <div class="mb-3">
-                <label for="integrationSelect" class="form-label">Integrationszeit</label>
+                <label for="integrationSelect" class="form-label uc2-tooltip" data-lang-key="integration_label">
+                  Integrationszeit
+                  <span class="uc2-tooltip-text" data-lang-key="integration_tooltip">Längere Integration = genauere Messung, aber langsamere Aktualisierung. 100ms ist ein guter Standard.</span>
+                </label>
                 <select class="form-select" id="integrationSelect">
                   <option value="0x00" selected>100 ms</option>
                   <option value="0x01">200 ms</option>
@@ -133,317 +152,403 @@
                   <option value="0x05">600 ms</option>
                 </select>
               </div>
-              
-              <button class="btn btn-primary w-100" id="applySettings">Einstellungen anwenden</button>
+              <button class="btn btn-primary w-100" id="applySettings" data-lang-key="apply_settings">Einstellungen anwenden</button>
               <div id="settingsStatus" class="mt-2 small text-muted"></div>
             </div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- 10-Step Alignment Tutorial -->
+    <section class="mb-5">
+      <h2 class="h4 mb-3" data-lang-key="tutorial_title">Justage-Anleitung (10 Schritte)</h2>
+      <p class="text-muted" data-lang-key="tutorial_subtitle">Klicken Sie auf einen Schritt für Details, oder navigieren Sie mit den Pfeilen.</p>
+      <div class="card">
+        <div class="card-body">
+          <div id="tutorialViewer">
+            <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+              <!-- SVG placeholder -->
+              <div style="flex:1;min-width:200px;max-width:350px;">
+                <div class="tutorial-svg-placeholder" id="tutorialSvg" style="height:200px;width:100%;">
+                  <svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+                    <rect x="10" y="10" width="180" height="100" rx="4" fill="none" stroke="#ccc" stroke-width="1" stroke-dasharray="4"/>
+                    <text x="100" y="55" text-anchor="middle" fill="#999" font-size="10" id="tutorialSvgLabel">Schritt 1</text>
+                    <text x="100" y="72" text-anchor="middle" fill="#bbb" font-size="8" data-lang-key="svg_placeholder">[SVG Platzhalter]</text>
+                  </svg>
+                </div>
+              </div>
+              <!-- Step text -->
+              <div style="flex:2;min-width:250px;">
+                <h4 id="tutorialStepTitle"></h4>
+                <p id="tutorialStepText"></p>
+              </div>
+            </div>
+            <!-- Navigation buttons -->
+            <div class="tutorial-nav">
+              <button class="btn btn-secondary" id="tutorialPrev" data-lang-key="btn_previous">← Zurück</button>
+              <span id="tutorialProgress">1 / 10</span>
+              <button class="btn btn-primary" id="tutorialNext" data-lang-key="btn_next">Weiter →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- All 10 steps as clickable list -->
+      <div class="mt-3" id="tutorialStepList"></div>
+    </section>
   </main>
 
-  <!-- ░░ Footer ░░----------------------------------------------------------- -->
+  <!-- Footer -->
   <footer class="py-3 mt-auto">
     <div class="container text-center small">
       <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
-      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
+      <div class="mt-1" id="versionInfo" style="opacity:.7;font-size:.85em;">Loading version...</div>
     </div>
   </footer>
 
-  <!-- Bootstrap JS removed - offline AP mode (P0 #2) -->
-  
   <script>
-    let intensityInterval = null;
-    let isMonitoring = false;
-    let requestInFlight = false; // Prevent overlapping requests (P0 #6)
-    
-    const intensityValue = document.getElementById('intensityValue');
-    const intensityBar = document.getElementById('intensityBar');
-    const alignmentStatus = document.getElementById('alignmentStatus');
-    const startBtn = document.getElementById('startIntensity');
-    const stopBtn = document.getElementById('stopIntensity');
-    const gainSelect = document.getElementById('gainSelect');
-    const integrationSelect = document.getElementById('integrationSelect');
-    const applySettingsBtn = document.getElementById('applySettings');
-    const settingsStatus = document.getElementById('settingsStatus');
-    
-    // Load current TSL settings on page load
+    // =====================================================================
+    // State
+    // =====================================================================
+    let intensityInterval = null, isMonitoring = false, requestInFlight = false;
+    let intensityData = [], plotStartTime = null, canvas, ctx;
+    const MAX_POINTS = 600;
+    const ById = id => document.getElementById(id);
+
+    // =====================================================================
+    // Dynamic Messbereich based on Gain / Integration Time
+    // =====================================================================
+    const gainMultipliers  = {'0x00':1,'0x10':25,'0x20':428,'0x30':9876};
+    const integrationMs    = {'0x00':100,'0x01':200,'0x02':300,'0x03':400,'0x04':500,'0x05':600};
+    window._optThreshold = 4000; window._goodThreshold = 1500; window._maxRange = 65535;
+
+    function updateMeasurementRange() {
+      const g = gainMultipliers[ById('gainSelect').value] || 428;
+      const t = integrationMs[ById('integrationSelect').value] || 100;
+      const rel = (g * t) / (428 * 100);
+      const estMax = Math.min(65535, Math.round(65535 * Math.min(rel, 1)));
+      const opt = Math.max(100, Math.round(estMax * 0.06));
+      ById('maxRangeDisplay').textContent = estMax;
+      ById('optimalThreshold').textContent = opt;
+      window._optThreshold = opt;
+      window._goodThreshold = Math.round(opt * 0.375);
+      window._maxRange = estMax;
+    }
+
+    // =====================================================================
+    // TSL sensor settings load / apply
+    // =====================================================================
     function loadTSLSettings() {
       fetch('/tsl/settings')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('TSL settings endpoint not available');
-          }
-          return response.json();
+        .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(d => {
+          ById('gainSelect').value = '0x'+d.gain.toString(16).toUpperCase().padStart(2,'0');
+          ById('integrationSelect').value = '0x'+d.integration_time.toString(16).toUpperCase().padStart(2,'0');
+          ById('settingsStatus').textContent = T('settings_loaded');
+          ById('settingsStatus').className = 'mt-2 small text-success';
+          updateMeasurementRange();
         })
-        .then(data => {
-          gainSelect.value = '0x' + data.gain.toString(16).toUpperCase().padStart(2, '0');
-          integrationSelect.value = '0x' + data.integration_time.toString(16).toUpperCase().padStart(2, '0');
-          settingsStatus.textContent = 'Aktuelle Einstellungen geladen';
-          settingsStatus.className = 'mt-2 small text-success';
-        })
-        .catch(error => {
-          console.error('Error loading TSL settings:', error);
-          settingsStatus.textContent = 'TSL Einstellungen nicht verfügbar';
-          settingsStatus.className = 'mt-2 small text-warning';
+        .catch(e => {
+          console.error('Error loading TSL settings:', e);
+          ById('settingsStatus').textContent = 'TSL Endpoint nicht verfügbar';
+          ById('settingsStatus').className = 'mt-2 small text-warning';
         });
     }
-    
-    // Apply TSL settings
+
     function applyTSLSettings() {
-      const gain = parseInt(gainSelect.value);
-      const integrationTime = parseInt(integrationSelect.value);
-      
-      settingsStatus.textContent = 'Einstellungen werden angewendet...';
-      settingsStatus.className = 'mt-2 small text-info';
-      
-      // Set gain
-      fetch('/tsl/gain?gain=' + gain, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-          // Set integration time
-          return fetch('/tsl/integration_time?integration_time=' + integrationTime, { method: 'POST' });
+      const gain = parseInt(ById('gainSelect').value);
+      const intTime = parseInt(ById('integrationSelect').value);
+      ById('settingsStatus').textContent = T('settings_applying');
+      ById('settingsStatus').className = 'mt-2 small';
+      fetch('/tsl/gain?gain='+gain,{method:'POST'}).then(r=>r.json())
+        .then(()=>fetch('/tsl/integration_time?integration_time='+intTime,{method:'POST'})).then(r=>r.json())
+        .then(()=>{
+          ById('settingsStatus').textContent = T('settings_applied');
+          ById('settingsStatus').className = 'mt-2 small text-success';
+          updateMeasurementRange();
         })
-        .then(response => response.json())
-        .then(data => {
-          settingsStatus.textContent = 'Einstellungen erfolgreich angewendet';
-          settingsStatus.className = 'mt-2 small text-success';
-        })
-        .catch(error => {
-          console.error('Error applying TSL settings:', error);
-          settingsStatus.textContent = 'Fehler beim Anwenden der Einstellungen';
-          settingsStatus.className = 'mt-2 small text-danger';
+        .catch(e=>{
+          console.error('Error applying TSL settings:', e);
+          ById('settingsStatus').textContent = T('settings_error');
+          ById('settingsStatus').className = 'mt-2 small text-danger';
         });
     }
-    
+
+    // =====================================================================
+    // Intensity polling + status badges
+    // =====================================================================
     function updateIntensity() {
-      // Skip if previous request still in flight (P0 #6)
       if (requestInFlight) return;
       requestInFlight = true;
-      fetch('/intensity')
-        .then(response => response.json())
-        .then(data => {
-          requestInFlight = false;
-          const intensity = data.intensity;
-          intensityValue.textContent = intensity;
-          
-          // Update progress bar (assuming max value of 65535)
-          const percentage = Math.min((intensity / 65535) * 100, 100);
-          intensityBar.style.width = percentage + '%';
-          intensityBar.setAttribute('aria-valuenow', percentage);
-          
-          // Update status based on intensity
-          if (intensity > 4000) {
-            alignmentStatus.textContent = 'Optimal';
-            alignmentStatus.className = 'badge bg-success';
-            intensityBar.className = 'progress-bar bg-success';
-          } else if (intensity > 1500) {
-            alignmentStatus.textContent = 'Gut';
-            alignmentStatus.className = 'badge bg-warning';
-            intensityBar.className = 'progress-bar bg-warning';
-          } else {
-            alignmentStatus.textContent = 'Justage erforderlich';
-            alignmentStatus.className = 'badge bg-danger';
-            intensityBar.className = 'progress-bar bg-danger';
-          }
-        })
-        .catch(error => {
-          requestInFlight = false;
-          console.error('Error fetching intensity:', error);
-          intensityValue.textContent = 'Fehler';
-        });
-    }
-    
-    function startMonitoring() {
-      if (!isMonitoring) {
-        isMonitoring = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        alignmentStatus.textContent = 'Überwachung aktiv';
-        alignmentStatus.className = 'badge bg-info';
-        
-        // Update immediately
-        updateIntensity();
-        
-        // Set interval for continuous updates
-        intensityInterval = setInterval(updateIntensity, 500); // Update every 500ms
-      }
-    }
-    
-    function stopMonitoring() {
-      if (isMonitoring) {
-        isMonitoring = false;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        alignmentStatus.textContent = 'Bereit';
-        alignmentStatus.className = 'badge bg-secondary';
-        
-        if (intensityInterval) {
-          clearInterval(intensityInterval);
-          intensityInterval = null;
+      fetch('/intensity').then(r=>r.json()).then(d => {
+        requestInFlight = false;
+        const v = d.intensity;
+        ById('intensityValue').textContent = v;
+        const pct = Math.min((v / (window._maxRange||65535))*100, 100);
+        ById('intensityBar').style.width = pct+'%';
+        const st = ById('alignmentStatus'), bar = ById('intensityBar');
+        if (v > window._optThreshold) {
+          st.textContent = T('status_optimal'); st.className='badge bg-success'; bar.className='progress-bar bg-success';
+        } else if (v > window._goodThreshold) {
+          st.textContent = T('status_good'); st.className='badge bg-warning'; bar.className='progress-bar bg-warning';
+        } else {
+          st.textContent = T('status_adjust'); st.className='badge bg-danger'; bar.className='progress-bar bg-danger';
         }
-      }
+        // Store for live plot
+        if (!plotStartTime) plotStartTime = Date.now();
+        intensityData.push({time:(Date.now()-plotStartTime)/1000, value:v});
+        if (intensityData.length > MAX_POINTS) intensityData.shift();
+        drawIntensityPlot();
+      }).catch(e => { requestInFlight=false; console.error('Intensity error:',e); ById('intensityValue').textContent='Fehler'; });
     }
-    
-    // Event listeners
-    startBtn.addEventListener('click', startMonitoring);
-    stopBtn.addEventListener('click', stopMonitoring);
-    applySettingsBtn.addEventListener('click', applyTSLSettings);
-    
-    // Load settings on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      loadTSLSettings();
-    });
-    
-    // Handle page visibility changes
-    document.addEventListener('visibilitychange', function() {
-      if (document.hidden && isMonitoring) {
-        stopMonitoring();
-      }
-    });
-    
-    // Handle beforeunload
-    window.addEventListener('beforeunload', function() {
-      if (isMonitoring) {
-        stopMonitoring();
-      }
-    });
-  </script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Fetch and display version information
-      fetch('/version')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Version endpoint not available');
-          }
-          return response.json();
-        })
-        .then(data => {
-          const versionInfo = document.getElementById('versionInfo');
-          if (versionInfo) {
-            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching version:', error);
-          const versionInfo = document.getElementById('versionInfo');
-          if (versionInfo) {
-            versionInfo.textContent = 'Version: ESP32 ODMR Server';
-          }
-        });
-    });
-  </script>
 
-  <script>
-    // Multi-language support
+    function startMonitoring() {
+      if (isMonitoring) return;
+      isMonitoring=true; plotStartTime=Date.now(); intensityData=[];
+      ById('startIntensity').disabled=true; ById('stopIntensity').disabled=false;
+      ById('alignmentStatus').textContent=T('status_active'); ById('alignmentStatus').className='badge bg-info';
+      updateIntensity();
+      intensityInterval = setInterval(updateIntensity, 500);
+    }
+
+    function stopMonitoring() {
+      if (!isMonitoring) return;
+      isMonitoring=false;
+      ById('startIntensity').disabled=false; ById('stopIntensity').disabled=true;
+      ById('alignmentStatus').textContent=T('status_ready'); ById('alignmentStatus').className='badge bg-secondary';
+      if (intensityInterval) { clearInterval(intensityInterval); intensityInterval=null; }
+    }
+
+    // =====================================================================
+    // Canvas intensity plot (like ratio page)
+    // =====================================================================
+    function resizeCanvas() {
+      if(!canvas) return;
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = 220;
+      drawIntensityPlot();
+    }
+
+    function drawIntensityPlot() {
+      if(!ctx) return;
+      const W=canvas.width, H=canvas.height;
+      const pad={top:15,right:15,bottom:30,left:55};
+      const pW=W-pad.left-pad.right, pH=H-pad.top-pad.bottom;
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+
+      const tw = parseInt(ById('plotTimeWindow').value);
+      const ct = intensityData.length ? intensityData[intensityData.length-1].time : 0;
+      const mt = Math.max(0, ct-tw);
+      const vis = intensityData.filter(d=>d.time>=mt);
+
+      let yMin,yMax;
+      if(ById('plotYRange').value==='auto' && vis.length>1){
+        const vs=vis.map(d=>d.value); const mg=Math.max(50,(Math.max(...vs)-Math.min(...vs))*.1);
+        yMin=Math.max(0,Math.min(...vs)-mg); yMax=Math.max(...vs)+mg;
+        if(yMax-yMin<100){const m=(yMax+yMin)/2;yMin=m-50;yMax=m+50;}
+      } else { yMin=0; yMax=window._maxRange||65535; }
+
+      // Grid
+      ctx.strokeStyle='#eee';ctx.lineWidth=1;
+      for(let i=0;i<=5;i++){const y=pad.top+pH*i/5;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();}
+      for(let i=0;i<=6;i++){const x=pad.left+pW*i/6;ctx.beginPath();ctx.moveTo(x,pad.top);ctx.lineTo(x,H-pad.bottom);ctx.stroke();}
+      // Axes
+      ctx.strokeStyle='#023773';ctx.lineWidth=2;ctx.beginPath();
+      ctx.moveTo(pad.left,pad.top);ctx.lineTo(pad.left,H-pad.bottom);ctx.lineTo(W-pad.right,H-pad.bottom);ctx.stroke();
+      // Labels
+      ctx.fillStyle='#023773';ctx.font='11px sans-serif';ctx.textAlign='center';
+      for(let i=0;i<=6;i++){ctx.fillText((mt+tw*i/6).toFixed(0)+'s',pad.left+pW*i/6,H-5);}
+      ctx.textAlign='right';
+      for(let i=0;i<=5;i++){ctx.fillText(Math.round(yMax-(yMax-yMin)*i/5),pad.left-5,pad.top+pH*i/5+4);}
+      // Data
+      if(vis.length>1){
+        ctx.strokeStyle='#1f9c7c';ctx.lineWidth=2;ctx.beginPath();
+        vis.forEach((p,i)=>{const x=pad.left+pW*((p.time-mt)/tw),y=pad.top+pH*((yMax-p.value)/(yMax-yMin));i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+        ctx.stroke();
+        const l=vis[vis.length-1],lx=pad.left+pW*((l.time-mt)/tw),ly=pad.top+pH*((yMax-l.value)/(yMax-yMin));
+        ctx.fillStyle='#85b918';ctx.beginPath();ctx.arc(lx,ly,4,0,Math.PI*2);ctx.fill();
+      }
+      if(!vis.length){ctx.fillStyle='#999';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText(T('no_data'),W/2,H/2);}
+    }
+
+    // =====================================================================
+    // 10-step tutorial data
+    // =====================================================================
+    const tutorialSteps = {
+      de:[
+        {title:"Schritt 1: Grundplatte aufstellen",text:"Stellen Sie die UC2-Grundplatte auf eine stabile, vibrationsarme Oberfläche. Alle optischen Komponenten werden darauf montiert."},
+        {title:"Schritt 2: Laser-Modul einsetzen",text:"Setzen Sie das Lasermodul (532 nm grüne Diode) in den vorgesehenen Würfel ein. Noch NICHT einschalten! Schutzbrille bereithalten."},
+        {title:"Schritt 3: Spiegel positionieren",text:"Platzieren Sie den 45°-Spiegel so, dass er den Laserstrahl um 90° in Richtung der Probe umlenkt."},
+        {title:"Schritt 4: Strahlteiler einsetzen",text:"Setzen Sie den Strahlteiler mit Langpass-Filter ein. Dieser trennt das Anregungslicht (grün) vom Fluoreszenzlicht (rot)."},
+        {title:"Schritt 5: Linse einsetzen",text:"Platzieren Sie die konvergente Linse im Strahlengang. Sie fokussiert den Laser auf die NV-Diamant-Probe."},
+        {title:"Schritt 6: NV-Probe positionieren",text:"Setzen Sie den NV-Diamant auf die XY-Bühne. Positionieren Sie ihn grob im Fokuspunkt der Linse."},
+        {title:"Schritt 7: Photodiode ausrichten",text:"Platzieren Sie die Photodiode (TSL2591) hinter dem Strahlteiler. Sie empfängt das rote Fluoreszenzlicht."},
+        {title:"Schritt 8: Grob-Justage",text:"Schalten Sie den Laser ein. Starten Sie die Überwachung oben. Bewegen Sie die Probe langsam, bis ein Signal erscheint. Ziel: Intensität > 'Gut'-Schwellwert."},
+        {title:"Schritt 9: Fein-Justage",text:"Optimieren Sie die Position der Probe und der Linse für maximale Intensität. Beobachten Sie den Intensitäts-Verlauf. Ziel: 'Optimal'-Status."},
+        {title:"Schritt 10: Mikrowellen-Antenne",text:"Positionieren Sie die Mikrowellenantenne nahe an der Probe. Gehen Sie zur Messungs-Seite und führen Sie einen ersten ODMR-Scan durch."}
+      ],
+      en:[
+        {title:"Step 1: Set up base plate",text:"Place the UC2 base plate on a stable, vibration-free surface. All optical components will be mounted on it."},
+        {title:"Step 2: Insert laser module",text:"Insert the laser module (532 nm green diode) into the designated cube. Do NOT turn on yet! Have safety glasses ready."},
+        {title:"Step 3: Position mirror",text:"Place the 45° mirror so it deflects the laser beam by 90° toward the sample."},
+        {title:"Step 4: Insert beam splitter",text:"Insert the beam splitter with longpass filter. This separates excitation light (green) from fluorescence light (red)."},
+        {title:"Step 5: Insert lens",text:"Place the converging lens in the beam path. It focuses the laser onto the NV diamond sample."},
+        {title:"Step 6: Position NV sample",text:"Place the NV diamond on the XY stage. Roughly position it in the focal point of the lens."},
+        {title:"Step 7: Align photodiode",text:"Place the photodiode (TSL2591) behind the beam splitter. It receives the red fluorescence light."},
+        {title:"Step 8: Coarse alignment",text:"Turn on the laser. Start monitoring above. Slowly move the sample until a signal appears. Target: Intensity above 'Good' threshold."},
+        {title:"Step 9: Fine alignment",text:"Optimize sample and lens position for maximum intensity. Watch the intensity graph. Target: 'Optimal' status."},
+        {title:"Step 10: Microwave antenna",text:"Position the microwave antenna close to the sample. Go to the measurement page and perform your first ODMR scan."}
+      ]
+    };
+    let currentTutorialStep = 0;
+
+    function updateTutorialView() {
+      const steps = tutorialSteps[currentLang]||tutorialSteps.de;
+      const s = steps[currentTutorialStep];
+      ById('tutorialStepTitle').textContent = s.title;
+      ById('tutorialStepText').textContent = s.text;
+      ById('tutorialSvgLabel').textContent = (currentLang==='en'?'Step ':'Schritt ')+(currentTutorialStep+1);
+      ById('tutorialProgress').textContent = (currentTutorialStep+1)+' / '+steps.length;
+      ById('tutorialPrev').disabled = currentTutorialStep===0;
+      ById('tutorialNext').disabled = currentTutorialStep===steps.length-1;
+      document.querySelectorAll('.tutorial-step').forEach((el,i)=>el.classList.toggle('active',i===currentTutorialStep));
+    }
+
+    function buildTutorialStepList() {
+      const steps = tutorialSteps[currentLang]||tutorialSteps.de;
+      const c = ById('tutorialStepList'); c.innerHTML='';
+      steps.forEach((s,i)=>{
+        const d=document.createElement('div');
+        d.className='tutorial-step'+(i===currentTutorialStep?' active':'');
+        d.innerHTML='<div class="tutorial-step-number">'+(i+1)+'</div>'+
+          '<div class="tutorial-step-content"><h4>'+s.title+'</h4><p>'+s.text+'</p></div>'+
+          '<div class="tutorial-svg-placeholder"><svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">'+
+          '<rect x="5" y="5" width="190" height="110" rx="4" fill="none" stroke="#ccc" stroke-dasharray="4"/>'+
+          '<text x="100" y="65" text-anchor="middle" fill="#bbb" font-size="9">SVG #'+(i+1)+'</text></svg></div>';
+        d.addEventListener('click',()=>{currentTutorialStep=i;updateTutorialView();});
+        c.appendChild(d);
+      });
+    }
+
+    // =====================================================================
+    // Bilingual translations (complete DE + EN)
+    // =====================================================================
+    let currentLang = 'de';
     const translations = {
-      de: {
-        "nav_start": "Start",
-        "nav_measurement_device": "Messung (on Device)",
-        "nav_measurement_webserial": "Messung (WebSerial)",
-        "nav_alignment": "Justage",
-        "nav_info": "Weitere Infos",
-        "title": "NV Experimente - Justage",
-        "page_title": "Photodioden-Justage",
-        "intensity_monitor": "Intensitäts-Monitor",
-        "start_monitoring": "Monitoring starten",
-        "stop_monitoring": "Monitoring stoppen",
-        "current_intensity": "Aktuelle Intensität"
+      de:{
+        nav_start:"Start",nav_measurement_device:"Messung (on Device)",nav_measurement_webserial:"Messung (WebSerial)",
+        nav_alignment:"Justage",nav_info:"Weitere Infos",nav_ratio:"B-Field Monitor",
+        title:"NV Experimente - Justage",page_title:"Justage des Aufbaus",
+        page_subtitle:"Live-Überwachung der Photodioden-Intensität zur Justage des optischen Pfads",
+        intensity_live:"Photodioden-Intensität (Live)",current_value:"Aktueller Wert",
+        intensity_bar_title:"Intensitäts-Anzeige",start_monitoring:"Start Überwachung",
+        stop_monitoring:"Stop Überwachung",status_label:"Status:",status_ready:"Bereit",
+        status_active:"Überwachung aktiv",status_optimal:"Optimal",status_good:"Gut",
+        status_adjust:"Justage erforderlich",
+        alignment_hint:"Justieren Sie den optischen Pfad für maximale Intensität",
+        intensity_graph:"📈 Intensitäts-Verlauf",clear_plot:"Leeren",
+        time_window:"Zeitfenster:",y_range_label:"Y-Bereich:",y_range_full:"Voll (0-Max)",
+        measurement_range:"Messbereich",range_hint:"Werte hängen von Gain und Integrationszeit ab",
+        sensor_settings:"Sensor-Einstellungen",gain_label:"Verstärkung (Gain)",
+        gain_tooltip:"Höhere Verstärkung = empfindlicher, aber schneller Sättigung bei starkem Licht. Starten Sie mit High (428x).",
+        integration_label:"Integrationszeit",
+        integration_tooltip:"Längere Integration = genauere Messung, aber langsamere Aktualisierung. 100ms ist ein guter Standard.",
+        apply_settings:"Einstellungen anwenden",settings_loaded:"Einstellungen geladen",
+        settings_applying:"Wird angewendet...",settings_applied:"Erfolgreich angewendet",
+        settings_error:"Fehler beim Anwenden",
+        tutorial_title:"Justage-Anleitung (10 Schritte)",
+        tutorial_subtitle:"Klicken Sie auf einen Schritt für Details, oder navigieren Sie mit den Pfeilen.",
+        btn_previous:"← Zurück",btn_next:"Weiter →",
+        svg_placeholder:"[SVG Platzhalter]",no_data:"Keine Daten - Monitoring starten"
       },
-      en: {
-        "nav_start": "Start",
-        "nav_measurement_device": "Measurement (on Device)",
-        "nav_measurement_webserial": "Measurement (WebSerial)",
-        "nav_alignment": "Alignment",
-        "nav_info": "More Info",
-        "title": "NV Experiments - Alignment",
-        "page_title": "Photodiode Alignment",
-        "intensity_monitor": "Intensity Monitor",
-        "start_monitoring": "Start Monitoring",
-        "stop_monitoring": "Stop Monitoring",
-        "current_intensity": "Current Intensity"
+      en:{
+        nav_start:"Start",nav_measurement_device:"Measurement (on Device)",nav_measurement_webserial:"Measurement (WebSerial)",
+        nav_alignment:"Alignment",nav_info:"More Info",nav_ratio:"B-Field Monitor",
+        title:"NV Experiments - Alignment",page_title:"Setup Alignment",
+        page_subtitle:"Live monitoring of photodiode intensity for optical path alignment",
+        intensity_live:"Photodiode Intensity (Live)",current_value:"Current Value",
+        intensity_bar_title:"Intensity Display",start_monitoring:"Start Monitoring",
+        stop_monitoring:"Stop Monitoring",status_label:"Status:",status_ready:"Ready",
+        status_active:"Monitoring active",status_optimal:"Optimal",status_good:"Good",
+        status_adjust:"Alignment needed",
+        alignment_hint:"Adjust the optical path for maximum intensity",
+        intensity_graph:"📈 Intensity Over Time",clear_plot:"Clear",
+        time_window:"Time Window:",y_range_label:"Y-Range:",y_range_full:"Full (0-Max)",
+        measurement_range:"Measurement Range",range_hint:"Values depend on Gain and Integration Time",
+        sensor_settings:"Sensor Settings",gain_label:"Gain",
+        gain_tooltip:"Higher gain = more sensitive, but saturates faster with strong light. Start with High (428x).",
+        integration_label:"Integration Time",
+        integration_tooltip:"Longer integration = more accurate, but slower updates. 100ms is a good default.",
+        apply_settings:"Apply Settings",settings_loaded:"Settings loaded",
+        settings_applying:"Applying...",settings_applied:"Successfully applied",
+        settings_error:"Error applying settings",
+        tutorial_title:"Alignment Guide (10 Steps)",
+        tutorial_subtitle:"Click on a step for details, or navigate with the arrows.",
+        btn_previous:"← Back",btn_next:"Next →",
+        svg_placeholder:"[SVG Placeholder]",no_data:"No data - start monitoring"
       }
     };
-    
+
+    // Helper: get translated string
+    function T(key) { return (translations[currentLang]||translations.de)[key] || key; }
+
     function setLanguage(lang) {
+      currentLang = lang;
       localStorage.setItem('language', lang);
       updateLanguage(lang);
-      
-      // Update dropdown display
-      const langDropdown = document.getElementById('langDropdown');
-      if (langDropdown) {
-        langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;
-      }
+      const dd = ById('langDropdown');
+      if(dd) dd.innerHTML = '🌐 '+lang.toUpperCase();
     }
-    
     function updateLanguage(lang) {
-      const elements = document.querySelectorAll('[data-lang-key]');
-      elements.forEach(element => {
-        const key = element.getAttribute('data-lang-key');
-        if (translations[lang] && translations[lang][key]) {
-          element.textContent = translations[lang][key];
-        }
+      document.querySelectorAll('[data-lang-key]').forEach(el=>{
+        const k=el.getAttribute('data-lang-key');
+        if(translations[lang]&&translations[lang][k]) el.textContent=translations[lang][k];
       });
-      
-      // Update title
-      if (translations[lang] && translations[lang].title) {
-        document.title = translations[lang].title;
-      }
+      if(translations[lang]&&translations[lang].title) document.title=translations[lang].title;
+      buildTutorialStepList(); updateTutorialView();
     }
-    
-    // Initialize language on page load
+
+    // =====================================================================
+    // Init
+    // =====================================================================
     document.addEventListener('DOMContentLoaded', function() {
+      canvas = ById('intensityPlot');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      ById('startIntensity').addEventListener('click', startMonitoring);
+      ById('stopIntensity').addEventListener('click', stopMonitoring);
+      ById('applySettings').addEventListener('click', applyTSLSettings);
+      ById('clearIntensityPlot').addEventListener('click',()=>{ intensityData=[]; plotStartTime=Date.now(); drawIntensityPlot(); });
+      ById('plotTimeWindow').addEventListener('change', drawIntensityPlot);
+      ById('plotYRange').addEventListener('change', drawIntensityPlot);
+      ById('gainSelect').addEventListener('change', updateMeasurementRange);
+      ById('integrationSelect').addEventListener('change', updateMeasurementRange);
+      ById('tutorialPrev').addEventListener('click',()=>{ if(currentTutorialStep>0){currentTutorialStep--;updateTutorialView();}});
+      ById('tutorialNext').addEventListener('click',()=>{ const s=tutorialSteps[currentLang]||tutorialSteps.de; if(currentTutorialStep<s.length-1){currentTutorialStep++;updateTutorialView();}});
+
       const savedLang = localStorage.getItem('language') || 'de';
       setLanguage(savedLang);
-      
-      // WebSerial nav visibility: use /webserial_check + browser capability (P2 #12)
+      loadTSLSettings();
+      updateMeasurementRange();
+      buildTutorialStepList();
+      updateTutorialView();
+
+      // WebSerial nav visibility
       (async function(){
-          const wsNav = document.getElementById('webSerialNavItem');
-          if (!wsNav) return;
-          if (!('serial' in navigator)) { wsNav.style.display = 'none'; return; }
-          try {
-              const r = await fetch('/webserial_check');
-              const d = await r.json();
-              if (!d.webserial_enabled) wsNav.style.display = 'none';
-          } catch(e) { wsNav.style.display = 'none'; }
+        const ws=ById('webSerialNavItem'); if(!ws) return;
+        if(!('serial' in navigator)){ws.style.display='none';return;}
+        try{const r=await fetch('/webserial_check');const d=await r.json();if(!d.webserial_enabled)ws.style.display='none';}catch(e){ws.style.display='none';}
       })();
-      
-      // Fetch and display version information
-      fetch('/version')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Version endpoint not available');
-          }
-          return response.json();
-        })
-        .then(data => {
-          const versionInfo = document.getElementById('versionInfo');
-          if (versionInfo) {
-            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching version:', error);
-          const versionInfo = document.getElementById('versionInfo');
-          if (versionInfo) {
-            versionInfo.textContent = 'Version: ESP32 ODMR Server';
-          }
-        });
+      // Version
+      fetch('/version').then(r=>r.ok?r.json():Promise.reject())
+        .then(d=>{ById('versionInfo').textContent='v'+d.version+' | Build: '+d.build_date+' | '+d.git_hash;})
+        .catch(()=>{ById('versionInfo').textContent='Version: ESP32 ODMR Server';});
     });
+
+    document.addEventListener('visibilitychange',function(){if(document.hidden&&isMonitoring)stopMonitoring();});
+    window.addEventListener('beforeunload',function(){if(isMonitoring)stopMonitoring();});
   </script>
   <script>
   /* Bootstrap-JS replacement: navbar collapse + dropdown */

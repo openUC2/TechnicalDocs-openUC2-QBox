@@ -5,10 +5,10 @@
 #define __VERSION_INFO_H__
 
 #define FIRMWARE_VERSION "1.0.0"
-#define BUILD_DATE "2026-03-11"
-#define BUILD_TIME "11:11:10"
-#define BUILD_TIMESTAMP "20260311111110"
-#define GIT_HASH "1b29b12"
+#define BUILD_DATE "2026-03-12"
+#define BUILD_TIME "14:12:01"
+#define BUILD_TIMESTAMP "20260312141201"
+#define GIT_HASH "d3d8f16"
 #define GIT_BRANCH "fix-listoferrors"
 
 // Combined version string

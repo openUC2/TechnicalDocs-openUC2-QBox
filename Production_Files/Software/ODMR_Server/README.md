@@ -234,7 +234,7 @@ pio device list       # cross-platform
 ### Option A — Flash merged binary at 0x0 (recommended for initial install)
 
 ```bash
-python -m esptool \
+/Users/bene/.platformio/penv/bin/python -m esptool \
   --chip esp32c3 \
   -p /dev/cu.usbmodem101 \
   -b 460800 \

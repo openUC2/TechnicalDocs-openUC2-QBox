@@ -95,6 +95,18 @@ volatile uint16_t cachedIR = 0;
 unsigned long lastSensorRead = 0;
 const unsigned long SENSOR_READ_INTERVAL = 100; // Read sensor every 100ms
 
+// Sweep data buffer for broken-connection recovery
+// Stores the last sweep results so they can be retrieved via /sweep_buffer
+struct SweepDataPoint {
+  float frequency;
+  uint32_t intensity;
+};
+static const int MAX_SWEEP_BUFFER = 500;
+SweepDataPoint sweepBuffer[MAX_SWEEP_BUFFER];
+int sweepBufferCount = 0;
+bool sweepInProgress = false;
+volatile bool sweepStopRequested = false;
+
 // WebServer on port 80
 WebServer server(80);
 
@@ -719,6 +731,11 @@ void handleSweep()
   Serial.printf("Sweep start: %.1f -> %.1f MHz, step %.1f, avg %d, settle %d ms, %d pts\n",
                 fBegin, fEnd, fStep, averages, settle_ms, totalPoints);
 
+  // Reset sweep buffer for this new sweep
+  sweepBufferCount = 0;
+  sweepInProgress = true;
+  sweepStopRequested = false;
+
   setLEDStatus(LED_MEASURING);
   adf.begin();
 
@@ -733,10 +750,10 @@ void handleSweep()
 
   for (float f = fBegin; f <= fEnd + 0.001f; f += fStep)
   {
-    // Check if client disconnected (user pressed stop / closed page)
-    if (!client.connected())
+    // Check if client disconnected or stop requested
+    if (!client.connected() || sweepStopRequested)
     {
-      Serial.println("Sweep: client disconnected, stopping");
+      Serial.println(sweepStopRequested ? "Sweep: stop requested" : "Sweep: client disconnected, stopping");
       break;
     }
 
@@ -752,6 +769,14 @@ void handleSweep()
         delay(1);
     }
     uint32_t intensity = (uint32_t)(sum / averages);
+
+    // Store in buffer for recovery
+    if (sweepBufferCount < MAX_SWEEP_BUFFER)
+    {
+      sweepBuffer[sweepBufferCount].frequency = f;
+      sweepBuffer[sweepBufferCount].intensity = intensity;
+      sweepBufferCount++;
+    }
 
     // Send data point as SSE event
     String msg = "data: {\"f\":";
@@ -777,8 +802,45 @@ void handleSweep()
   server.sendContent(""); // End chunked transfer
 
   adf.stop();
+  sweepInProgress = false;
+  sweepStopRequested = false;
   setLEDStatus(LED_CONNECTED);
   Serial.printf("Sweep complete: %d points measured\n", pointIndex);
+}
+
+// Endpoint to retrieve buffered sweep data (for broken-connection recovery)
+void handleSweepBuffer()
+{
+  String json = "{\"in_progress\":";
+  json += sweepInProgress ? "true" : "false";
+  json += ",\"count\":";
+  json += String(sweepBufferCount);
+  json += ",\"data\":[";
+  for (int i = 0; i < sweepBufferCount; i++)
+  {
+    if (i > 0) json += ",";
+    json += "{\"f\":";
+    json += String(sweepBuffer[i].frequency, 1);
+    json += ",\"I\":";
+    json += String(sweepBuffer[i].intensity);
+    json += "}";
+  }
+  json += "]}";
+  server.send(200, "application/json", json);
+}
+
+// Endpoint to explicitly stop a running sweep
+void handleSweepStop()
+{
+  if (sweepInProgress)
+  {
+    sweepStopRequested = true;
+    server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"stop requested\"}");
+  }
+  else
+  {
+    server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"no sweep running\"}");
+  }
 }
 
 void setup()
@@ -1046,6 +1108,8 @@ void setup()
   server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
   server.on("/ratio", HTTP_GET, handleMeasureRatio);
   server.on("/sweep", HTTP_GET, handleSweep);
+  server.on("/sweep_buffer", HTTP_GET, handleSweepBuffer);
+  server.on("/sweep_stop", HTTP_POST, handleSweepStop);
 
   // ADF4351 enable/disable endpoints (P1 #9)
   server.on("/ADF_Enable", HTTP_POST, []()
@@ -1160,10 +1224,6 @@ void loop()
           Serial.printf("STATUS connected:%d freq_range:[%.1f,%.1f] led:%d\n",
                         WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus);
         }
-        else if (rxBuf.length() > 0)
-        {
-          Serial.printf("ERR unknown command: %s\n", rxBuf.c_str());
-        }
         else if (rxBuf.startsWith("RATIO "))
         {
           // Format: RATIO f1 f2
@@ -1189,6 +1249,10 @@ void loop()
           {
             Serial.println("ERR RATIO syntax");
           }
+        }
+        else if (rxBuf.length() > 0)
+        {
+          Serial.printf("ERR unknown command: %s\n", rxBuf.c_str());
         }
       }
       rxBuf = "";

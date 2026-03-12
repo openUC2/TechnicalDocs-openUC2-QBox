@@ -195,16 +195,36 @@
             Dieses Experiment wurde im Rahmen des Projekts <strong>QuantumMiniLabs</strong> entwickelt,
             gefördert vom Bundesministerium für Bildung und Forschung (BMBF).
           </p>
-          <div class="row mt-3">
-            <div class="col-md-4 mb-2">
+          <div class="row mt-3" style="align-items:center;">
+            <div class="col-md-4 mb-2 text-center">
+              <!-- openUC2 placeholder logo -->
+              <svg width="120" height="60" viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" style="border:1px solid #ccc;border-radius:8px;background:#fff;margin-bottom:8px;">
+                <rect x="5" y="10" width="40" height="40" rx="8" fill="#00a88f" opacity="0.85"/>
+                <rect x="15" y="20" width="20" height="20" rx="4" fill="#fff"/>
+                <text x="75" y="36" font-size="13" font-family="Arial,sans-serif" fill="#333" text-anchor="middle" font-weight="bold">openUC2</text>
+              </svg><br>
               <strong>openUC2 GmbH</strong><br>
               <small><a href="https://openuc2.com" target="_blank">openuc2.com</a></small>
             </div>
-            <div class="col-md-4 mb-2">
+            <div class="col-md-4 mb-2 text-center">
+              <!-- Uni Münster placeholder logo -->
+              <svg width="120" height="60" viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" style="border:1px solid #ccc;border-radius:8px;background:#fff;margin-bottom:8px;">
+                <circle cx="30" cy="30" r="20" fill="#003366" opacity="0.85"/>
+                <text x="30" y="35" font-size="16" font-family="serif" fill="#fff" text-anchor="middle" font-weight="bold">WWU</text>
+                <text x="80" y="28" font-size="9" font-family="Arial,sans-serif" fill="#333" text-anchor="middle">Universität</text>
+                <text x="80" y="40" font-size="9" font-family="Arial,sans-serif" fill="#333" text-anchor="middle">Münster</text>
+              </svg><br>
               <strong data-lang-key="partner_uni">Universität Münster</strong><br>
-              <small>Physikalisches Institut</small>
+              <small data-lang-key="partner_uni_dept">Physikalisches Institut</small>
             </div>
-            <div class="col-md-4 mb-2">
+            <div class="col-md-4 mb-2 text-center">
+              <!-- BMBF placeholder logo -->
+              <svg width="120" height="60" viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" style="border:1px solid #ccc;border-radius:8px;background:#fff;margin-bottom:8px;">
+                <rect x="10" y="12" width="36" height="36" rx="4" fill="#c1272d" opacity="0.85"/>
+                <text x="28" y="35" font-size="11" font-family="Arial,sans-serif" fill="#fff" text-anchor="middle" font-weight="bold">BMBF</text>
+                <text x="78" y="28" font-size="9" font-family="Arial,sans-serif" fill="#333" text-anchor="middle" data-lang-key="logo_bmbf_line1">Gefördert vom</text>
+                <text x="78" y="40" font-size="9" font-family="Arial,sans-serif" fill="#333" text-anchor="middle">BMBF</text>
+              </svg><br>
               <strong data-lang-key="partner_funding">Förderung: BMBF</strong><br>
               <small>QuantumMiniLabs</small>
             </div>
@@ -226,36 +246,6 @@
   </footer>
 
   <!-- Bootstrap JS removed - offline AP mode (P0 #2) -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Fetch and display version information
-      fetch('/version')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Version endpoint not available');
-          }
-          return response.json();
-        })
-        .then(data => {
-          const versionInfo = document.getElementById('versionInfo');
-          if (versionInfo) {
-            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching version:', error);
-          const versionInfo = document.getElementById('versionInfo');
-          if (versionInfo) {
-            versionInfo.textContent = 'Version: ESP32 ODMR Server';
-          }
-        });
-    });
-  </script>
-
   <script>
     // Multi-language support
     const translations = {
@@ -303,7 +293,9 @@
         "project_partners": "Projekt & Partner",
         "project_description": "Dieses Experiment wurde im Rahmen des Projekts QuantumMiniLabs entwickelt, gefördert vom Bundesministerium für Bildung und Forschung (BMBF).",
         "partner_uni": "Universität Münster",
+        "partner_uni_dept": "Physikalisches Institut",
         "partner_funding": "Förderung: BMBF",
+        "logo_bmbf_line1": "Gefördert vom",
         "contact_text": "Kontakt:"
       },
       en: {
@@ -350,7 +342,9 @@
         "project_partners": "Project & Partners",
         "project_description": "This experiment was developed within the QuantumMiniLabs project, funded by the German Federal Ministry of Education and Research (BMBF).",
         "partner_uni": "University of Münster",
+        "partner_uni_dept": "Department of Physics",
         "partner_funding": "Funding: BMBF",
+        "logo_bmbf_line1": "Funded by",
         "contact_text": "Contact:"
       }
     };
