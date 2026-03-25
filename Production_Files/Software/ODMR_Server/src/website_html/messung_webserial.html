@@ -176,13 +176,13 @@
       var YMax = 0,
         YMin = 0;
       var _YMax = 0,
-        _YMin = 36000;
+        _YMin = 65535;
       const fMin = 2200,
         fMax = 4400,
         stepMin = 0.2,
         stepMax = 5;
       const IntMin = 0,
-        IntMax = 36000,
+        IntMax = 65535,
         IntRangeMin = 200;
       const XPlotSize = 1600,
         YPlotSize = 800;
@@ -229,7 +229,7 @@
         ToggleStart(0);
         deleteScaleGroup("DataGroupID");
         AngezeigteDatenpunkte = [];
-        (_YMax = 0), (_YMin = 36000);
+        (_YMax = 0), (_YMin = 65535);
         prepareFreqs();
         prepareXSkala(fBegin, fEnd);
         
@@ -870,20 +870,20 @@
 
     <!-- ░░ Main content ░░------------------------------------------------------ -->
     <div class="container-fluid">
-      <h1 class="display-6 mb-4 text-center">Messung der Lichtintensität in Abhängigkeit von der Frequenz</h1>
+      <h1 class="display-6 mb-4 text-center" data-lang-key="page_title">Messung der Lichtintensität in Abhängigkeit von der Frequenz</h1>
       
       <!-- ░░ Tabs Navigation ░░------------------------------------------------- -->
       <ul class="nav nav-tabs mb-4" id="measurementTabs" role="tablist">
         <li class="nav-item" role="presentation">
           <button class="nav-link active" id="sweep-tab" data-bs-toggle="tab" 
                   data-bs-target="#sweep-pane" type="button" role="tab">
-            Frequenz-Sweep
+            <span data-lang-key="freq_sweep">Frequenz-Sweep</span>
           </button>
         </li>
         <li class="nav-item" role="presentation">
           <button class="nav-link" id="live-tab" data-bs-toggle="tab" 
                   data-bs-target="#live-pane" type="button" role="tab">
-            Live Monitor
+            <span data-lang-key="live_monitor">Live Monitor</span>
           </button>
         </li>
       </ul>
@@ -1038,12 +1038,7 @@
               </svg>
             </div>
             <div class="grid2">
-              <input
-                type="button"
-                class="Button Laserbutton"
-                id="Laser"
-                value="Laserdiode einschalten"
-              />
+              <!-- Laser button removed (P2 #11) -->
             </div>
             <div class="grid3">
               <div
@@ -1146,7 +1141,7 @@
             <div class="col-md-9">
               <div class="card h-100">
                 <div class="card-header">
-                  <h5 class="mb-0">Live Intensität Monitor</h5>
+                  <h5 class="mb-0" data-lang-key="live_intensity_monitor">Live Intensität Monitor</h5>
                 </div>
                 <div class="card-body p-2">
                   <canvas id="liveChart" class="w-100" style="height: 60vh;"></canvas>
@@ -1156,11 +1151,11 @@
             <div class="col-md-3">
               <div class="card h-100">
                 <div class="card-header">
-                  <h5 class="mb-0">Live Kontrolle</h5>
+                  <h5 class="mb-0" data-lang-key="live_control">Live Kontrolle</h5>
                 </div>
                 <div class="card-body">
                   <div class="mb-3">
-                    <button id="startLiveBtn" class="btn btn-success w-100">
+                    <button id="startLiveBtn" class="btn btn-success w-100" data-lang-key="start_live">
                       Live Monitor starten
                     </button>
                   </div>
@@ -1193,8 +1188,15 @@
                       </div>
                     </div>
                   </div>
+                  <div class="mb-3">
+                    <label class="form-label small" data-lang-key="live_freq_label">Frequenz (MHz):</label>
+                    <div class="input-group input-group-sm">
+                      <input type="number" class="form-control form-control-sm" id="liveFreq" value="2870" min="2200" max="4400" step="0.1">
+                      <button id="setFreqBtn" class="btn btn-primary btn-sm" type="button" data-lang-key="set_freq_btn">Setzen</button>
+                    </div>
+                  </div>
                   <div class="mt-3">
-                    <button id="resetLiveBtn" class="btn btn-warning btn-sm w-100">
+                    <button id="resetLiveBtn" class="btn btn-warning btn-sm w-100" data-lang-key="reset_live">
                       Daten zurücksetzen
                     </button>
                   </div>
@@ -1208,13 +1210,13 @@
       <!-- ░░ Scan Range Controls ░░------------------------------------------- -->
       <div class="card mt-2 measurement-section">
         <div class="card-header py-2">
-          <h6 class="mb-0">Scan-Parameter einstellen</h6>
+          <h6 class="mb-0" data-lang-key="scan_params">Scan-Parameter einstellen</h6>
         </div>
         <div class="card-body py-2">
           <div class="row g-2">
             <!-- Start Frequency -->
             <div class="col-md-4">
-              <label for="f_begin" class="form-label small">Startfrequenz (MHz)</label>
+              <label for="f_begin" class="form-label small" data-lang-key="start_freq">Startfrequenz (MHz)</label>
               <div class="input-group input-group-sm">
                 <button class="btn btn-outline-secondary btn-sm" type="button" 
                         onclick="addValue('-100', 'f_begin')">-100</button>
@@ -1231,7 +1233,7 @@
             
             <!-- End Frequency -->
             <div class="col-md-4">
-              <label for="f_end" class="form-label small">Endfrequenz (MHz)</label>
+              <label for="f_end" class="form-label small" data-lang-key="end_freq">Endfrequenz (MHz)</label>
               <div class="input-group input-group-sm">
                 <button class="btn btn-outline-secondary btn-sm" type="button" 
                         onclick="addValue('-100', 'f_end')">-100</button>
@@ -1248,7 +1250,7 @@
             
             <!-- Step Size -->
             <div class="col-md-4">
-              <label for="f_step" class="form-label small">Schrittweite (MHz)</label>
+              <label for="f_step" class="form-label small" data-lang-key="step_size">Schrittweite (MHz)</label>
               <div class="input-group input-group-sm">
                 <button class="btn btn-outline-secondary btn-sm" type="button" 
                         onclick="addValue('-1', 'f_step')">-1</button>
@@ -1284,7 +1286,7 @@
       <!-- ░░ Measurement History ░░------------------------------------------- -->
       <div class="card mt-4">
         <div class="card-header">
-          <h5 class="mb-0">Durchgeführte Messungen</h5>
+          <h5 class="mb-0" data-lang-key="completed_measurements">Durchgeführte Messungen</h5>
         </div>
         <div class="card-body">
           <div class="table-responsive">
@@ -1755,23 +1757,7 @@
           });
         }
 
-        async function LaserOn() {
-          if (confirm("Laserdiode wirklich einschalten?")) {
-            await writer.write(enc.encode("LASER ON\n"));
-            let Laser = ById("Laser");
-            Laser.value = "Laserdiode ausschalten";
-            Laser.removeEventListener("click", LaserOn);
-            Laser.addEventListener("click", LaserOff);
-          }
-        }
-
-        async function LaserOff() {
-          await writer.write(enc.encode("LASER OFF\n"));
-          let Laser = ById("Laser");
-          Laser.value = "Laserdiode einschalten";
-          Laser.removeEventListener("click", LaserOff);
-          Laser.addEventListener("click", LaserOn);
-        }
+        // Laser control removed (P2 #11)
         /* ---------- end of webserial stuff ---------- */
 
         function YMidContr(_this) {
@@ -1811,7 +1797,7 @@
         function YRangeContr2(_this) {
           let IntensitätswertLogarithmisch = Math.min(
             100 * Math.floor(Math.pow(2, _this.value)),
-            36000
+            65535
           );
           if (
             (ById("YMid1").value - IntMin) * 2 <
@@ -1848,20 +1834,21 @@
           ["f_Reset", fReset],
           ["StartStop", MessungStarten],
           ["AutoMessung", AutoToggle],
-          ["Laser", LaserOn],
           ["startLiveBtn", startLiveMonitor],
           ["resetLiveBtn", resetLiveData],
-          ["setFreqBtn", setFrequency],
           [
             "Clear",
             () => {
               deleteScaleGroup("DataGroupID");
               AngezeigteDatenpunkte = [];
-              (_YMax = 0), (_YMin = 36000);
+              (_YMax = 0), (_YMin = 65535);
             },
           ],
           ["MessreiheHerunterladen", DownloadCSV],
         ];
+        // setFreqBtn handled separately (may not exist in all layouts)
+        const setFreqBtnEl = ById("setFreqBtn");
+        if (setFreqBtnEl) setFreqBtnEl.addEventListener("click", setFrequency);
         ChangeListeners.forEach((element) =>
           ById(element[0]).addEventListener("change", element[1])
         );
@@ -1888,8 +1875,7 @@
     </div>
     </footer>
 
-    <!-- Bootstrap JS from CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap JS removed - offline AP mode (P0 #2) -->
   
   <script>
     // Multi-language support
@@ -1900,6 +1886,7 @@
         "nav_measurement_webserial": "Messung (WebSerial)",
         "nav_alignment": "Justage",
         "nav_info": "Weitere Infos",
+        "nav_ratio": "B-Field Monitor",
         "title": "NV Experimente - Messung durchführen",
         "page_title": "Messung der Lichtintensität in Abhängigkeit von der Frequenz",
         "freq_sweep": "Frequenz-Sweep",
@@ -1908,7 +1895,24 @@
         "start_measurement": "Messung starten",
         "stop_measurement": "Messung stoppen",
         "serial_status": "Serial Status:",
-        "not_connected": "Nicht verbunden"
+        "not_connected": "Nicht verbunden",
+        "live_intensity_monitor": "Live Intensität Monitor",
+        "live_control": "Live Kontrolle",
+        "start_live": "Live Monitor starten",
+        "stop_live": "Live Monitor stoppen",
+        "live_freq_label": "Frequenz (MHz):",
+        "set_freq_btn": "Setzen",
+        "reset_live": "Daten zurücksetzen",
+        "scan_params": "Scan-Parameter einstellen",
+        "start_freq": "Startfrequenz (MHz)",
+        "end_freq": "Endfrequenz (MHz)",
+        "step_size": "Schrittweite (MHz)",
+        "completed_measurements": "Durchgeführte Messungen",
+        "waiting_data": "Warten auf Daten...",
+        "webserial_warning": "Ihr Browser unterstützt die WebSerial API nicht. Bitte verwenden Sie Chrome/Edge oder die \"Messung (on Device)\" Seite.",
+        "timeout_warning": "Messungen wurden wegen Timeout übersprungen",
+        "confirm_delete": "Messung wirklich löschen?",
+        "no_measurements": "Noch keine Messungen durchgeführt"
       },
       en: {
         "nav_start": "Start",
@@ -1916,6 +1920,7 @@
         "nav_measurement_webserial": "Measurement (WebSerial)",
         "nav_alignment": "Alignment",
         "nav_info": "More Info",
+        "nav_ratio": "B-Field Monitor",
         "title": "NV Experiments - Perform Measurement",
         "page_title": "Measurement of Light Intensity as a Function of Frequency",
         "freq_sweep": "Frequency Sweep",
@@ -1924,7 +1929,24 @@
         "start_measurement": "Start Measurement",
         "stop_measurement": "Stop Measurement",
         "serial_status": "Serial Status:",
-        "not_connected": "Not connected"
+        "not_connected": "Not connected",
+        "live_intensity_monitor": "Live Intensity Monitor",
+        "live_control": "Live Control",
+        "start_live": "Start Live Monitor",
+        "stop_live": "Stop Live Monitor",
+        "live_freq_label": "Frequency (MHz):",
+        "set_freq_btn": "Set",
+        "reset_live": "Reset Data",
+        "scan_params": "Set Scan Parameters",
+        "start_freq": "Start Frequency (MHz)",
+        "end_freq": "End Frequency (MHz)",
+        "step_size": "Step Size (MHz)",
+        "completed_measurements": "Completed Measurements",
+        "waiting_data": "Waiting for data...",
+        "webserial_warning": "Your browser does not support the WebSerial API. Please use Chrome/Edge or the \"Measurement (on Device)\" page.",
+        "timeout_warning": "Measurements were skipped due to timeout",
+        "confirm_delete": "Really delete measurement?",
+        "no_measurements": "No measurements performed yet"
       }
     };
     
@@ -1959,6 +1981,26 @@
       const savedLang = localStorage.getItem('language') || 'de';
       setLanguage(savedLang);
     });
+  </script>
+  <script>
+  /* Bootstrap-JS replacement: navbar collapse + dropdown + tabs */
+  (function(){
+    document.querySelectorAll('.navbar-toggler').forEach(function(b){
+      b.addEventListener('click',function(){var t=document.querySelector(b.getAttribute('data-bs-target'));if(t)t.classList.toggle('show');});
+    });
+    document.querySelectorAll('.dropdown-toggle').forEach(function(b){
+      b.addEventListener('click',function(e){e.preventDefault();var m=b.nextElementSibling;if(m&&m.classList.contains('dropdown-menu'))m.classList.toggle('show');});
+    });
+    document.addEventListener('click',function(e){if(!e.target.closest('.dropdown'))document.querySelectorAll('.dropdown-menu.show').forEach(function(m){m.classList.remove('show');});});
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(b){
+      b.addEventListener('click',function(e){e.preventDefault();
+        var tgt=document.querySelector(b.getAttribute('data-bs-target'));if(!tgt)return;
+        tgt.parentElement.querySelectorAll('.tab-pane').forEach(function(p){p.classList.remove('show','active');});
+        b.closest('.nav').querySelectorAll('[data-bs-toggle="tab"]').forEach(function(t){t.classList.remove('active');});
+        tgt.classList.add('show','active');b.classList.add('active');
+      });
+    });
+  })();
   </script>
 </body>
 </html>

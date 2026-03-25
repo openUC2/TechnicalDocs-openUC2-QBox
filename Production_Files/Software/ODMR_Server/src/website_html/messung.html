@@ -28,9 +28,12 @@
         var fBegin=2820, fEnd=2920, fStep=2, N_freq=0; 
         var _fBegin=2820, _fEnd=2920, _fStep=2; 
         var YMax=0, YMin=0;      
-        var _YMax=0, _YMin=36000;
+        var _YMax=0, _YMin=65535;
         const fMin=2200, fMax=4400, stepMin=0.2, stepMax=5; 
-        const IntMin=0, IntMax=36000, IntRangeMin=200;  
+        const IntMin=0, IntMax=65535, IntRangeMin=200;
+        var stopRequested = false;  // Global stop flag (P0 #5)
+        var continuousTimeout = null; // Track setTimeout for continuous mode
+        var currentEventSource = null; // Track SSE connection for streaming sweep
         const XPlotSize=1600, YPlotSize=800; 
         var AutoMessung=0;  
         const PlotViewBox="-200 -" + (YPlotSize+75) + " " + (XPlotSize+200+150) + " " + (YPlotSize+75+150);
@@ -49,35 +52,112 @@
     </script>
     
     <script> 
-        async function MessungStarten(){ 
+        // Start measurement using SSE (Server-Sent Events) streaming.
+        // The ESP32 performs the frequency sweep and streams each data point
+        // back in real time. No individual HTTP requests per frequency needed.
+        function MessungStarten(){
+            stopRequested = false;
             ToggleStart(0);
             setLEDStatus('measuring', 'Messung läuft');
-            enableADF();
             
             deleteScaleGroup("DataGroupID");    
             AngezeigteDatenpunkte=[];
-            _YMax=0, _YMin=36000;
+            _YMax=0; _YMin=65535;
             prepareFreqs();             
             prepareXSkala(fBegin,fEnd);
-            while(Frequenzen.length!=0){   
-                var response=await freqMessung(Frequenzen.shift()); 
-                Messreihe.push(response);  
-                _YMin=Math.min(_YMin,response[1]-100);
-                _YMax=Math.max(_YMax,response[1]+100);
-                autoScale();
-                drawCircle(response,+200,"black");  
-            }
-            addDataGroup(); 
-            Messreihe=[];
+
+            // Build SSE URL from current sweep parameters
+            var url = '/sweep?f_begin=' + fBegin + '&f_end=' + fEnd + '&f_step=' + fStep;
+            currentEventSource = new EventSource(url);
             
-            setLEDStatus('ready', 'Messungen abgeschlossen');
+            currentEventSource.onmessage = function(event) {
+                try {
+                    var data = JSON.parse(event.data);
+                    if (data.done) {
+                        currentEventSource.close();
+                        currentEventSource = null;
+                        addDataGroup();
+                        Messreihe = [];
+                        setLEDStatus('ready', 'Messungen abgeschlossen');
+                        if (AutoMessung && !stopRequested) {
+                            continuousTimeout = setTimeout(MessungStarten, 600);
+                        } else {
+                            ToggleStart(1);
+                            disableADF();
+                            stopRequested = false;
+                        }
+                        return;
+                    }
+                    // Process streamed data point [freq, intensity, magnetic_field_placeholder]
+                    var response = [data.f, data.I, 0];
+                    Messreihe.push(response);
+                    _YMin = Math.min(_YMin, response[1] - 100);
+                    _YMax = Math.max(_YMax, response[1] + 100);
+                    autoScale();
+                    drawCircle(response, +200, "black");
+                } catch(e) {
+                    console.warn('SSE parse error:', e);
+                }
+            };
             
-            if(AutoMessung){
-                setTimeout(MessungStarten, 600);
-            } else {
+            currentEventSource.onerror = function(e) {
+                console.warn('SSE connection error:', e);
+                if (currentEventSource) {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+                // Try to recover buffered data from server
+                recoverSweepBuffer();
+                setLEDStatus('error', T('status_conn_error'));
                 ToggleStart(1);
-                disableADF();
-            }  
+                stopRequested = false;
+            };
+        }
+        // Stop measurement handler - calls server /sweep_stop endpoint AND
+        // closes SSE connection to ensure the ESP32 stops immediately
+        function MessungStoppen(){
+            stopRequested = true;
+            // Signal the server to stop the sweep
+            fetch('/sweep_stop', {method:'POST'}).catch(e=>console.warn('sweep_stop:',e));
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+            if(continuousTimeout) { clearTimeout(continuousTimeout); continuousTimeout = null; }
+            AutoMessung = 0;
+            addDataGroup();
+            Messreihe = [];
+            setLEDStatus('ready', T('status_stopped'));
+            ToggleStart(1);
+            disableADF();
+        }
+        // Recover sweep data from server buffer after connection drop
+        function recoverSweepBuffer() {
+            fetch('/sweep_buffer').then(r=>r.json()).then(data=>{
+                if(data.data && data.data.length > 0) {
+                    console.log('Recovered ' + data.data.length + ' buffered data points');
+                    // Merge buffered data into current measurement
+                    Messreihe = [];
+                    data.data.forEach(pt => {
+                        var response = [pt.f, pt.I, 0];
+                        Messreihe.push(response);
+                        _YMin = Math.min(_YMin, pt.I - 100);
+                        _YMax = Math.max(_YMax, pt.I + 100);
+                        drawCircle(response, +200, '#e67e22');
+                    });
+                    autoScale();
+                    addDataGroup();
+                    Messreihe = [];
+                    setLEDStatus('ready', T('status_recovered'));
+                } else {
+                    addDataGroup();
+                    Messreihe = [];
+                }
+            }).catch(e=>{
+                console.warn('Buffer recovery failed:', e);
+                addDataGroup();
+                Messreihe = [];
+            });
         }
         function autoScale(){
             if(ById("YMidAuto").checked){
@@ -212,30 +292,7 @@
             ById("f_step").value=2;
             randbedingungenUebernehmen();
         }
-        function LaserOn(){
-            if(confirm("Laserdiode wirklich einschalten?")){
-                var xhr=new XMLHttpRequest();
-                xhr.open("POST","/Laser_An",true);
-                xhr.send();
-                let Laser=ById("Laser");
-                Laser.innerHTML = '<i class="bi bi-lightbulb-fill"></i> Laserdiode ausschalten';
-                Laser.className = "btn btn-danger btn-lg";
-                Laser.removeEventListener("click", LaserOn);
-                Laser.addEventListener("click", LaserOff);
-                setLEDStatus('laser_on', 'Laser aktiv');
-            }
-        }
-        function LaserOff(){
-            var xhr=new XMLHttpRequest();
-            xhr.open("POST","/Laser_Aus",true);
-            xhr.send();
-            let Laser=ById("Laser");
-            Laser.innerHTML = '<i class="bi bi-lightbulb"></i> Laserdiode einschalten';
-            Laser.className = "btn btn-warning btn-lg";
-            Laser.removeEventListener("click", LaserOff);
-            Laser.addEventListener("click", LaserOn);
-            setLEDStatus('ready', 'Bereit');
-        }
+        // Laser control removed (P2 #11) - laser is not user-controllable via UI
         function ToggleStart(OnOff){
             let StartButton=ById("StartStop");
             if(OnOff){
@@ -310,13 +367,25 @@
                 Messreihe.shift();              
             }
         }
+        // WiFi measurement with timeout + retry (P0 #4)
         async function freqMessung(f){
-            return new Promise(function(resolve){
-                var xhr =new XMLHttpRequest();
-                xhr.onreadystatechange=function() {if (this.readyState==4 && this.status ==200){resolve(this.responseText.split(" ").map(Number));}}
-                xhr.open("GET", "/measure?frequenz=" + f, true);
-                xhr.send();
-            });
+            const TIMEOUT_MS = 3000;
+            const MAX_RETRIES = 1;
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+                    const resp = await fetch('/measure?frequenz=' + f, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    return text.split(' ').map(Number);
+                } catch(e) {
+                    if (attempt < MAX_RETRIES) { console.warn('Retry point ' + f + ':', e); continue; }
+                    console.error('Skipped point ' + f + ':', e);
+                    throw e;
+                }
+            }
         }
         function getScalesteps(R){
             for(Step=1;R>Step;Step*=10){}                       
@@ -568,11 +637,6 @@
         </div>
         <div class="grid2">
             <div class="d-grid gap-2">
-              <button type="button" class="btn btn-warning btn-lg" id="Laser"
-                      title="Schaltet die Laserdiode ein/aus für die Anregung der NV-Zentren" 
-                      data-bs-toggle="tooltip">
-                <i class="bi bi-lightbulb"></i> Laserdiode einschalten
-              </button>
               <!-- LED Status Indicator -->
               <div class="d-flex align-items-center justify-content-center mt-2">
                 <div id="statusLED" class="me-2" style="width: 12px; height: 12px; border-radius: 50%; background-color: #6c757d; border: 2px solid #dee2e6;"></div>
@@ -602,6 +666,11 @@
                       data-bs-toggle="tooltip">
                 <i class="bi bi-play-fill"></i> <span data-lang-key="start_measurement">Messung starten</span>
               </button>
+              <button type="button" class="btn btn-danger btn-lg" id="StopMessung"
+                      title="Stoppt die laufende Messung" 
+                      data-bs-toggle="tooltip">
+                <i class="bi bi-stop-fill"></i> <span data-lang-key="stop_measurement">Messung stoppen</span>
+              </button>
               <button type="button" class="btn btn-outline-primary" id="AutoMessung"
                       title="Wechselt zwischen Einzel- und Dauermessung" 
                       data-bs-toggle="tooltip">
@@ -617,18 +686,22 @@
               </div>
               <div class="card-body py-2">
                 <div class="mb-2">
-                  <label for="gainSelect" class="form-label small" data-lang-key="gain">Verstärkung (Gain):</label>
+                  <label for="gainSelect" class="form-label small uc2-tooltip" data-lang-key="gain">Verstärkung (Gain):
+                    <span class="uc2-tooltip-text" data-lang-key="gain_tooltip">Höhere Verstärkung = empfindlicher, aber schneller Sättigung bei starkem Licht.</span>
+                  </label>
                   <select id="gainSelect" class="form-select form-select-sm"
                           title="Bestimmt die Verstärkung des TSL2591 Lichtsensors" 
                           data-bs-toggle="tooltip">
                     <option value="0x00">Low (1x)</option>
                     <option value="0x10">Medium (25x)</option>
-                    <option value="0x20">High (428x)</option>
-                    <option value="0x30" selected>Max (9876x)</option>
+                    <option value="0x20" selected>High (428x)</option>
+                    <option value="0x30">Max (9876x)</option>
                   </select>
                 </div>
                 <div class="mb-3">
-                  <label for="integrationSelect" class="form-label small" data-lang-key="integration_time">Integrationszeit:</label>
+                  <label for="integrationSelect" class="form-label small uc2-tooltip" data-lang-key="integration_time">Integrationszeit:
+                    <span class="uc2-tooltip-text" data-lang-key="integration_tooltip">Längere Integration = genauere Messung, aber langsamere Aktualisierung.</span>
+                  </label>
                   <select id="integrationSelect" class="form-select form-select-sm"
                           title="Bestimmt die Belichtungszeit des Sensors" 
                           data-bs-toggle="tooltip">
@@ -876,7 +949,7 @@
                 ById("YMid2").min=IntMin+_this.value/2; 
             }
             function YRangeContr2(_this){
-                let IntensitätswertLogarithmisch=Math.min(100*Math.floor(Math.pow(2, _this.value)),36000);
+                let IntensitätswertLogarithmisch=Math.min(100*Math.floor(Math.pow(2, _this.value)),65535);
                 if((ById("YMid1").value-IntMin)*2<IntensitätswertLogarithmisch){ById("YMid1").value=IntMin+IntensitätswertLogarithmisch/2;ById("YMid2").value=IntMin+IntensitätswertLogarithmisch/2;}
                 else if((IntMax-ById("YMid1").value)*2<IntensitätswertLogarithmisch){ById("YMid1").value=IntMax-IntensitätswertLogarithmisch/2;ById("YMid2").value=IntMax-IntensitätswertLogarithmisch/2;}
                 _this.previousElementSibling.value=IntensitätswertLogarithmisch; 
@@ -896,17 +969,18 @@
                 });
             }
 
-            // Hide WebSerial navigation item if on ESP32
-            const isLocalDevice = window.location.hostname === '192.168.4.1' || 
-                               window.location.hostname.includes('ODMR_') || 
-                               window.location.protocol === 'file:';
-            
-            if (isLocalDevice) {
-                const webSerialNavItem = document.getElementById('webSerialNavItem');
-                if (webSerialNavItem) {
-                    webSerialNavItem.style.display = 'none';
-                }
-            }
+            // WebSerial nav visibility: use /webserial_check + browser capability (P2 #12)
+            (async function(){
+                const wsNav = document.getElementById('webSerialNavItem');
+                if (!wsNav) return;
+                // Browser capability check first
+                if (!('serial' in navigator)) { wsNav.style.display = 'none'; return; }
+                try {
+                    const r = await fetch('/webserial_check');
+                    const d = await r.json();
+                    if (!d.webserial_enabled) wsNav.style.display = 'none';
+                } catch(e) { wsNav.style.display = 'none'; }
+            })();
             
             // Initialize parameter summary
             updateParameterSummary();
@@ -938,8 +1012,8 @@
                 ["fE100",()=>addValue("100","f_end")],
                 ["fs-1",()=>addValue("-1","f_step")],
                 ["fs1",()=>addValue("1","f_step")],
-                ["Laser", LaserOn],
-                ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=36000;}],
+                ["StopMessung", MessungStoppen],
+                ["Clear", ()=>{deleteScaleGroup("DataGroupID");AngezeigteDatenpunkte=[];_YMax=0, _YMin=65535;}],
                 ["MessreiheHerunterladen",DownloadCSV],
             ];
             ChangeListeners.forEach(element => ById(element[0]).addEventListener("change", element[1]));
@@ -958,8 +1032,7 @@
     </div>
   </footer>
 
-  <!-- Bootstrap JS from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Bootstrap JS removed - offline AP mode (P0 #2) -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Fetch and display version information
@@ -991,59 +1064,59 @@
   </script>
 
   <script>
-    // Multi-language support
+    // Multi-language support (complete DE + EN)
     const translations = {
       de: {
-        "nav_start": "Start",
-        "nav_measurement_device": "Messung (on Device)",
-        "nav_measurement_webserial": "Messung (WebSerial)",
-        "nav_alignment": "Justage",
-        "nav_info": "Weitere Infos",
-        "title": "NV Experimente - Messung durchführen",
-        "page_title": "Messung der Lichtintensität in Abhängigkeit von der Frequenz",
-        "scan_params": "Scan-Parameter",
-        "start_freq": "Startfrequenz (MHz)",
-        "end_freq": "Endfrequenz (MHz)",
-        "step_size": "Schrittweite (MHz)",
-        "apply_data": "Daten übernehmen",
-        "reset": "Zurücksetzen",
-        "download_csv": "Download CSV",
-        "clear": "Leeren",
-        "start_measurement": "Messung starten",
-        "measurement_running": "Messung läuft",
-        "single_measurement": "Einzelmessung",
-        "continuous_measurement": "Dauermessung",
-        "sensor_settings": "Sensor-Einstellungen",
-        "gain": "Verstärkung (Gain)",
-        "integration_time": "Integrationszeit",
-        "apply_settings": "Einstellungen anwenden"
+        nav_start:"Start",nav_measurement_device:"Messung (on Device)",nav_measurement_webserial:"Messung (WebSerial)",
+        nav_alignment:"Justage",nav_info:"Weitere Infos",nav_ratio:"B-Field Monitor",
+        title:"NV Experimente - Messung durchführen",
+        page_title:"Messung der Lichtintensität in Abhängigkeit von der Frequenz",
+        scan_params:"Scan-Parameter",start_freq:"Startfrequenz (MHz)",end_freq:"Endfrequenz (MHz)",
+        step_size:"Schrittweite (MHz)",apply_data:"Daten übernehmen",reset:"Zurücksetzen",
+        download_csv:"Download CSV",clear:"Leeren",
+        start_measurement:"Messung starten",measurement_running:"Messung läuft",
+        stop_measurement:"Messung stoppen",
+        single_measurement:"Einzelmessung",continuous_measurement:"Dauermessung",
+        sensor_settings:"Sensor-Einstellungen",gain:"Verstärkung (Gain):",
+        gain_tooltip:"Höhere Verstärkung = empfindlicher, aber schneller Sättigung bei starkem Licht.",
+        integration_time:"Integrationszeit:",
+        integration_tooltip:"Längere Integration = genauere Messung, aber langsamere Aktualisierung.",
+        apply_settings:"Einstellungen anwenden",
+        status_stopped:"Messung gestoppt",status_conn_error:"Verbindungsfehler",
+        status_recovered:"Daten wiederhergestellt",
+        measurements_done:"Messungen abgeschlossen",
+        freq_range_label:"Frequenzbereich",step_size_label:"Schrittweite",
+        data_points_label:"Datenpunkte",scan_duration_label:"Scan-Dauer",
+        completed_measurements:"Durchgeführte Messungen",
+        delete_series:"Messreihe Löschen",show:"Anzeigen"
       },
       en: {
-        "nav_start": "Start",
-        "nav_measurement_device": "Measurement (on Device)",
-        "nav_measurement_webserial": "Measurement (WebSerial)",
-        "nav_alignment": "Alignment",
-        "nav_info": "More Info",
-        "title": "NV Experiments - Perform Measurement",
-        "page_title": "Measurement of Light Intensity as a Function of Frequency",
-        "scan_params": "Scan Parameters",
-        "start_freq": "Start Frequency (MHz)",
-        "end_freq": "End Frequency (MHz)",
-        "step_size": "Step Size (MHz)",
-        "apply_data": "Apply Data",
-        "reset": "Reset",
-        "download_csv": "Download CSV",
-        "clear": "Clear",
-        "start_measurement": "Start Measurement",
-        "measurement_running": "Measurement Running",
-        "single_measurement": "Single Measurement",
-        "continuous_measurement": "Continuous Measurement",
-        "sensor_settings": "Sensor Settings",
-        "gain": "Gain",
-        "integration_time": "Integration Time",
-        "apply_settings": "Apply Settings"
+        nav_start:"Start",nav_measurement_device:"Measurement (on Device)",nav_measurement_webserial:"Measurement (WebSerial)",
+        nav_alignment:"Alignment",nav_info:"More Info",nav_ratio:"B-Field Monitor",
+        title:"NV Experiments - Perform Measurement",
+        page_title:"Measurement of Light Intensity as a Function of Frequency",
+        scan_params:"Scan Parameters",start_freq:"Start Frequency (MHz)",end_freq:"End Frequency (MHz)",
+        step_size:"Step Size (MHz)",apply_data:"Apply Data",reset:"Reset",
+        download_csv:"Download CSV",clear:"Clear",
+        start_measurement:"Start Measurement",measurement_running:"Measurement Running",
+        stop_measurement:"Stop Measurement",
+        single_measurement:"Single Measurement",continuous_measurement:"Continuous Measurement",
+        sensor_settings:"Sensor Settings",gain:"Gain:",
+        gain_tooltip:"Higher gain = more sensitive, but saturates faster with strong light.",
+        integration_time:"Integration Time:",
+        integration_tooltip:"Longer integration = more accurate, but slower updates.",
+        apply_settings:"Apply Settings",
+        status_stopped:"Measurement stopped",status_conn_error:"Connection error",
+        status_recovered:"Data recovered",
+        measurements_done:"Measurements completed",
+        freq_range_label:"Frequency Range",step_size_label:"Step Size",
+        data_points_label:"Data Points",scan_duration_label:"Scan Duration",
+        completed_measurements:"Completed Measurements",
+        delete_series:"Delete Series",show:"Show"
       }
     };
+    // Translation helper
+    function T(key) { const lang = localStorage.getItem('language')||'de'; return (translations[lang]||translations.de)[key]||key; }
     
     function setLanguage(lang) {
       localStorage.setItem('language', lang);
@@ -1076,6 +1149,18 @@
       const savedLang = localStorage.getItem('language') || 'de';
       setLanguage(savedLang);
     });
+  </script>
+  <script>
+  /* Bootstrap-JS replacement: navbar collapse + dropdown */
+  (function(){
+    document.querySelectorAll('.navbar-toggler').forEach(function(b){
+      b.addEventListener('click',function(){var t=document.querySelector(b.getAttribute('data-bs-target'));if(t)t.classList.toggle('show');});
+    });
+    document.querySelectorAll('.dropdown-toggle').forEach(function(b){
+      b.addEventListener('click',function(e){e.preventDefault();var m=b.nextElementSibling;if(m&&m.classList.contains('dropdown-menu'))m.classList.toggle('show');});
+    });
+    document.addEventListener('click',function(e){if(!e.target.closest('.dropdown'))document.querySelectorAll('.dropdown-menu.show').forEach(function(m){m.classList.remove('show');});});
+  })();
   </script>
 </body>
 </html>

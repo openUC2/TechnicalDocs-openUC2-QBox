@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NV Experimente - Messung durchführen</title>
+
+<!-- Offline CSS: Bootstrap + custom overrides -->
+  <link rel="stylesheet" href="bootstrap.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Page-specific styles -->
+    <style>
+      /* Custom styles for this page */
+      body {
+        overflow-x: hidden;
+      }
+      
+      .container-fluid {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      #measurementTabContent {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .tab-pane {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .grid-container {
+          grid-template-columns: 1fr 350px;
+          flex: 1;
+          min-height: 0;
+      }
+      .grid1 {
+          grid-area: 1 / 1 / 4 / 2;
+          height: 100%;
+          min-height: 0;
+          overflow: hidden;
+      }
+      .grid2, .grid3, .grid4, .grid5, .grid6 {
+          min-width: 0;
+      }
+      
+      /* Fixed height containers for measurement sections */
+      .measurement-section {
+        max-height: 50vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      
+      .measurement-history-section {
+        max-height: 40vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        margin-top: 1rem;
+      }
+      
+      .table-responsive {
+        max-height: 35vh;
+        overflow-y: auto;
+        overflow-x: auto;
+      }
+      
+      /* Sticky table header */
+      .table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: var(--uc2-blue) !important;
+        color: #fff;
+      }
+      
+      .StopButton {
+          background-color: #dc3545 !important;
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          margin: 4px;
+          border-radius: 4px;
+          cursor: pointer;
+      }
+      .StopButton:hover {
+          background-color: #c82333 !important;
+      }
+      
+      .svg {
+          width: 100%;
+          height: calc(100vh - 300px);
+          max-height: 600px;
+      }
+      
+      /* Measurement table styles */
+      .measurement-row:hover {
+          background-color: var(--uc2-light);
+      }
+      
+      /* Live chart styles */
+      #liveChart {
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background-color: #fff;
+          display: block;
+      }
+      
+      /* Tab content spacing */
+      .tab-pane .row {
+          height: 100%;
+      }
+      
+      .card.h-100 {
+          height: 100% !important;
+      }
+      
+      /* Ensure cards fill available space */
+      .card-body canvas {
+          flex: 1;
+      }
+      
+      /* Responsive design improvements */
+      @media (max-width: 1200px) {
+          .grid-container {
+              grid-template-columns: 1fr 300px;
+          }
+      }
+      
+      @media (max-width: 992px) {
+          .grid-container {
+              grid-template-columns: 1fr 280px;
+          }
+      }
+      
+      @media (max-width: 768px) {
+          .grid-container {
+              grid-template-columns: 1fr;
+              height: auto;
+          }
+          .grid1 {
+              grid-area: auto;
+          }
+          .input-group .btn {
+              padding: 0.25rem 0.5rem;
+              font-size: 0.875rem;
+          }
+          .svg {
+              height: 400px;
+          }
+          .tab-pane {
+              height: auto;
+              overflow: visible;
+          }
+      }
+    </style>
+    <script>
+      var Frequenzen = [];
+      var Messreihe = [];
+      var MessreihenHerunterladen = [];
+      var AngezeigteDatenpunkte = [];
+      var fBegin = 2820,
+        fEnd = 2920,
+        fStep = 2,
+        N_freq = 0;
+      var _fBegin = 2820,
+        _fEnd = 2920,
+        _fStep = 2;
+      var YMax = 0,
+        YMin = 0;
+      var _YMax = 0,
+        _YMin = 65535;
+      const fMin = 2200,
+        fMax = 4400,
+        stepMin = 0.2,
+        stepMax = 5;
+      const IntMin = 0,
+        IntMax = 65535,
+        IntRangeMin = 200;
+      const XPlotSize = 1600,
+        YPlotSize = 800;
+      var AutoMessung = 0;
+      var MessungRunning = false; // Track if measurement is running
+      const PlotViewBox =
+        "-200 -" +
+        (YPlotSize + 75) +
+        " " +
+        (XPlotSize + 200 + 150) +
+        " " +
+        (YPlotSize + 75 + 150);
+      const CircSize = "5";
+      const MinSkaleneinteilungY = 50;
+      var XSkalierfaktor = 1,
+        XVerschiebung = 0;
+      var YSkalierfaktor = 1,
+        YVerschiebung = 0;
+
+      const ns = "http://www.w3.org/2000/svg";
+      var setAttrs = (e, a) =>
+        Object.entries(a).forEach(([k, v]) => e.setAttribute(k, v));
+      var scaleV = (x, a, b) => a * x + b;
+      var ById = (ID) => document.getElementById(ID);
+      function addValue(by, id) {
+        ById(id).value = parseFloat(by) + parseFloat(ById(id).value);
+        unlockSendData();
+      }
+      function uncheck(id) {
+        ById(id).checked = false;
+      }
+    </script>
+
+    <script>
+      async function MessungStarten() {
+        if (MessungRunning) {
+          // Stop measurement
+          MessungRunning = false;
+          ToggleStart(1);
+          return;
+        }
+        
+        MessungRunning = true;
+        ToggleStart(0);
+        deleteScaleGroup("DataGroupID");
+        AngezeigteDatenpunkte = [];
+        (_YMax = 0), (_YMin = 65535);
+        prepareFreqs();
+        prepareXSkala(fBegin, fEnd);
+        
+        let skippedCount = 0;
+        while (Frequenzen.length != 0 && MessungRunning) {
+          var response = await freqMessung(Frequenzen.shift());
+          if (!MessungRunning) break; // Check if stopped during measurement
+          
+          // Skip null responses (timeouts)
+          if (response[1] === null || response[2] === null) {
+            skippedCount++;
+            console.warn(`Skipped measurement at ${response[0]} MHz (${skippedCount} total skipped)`);
+            continue;
+          }
+          
+          Messreihe.push(response);
+          _YMin = Math.min(_YMin, response[1] - 100);
+          _YMax = Math.max(_YMax, response[1] + 100);
+          autoScale();
+          drawCircle(response, +200, "black");
+        }
+        
+        if (skippedCount > 0) {
+          addSerialMessage(`⚠ Warnung: ${skippedCount} Messungen wurden wegen Timeout übersprungen`);
+        }
+        
+        if (MessungRunning) { // Only add data if measurement completed
+          addDataGroup();
+        }
+        Messreihe = [];
+        MessungRunning = false;
+        
+        if (AutoMessung && MessungRunning) {
+          setTimeout(MessungStarten, 600);
+        } else {
+          ToggleStart(1);
+        }
+      }
+      function autoScale() {
+        if (ById("YMidAuto").checked) {
+          ymid = ById("YMid1");
+          ymid.value = Math.floor((+_YMax + _YMin) / 2);
+          YMidContr(ymid);
+        }
+        if (ById("YRangeAuto").checked) {
+          yrange = ById("YRange1");
+          yrange.value = Math.abs(_YMax - _YMin);
+          YRangeContr(yrange);
+        }
+        if (ById("YMidAuto").checked || ById("YRangeAuto").checked) {
+          adaptYScale();
+        }
+      }
+      function MessreiheAnzeigen(id, row) {
+        for (let i = 0; i < MessreihenHerunterladen[id].length; i++) {
+          drawCircle(
+            MessreihenHerunterladen[id][i],
+            +200,
+            ById(row).lastChild.lastChild.value
+          );
+        }
+      }
+      function randbedingungenUebernehmen() {
+        ById("sendData").disabled = true;
+        _fBegin = parseFloat(ById("f_begin").value);
+        _fEnd = parseFloat(ById("f_end").value);
+        _fStep = parseFloat(ById("f_step").value);
+      }
+      function unlockSendData() {
+        [
+          ["f_begin", fMin, fMax - 5],
+          ["f_end", 5 + parseFloat(ById("f_begin").value), fMax],
+          ["f_step", stepMin, stepMax],
+        ].forEach(
+          (element) =>
+            (ById(element[0]).value = Math.min(
+              element[2],
+              Math.max(element[1], ById(element[0]).value)
+            ))
+        );
+        ById("f_step").value = parseFloat(ById("f_step").value).toFixed(1);
+        ById("sendData").disabled = false;
+      }
+      function AutoToggle() {
+        const Autobutton = ById("AutoMessung");
+        if (AutoMessung) {
+          Autobutton.value = "Einzelmessung";
+          AutoMessung = 0;
+        } else {
+          Autobutton.value = "Dauermessung";
+          AutoMessung = 1;
+        }
+      }
+      function fReset() {
+        ById("f_begin").value = 2820;
+        ById("f_end").value = 2920;
+        ById("f_step").value = 2;
+        randbedingungenUebernehmen();
+      }
+      /*
+      function LaserOn() {
+        if (confirm("Laserdiode wirklich einschalten?")) {
+          var xhr = new XMLHttpRequest();
+          xhr.open("POST", "/Laser_An", true);
+          xhr.send();
+          let Laser = ById("Laser");
+          Laser.value = "Laserdiode ausschalten";
+          Laser.removeEventListener("click", LaserOn);
+          Laser.addEventListener("click", LaserOff);
+        }
+      }
+      function LaserOff() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/Laser_Aus", true);
+        xhr.send();
+        let Laser = ById("Laser");
+        Laser.value = "Laserdiode einschalten";
+        Laser.removeEventListener("click", LaserOff);
+        Laser.addEventListener("click", LaserOn);
+      }
+        */
+      function ToggleStart(OnOff) {
+        let StartButton = ById("StartStop");
+        if (OnOff) {
+          StartButton.disabled = false;
+          StartButton.value = "Messung starten";
+          StartButton.className = "Button StartButton";
+        } else {
+          StartButton.disabled = false; // Keep enabled to allow stopping
+          StartButton.value = "Messung stoppen";
+          StartButton.className = "Button StopButton";
+        }
+      }
+      function DownloadCSV() {
+        var csv_data = [];
+        var mostValues = 0;
+        if (MessreihenHerunterladen.length == 0) {
+          alert(
+            "Es sind keine Messungen vorhanden,\n die heruntergeladen werden können."
+          );
+          return;
+        }
+        var csv_header = [];
+        for (var i = 0; i < MessreihenHerunterladen.length; i++) {
+          csv_header.push("Messreihe " + i + ";;");
+        }
+        csv_data.push(csv_header.join("; ;"));
+        var csv_columnTitle = [];
+        for (var i = 0; i < MessreihenHerunterladen.length; i++) {
+          csv_columnTitle.push("Frequenz;Intensitaet;Magnetfeld");
+        }
+        csv_data.push(csv_columnTitle.join("; ;"));
+        for (var i = 0; i < MessreihenHerunterladen.length; i++) {
+          mostValues = Math.max(mostValues, MessreihenHerunterladen[i].length);
+        }
+        for (var i = 0; i < mostValues; i++) {
+          var csv_row = [];
+          for (var j = 0; j < MessreihenHerunterladen.length; j++) {
+            var csv_tripel = [];
+            if (MessreihenHerunterladen[j].length <= i) {
+              csv_row.push(" ; ; ");
+            } else {
+              for (var k = 0; k < 3; k++) {
+                csv_tripel.push(MessreihenHerunterladen[j][i][k]);
+              }
+              csv_row.push(csv_tripel.join(";"));
+            }
+          }
+          csv_data.push(csv_row.join("; ;"));
+        }
+        csv_data = csv_data.join("\n");
+        CSVFile = new Blob([csv_data], { type: "text/csv" });
+        var temp_link = document.createElement("a");
+        temp_link.download = "Messungen.csv";
+        var url = window.URL.createObjectURL(CSVFile);
+        temp_link.href = url;
+        temp_link.style.display = "none";
+        document.body.appendChild(temp_link);
+        temp_link.click();
+        document.body.removeChild(temp_link);
+      }
+    </script>
+    <script>
+      function prepareFreqs() {
+        Frequenzen = [];
+        fBegin = _fBegin;
+        fEnd = _fEnd;
+        fStep = _fStep;
+        for (let j = fBegin; j <= fEnd; j += fStep) {
+          Frequenzen.push(j);
+        }
+        N_freq = Frequenzen.length;
+        while (Messreihe.length > N_freq) {
+          Messreihe.shift();
+        }
+      }
+      /*
+      async function freqMessung(f) {
+        return new Promise(function (resolve) {
+          var xhr = new XMLHttpRequest();
+          xhr.onreadystatechange = function () {
+            if (this.readyState == 4 && this.status == 200) {
+              resolve(this.responseText.split(" ").map(Number));
+            }
+          };
+          xhr.open("GET", "/measure?frequenz=" + f, true);
+          xhr.send();
+        });
+      }
+        */
+      function getScalesteps(R) {
+        for (Step = 1; R > Step; Step *= 10) {}
+        if (R < Step / 2) {
+          Step /= 2;
+        }
+        return Step;
+      }
+      function prepareXSkala(_XMin, _XMax) {
+        deleteScaleGroup("XScaleGroupID");
+        XSkalierfaktor = XPlotSize / (_XMax - _XMin);
+        XVerschiebung = (0 - _XMin) * XSkalierfaktor;
+        let XScaleSteps = getScalesteps((fEnd - fBegin) / 12);
+        for (
+          let i = Math.ceil(fBegin / XScaleSteps) * XScaleSteps;
+          i <= fEnd;
+          i += XScaleSteps
+        ) {
+          SkalaXStrich(i);
+        }
+      }
+
+      function adaptYScale() {
+        let YMinNew = +ById("YMid1").value - ById("YRange1").value / 2;
+        let YMaxNew = +ById("YMid1").value + ById("YRange1").value / 2;
+        let _YSkalierfaktor = YSkalierfaktor;
+        YSkalierfaktor = YPlotSize / (YMinNew - YMaxNew);
+        let _YVerschiebung = YVerschiebung;
+        YVerschiebung = (0 - YMinNew) * YSkalierfaktor;
+        deleteScaleGroup("YScaleGroupID");
+        deleteScaleGroup("DataGroupID");
+        let YScalesteps = getScalesteps((YMaxNew - YMinNew) / 12);
+        for (
+          let i = Math.ceil(YMinNew / YScalesteps) * YScalesteps;
+          i < YMaxNew;
+          i = i + YScalesteps
+        ) {
+          SkalaYStrich(
+            scaleV(i, _YSkalierfaktor, _YVerschiebung),
+            scaleV(i, YSkalierfaktor, YVerschiebung),
+            i
+          );
+        }
+        for (let i = 0; i < AngezeigteDatenpunkte.length; i++) {
+          let data = AngezeigteDatenpunkte.shift();
+          drawCircle(data[0], data[1], data[2]);
+        }
+      }
+    </script>
+    <script>
+      function createTable(tableData) {
+        var table = document.createElement("table");
+        var tableBody = document.createElement("tbody");
+
+        tableData.forEach(function (rowData) {
+          var row = document.createElement("tr");
+          rowData.forEach(function (cellData) {
+            var cell = document.createElement("td");
+            cell.appendChild(document.createTextNode(cellData));
+            row.appendChild(cell);
+          });
+          tableBody.appendChild(row);
+        });
+        table.appendChild(tableBody);
+        document.body.appendChild(table);
+      }
+
+      function SkalaXStrich(f) {
+        const XScaleGroup = ById("XScaleGroupID");
+        var XLine = document.createElementNS(ns, "line");
+        var xWert = scaleV(f, XSkalierfaktor, XVerschiebung);
+        setAttrs(XLine, {
+          x1: xWert,
+          x2: xWert,
+          y1: "50",
+          y2: "100",
+          stroke: "#000000",
+          "stroke-width": "3",
+        });
+
+        XScaleGroup.appendChild(XLine);
+        var Beschriftung = document.createElementNS(ns, "text");
+        setAttrs(Beschriftung, {
+          x: xWert,
+          y: "125",
+          style: "font:  30px Calibri ",
+          "text-anchor": "middle",
+          "alignment-baseline": "Central",
+        });
+        Beschriftung.textContent = f;
+        XScaleGroup.appendChild(Beschriftung);
+      }
+
+      function SkalaYStrich(_scaleY, scaleY, Y) {
+        const YScaleGroup = ById("YScaleGroupID");
+        var YLine = document.createElementNS(ns, "line");
+        setAttrs(YLine, {
+          x1: "-80",
+          x2: "-50",
+          y1: _scaleY,
+          y2: _scaleY,
+          stroke: "#000000",
+          "stroke-width": "3",
+        });
+        YScaleGroup.appendChild(YLine);
+        var Beschriftung = document.createElementNS(ns, "text");
+        setAttrs(Beschriftung, {
+          x: "-85",
+          y: _scaleY,
+          style: "font:  30px Calibri ",
+          "text-anchor": "end",
+          "alignment-baseline": "Central",
+        });
+        Beschriftung.textContent = Y;
+        YScaleGroup.appendChild(Beschriftung);
+        if (_scaleY != scaleY) {
+          for (let i = 0; i < 3; i++) {
+            let _Elements = [YLine, YLine, Beschriftung],
+              attributeNames = ["y1", "y2", "y"];
+            const animy = document.createElementNS(ns, "animate");
+            setAttrs(animy, {
+              attributeName: attributeNames[i],
+              begin: "indefinite",
+              dur: "0.1",
+              to: scaleY,
+              fill: "freeze",
+            });
+            _Elements[i].appendChild(animy);
+            animy.beginElement();
+          }
+        }
+      }
+
+      function drawCircle(_Mess, yAnimStart, col) {
+        let XY = [
+          scaleV(_Mess[0], XSkalierfaktor, XVerschiebung),
+          scaleV(_Mess[1], YSkalierfaktor, YVerschiebung),
+        ];
+        AngezeigteDatenpunkte.push([_Mess, XY[1], col]);
+        const DataGroup = ById("DataGroupID");
+        var point = document.createElementNS(ns, "circle");
+        setAttrs(point, {
+          cx: scaleV(_Mess[0], XSkalierfaktor, XVerschiebung),
+          cy: yAnimStart,
+          r: CircSize,
+          fill: col,
+          stroke: "black",
+          strokewidth: "2",
+        });
+        DataGroup.appendChild(point);
+        point.addEventListener("mouseover", function () {
+          showcoordinates(point, XY, _Mess);
+        });
+        point.addEventListener("mouseleave", function () {
+          hidecoordinates(point, CircSize);
+        });
+        point.addEventListener("touchstart", function () {
+          showcoordinates(point, XY, _Mess);
+        });
+        point.addEventListener("touchend", function () {
+          hidecoordinates(point, CircSize);
+        });
+        const animY = document.createElementNS(ns, "animate");
+        setAttrs(animY, {
+          attributeName: "cy",
+          begin: "indefinite",
+          dur: "0.1",
+          to: XY[1],
+          fill: "freeze",
+        });
+        point.appendChild(animY);
+        animY.beginElement();
+      }
+
+      function showcoordinates(point, XY, _Mess) {
+        let Coordinates = document.createElementNS(ns, "text");
+        setAttrs(Coordinates, {
+          id: "Coordinates",
+          y: XY[1],
+          style: "font: 30px Calibri",
+          "text-anchor": "front",
+          "alignment-baseline": "Hanging",
+        });
+        ById("DataGroupID").appendChild(Coordinates);
+        let banner = document.createElementNS(ns, "rect");
+        setAttrs(banner, {
+          id: "cBanner",
+          x: XY[0] + 20,
+          y: XY[1],
+          width: "210",
+          height: "120",
+          fill: "#C4A770df",
+          stroke: "#000",
+          "stroke-width": "2",
+          rx: "15",
+        });
+        if (XY[0] + 30 + 240 >= 2150) {
+          setAttrs(banner, { x: XY[0] - 230 });
+        }
+        ById("DataGroupID").insertBefore(banner, Coordinates);
+        let info = [];
+        let infotext = [
+          "f = " + _Mess[0].toFixed(1) + " MHz",
+          "I = " + _Mess[1],
+          "B = " + _Mess[2],
+        ];
+        for (let i = 0; i < 3; i++) {
+          info[i] = document.createElementNS(ns, "tspan");
+          setAttrs(info[i], { x: XY[0] + 30, dy: "35px" });
+          if (XY[0] + 30 + 240 >= 2150) {
+            setAttrs(info[i], { dx: "-250" });
+          }
+          info[i].textContent = infotext[i];
+          Coordinates.appendChild(info[i]);
+        }
+        changeDatapointSize(point, 10);
+      }
+
+      function hidecoordinates(point, r) {
+        ById("DataGroupID").removeChild(ById("cBanner"));
+        ById("DataGroupID").removeChild(ById("Coordinates"));
+        let Coordinates = document.createElementNS(ns, "text");
+        changeDatapointSize(point, r);
+      }
+
+      function changeDatapointSize(point, r) {
+        let animR = document.createElementNS(ns, "animate");
+        setAttrs(animR, {
+          attributeName: "r",
+          begin: "indefinite",
+          dur: "0.1",
+          to: r,
+          fill: "freeze",
+        });
+        point.appendChild(animR);
+        animR.beginElement();
+      }
+
+      function deleteScaleGroup(GroupID) {
+        let plot = ById("PlotSVGID");
+        let ScaleGroup = ById(GroupID);
+        plot.removeChild(ScaleGroup);
+        ScaleGroup = document.createElementNS(ns, "g");
+        ScaleGroup.setAttribute("id", GroupID);
+        plot.appendChild(ScaleGroup);
+      }
+
+      function addDataGroup() {
+        MessreihenHerunterladen.push(Messreihe);
+        const tableBody = ById("Messungen");
+        const noMeasurementsDiv = document.getElementById("noMeasurements");
+        
+        // Hide "no measurements" message
+        if (noMeasurementsDiv) {
+          noMeasurementsDiv.style.display = "none";
+        }
+        
+        let NR = MessreihenHerunterladen.length - 1;
+        var row = tableBody.insertRow(NR);
+        row.id = "Messreihe" + String(NR);
+        row.className = "measurement-row";
+        
+        var cells = [];
+        let b_av = 0;
+        for (let i = 0; i < 9; i++) {
+          cells[i] = row.insertCell(i);
+        }
+        
+        // Calculate average B field
+        for (let i = 0; i < Messreihe.length; i++) {
+          b_av += Messreihe[i][2];
+        }
+        b_av = Math.round((b_av / Messreihe.length) * 1000) / 1000; // Round to 3 decimals
+        
+        // Create timestamp
+        const now = new Date();
+        const timestamp = now.toLocaleString('de-DE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        
+        // Checkbox
+        var check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "form-check-input measurement-checkbox";
+        check.setAttribute("data-measurement-id", NR);
+        cells[0].appendChild(check);
+        
+        // Fill data cells
+        var content = [
+          MessreihenHerunterladen.length,
+          fBegin.toFixed(1),
+          fEnd.toFixed(1),
+          fStep.toFixed(1),
+          b_av.toFixed(3),
+          Messreihe.length,
+          timestamp
+        ];
+        
+        for (let i = 0; i < content.length; i++) {
+          cells[i + 1].innerHTML = String(content[i]);
+        }
+        
+        // Actions cell with button group
+        const actionGroup = document.createElement("div");
+        actionGroup.className = "btn-group btn-group-sm";
+        
+        // Show button
+        var showBtn = document.createElement("button");
+        showBtn.innerHTML = '<i class="bi bi-eye"></i> Anzeigen';
+        showBtn.className = "btn btn-primary btn-sm";
+        showBtn.type = "button";
+        showBtn.addEventListener("click", () => MessreiheAnzeigen(NR, row.id));
+        actionGroup.appendChild(showBtn);
+        
+        // Color picker
+        var colorInput = document.createElement("input");
+        colorInput.type = "color";
+        colorInput.className = "btn btn-outline-secondary btn-sm";
+        colorInput.value = getRandomColor();
+        colorInput.title = "Farbe ändern";
+        colorInput.style.width = "40px";
+        actionGroup.appendChild(colorInput);
+        
+        // Delete button
+        var deleteBtn = document.createElement("button");
+        deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+        deleteBtn.className = "btn btn-danger btn-sm";
+        deleteBtn.type = "button";
+        deleteBtn.title = "Löschen";
+        deleteBtn.addEventListener("click", () => {
+          if (confirm('Messung wirklich löschen?')) {
+            row.remove();
+            MessreihenHerunterladen.splice(NR, 1);
+            updateMeasurementNumbers();
+            checkEmptyTable();
+          }
+        });
+        actionGroup.appendChild(deleteBtn);
+        
+        cells[8].appendChild(actionGroup);
+      }
+      
+      function getRandomColor() {
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
+      
+      function updateMeasurementNumbers() {
+        const rows = document.querySelectorAll('.measurement-row');
+        rows.forEach((row, index) => {
+          row.cells[1].textContent = index + 1;
+          row.id = "Messreihe" + index;
+        });
+      }
+      
+      function checkEmptyTable() {
+        const tableBody = ById("Messungen");
+        const noMeasurementsDiv = document.getElementById("noMeasurements");
+        
+        if (tableBody.rows.length === 0 && noMeasurementsDiv) {
+          noMeasurementsDiv.style.display = "block";
+        }
+      }
+      
+      // Select all functionality
+      document.addEventListener('DOMContentLoaded', function() {
+      // Fetch and display version information
+      fetch('/version')
+        .then(response => response.json())
+        .then(data => {
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = `v${data.version} | Build: ${data.build_date} | ${data.git_hash}`;
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching version:', error);
+          const versionInfo = document.getElementById('versionInfo');
+          if (versionInfo) {
+            versionInfo.textContent = '';
+          }
+        });
+        const selectAllCheckbox = document.getElementById('selectAll');
+        if (selectAllCheckbox) {
+          selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.measurement-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+          });
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <!-- ░░ Navbar ░░----------------------------------------------------------- -->
+    <nav class="navbar navbar-expand-lg shadow-sm mb-4">
+      <div class="container">
+        <a class="navbar-brand fw-bold" href="index.html">NV-Experimente</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#nvNav" aria-controls="nvNav" aria-expanded="false">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="nvNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item"><a class="nav-link" href="index.html" data-lang-key="nav_start">Start</a></li>
+            <li class="nav-item"><a class="nav-link" href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+            <li class="nav-item"><a class="nav-link active" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
+            <li class="nav-item"><a class="nav-link" href="ratio.html" data-lang-key="nav_ratio">B-Field Monitor</a></li>
+            <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
+            <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
+                    <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              🌐 DE
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="langDropdown">
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('de'); return false;">🇩🇪 Deutsch</a></li>
+              <li><a class="dropdown-item" href="#" onclick="setLanguage('en'); return false;">🇺🇸 English</a></li>
+            </ul>
+          </li>
+        </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ░░ Main content ░░------------------------------------------------------ -->
+    <div class="container-fluid">
+      <h1 class="display-6 mb-4 text-center">Messung der Lichtintensität in Abhängigkeit von der Frequenz</h1>
+      
+      <!-- ░░ Tabs Navigation ░░------------------------------------------------- -->
+      <ul class="nav nav-tabs mb-4" id="measurementTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="sweep-tab" data-bs-toggle="tab" 
+                  data-bs-target="#sweep-pane" type="button" role="tab">
+            Frequenz-Sweep
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="live-tab" data-bs-toggle="tab" 
+                  data-bs-target="#live-pane" type="button" role="tab">
+            Live Monitor
+          </button>
+        </li>
+      </ul>
+
+      <!-- ░░ Tab Content ░░---------------------------------------------------- -->
+      <div class="tab-content" id="measurementTabContent">
+        
+        <!-- ░░ Frequency Sweep Tab ░░----------------------------------------- -->
+        <div class="tab-pane fade show active" id="sweep-pane" role="tabpanel">
+          <main class="Block">
+          <div class="grid-container">
+            <div class="grid1" id="fullPlot">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                style="
+                  border: 1px solid rgb(255, 255, 255);
+                  background-color: #ffffff;
+                "
+                id="PlotSVGID"
+                class="svg"
+              >
+                <line
+                  id="XAxisID"
+                  x1="-20"
+                  x2="1700"
+                  y1="50"
+                  y2="50"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-50"
+                  x2="-30"
+                  y1="50"
+                  y2="50"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-35"
+                  x2="-25"
+                  y1="65"
+                  y2="35"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-25"
+                  x2="-15"
+                  y1="65"
+                  y2="35"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <polyline
+                  points="1680,40 1700,50 1680,60"
+                  fill="none"
+                  stroke="black"
+                  stroke-width="3"
+                />
+                <text
+                  x="1690"
+                  y="90"
+                  text-anchor="middle"
+                  alignment-baseline="Central"
+                  style="font: 35px Calibri"
+                >
+                  <tspan
+                    alignment-baseline="Central"
+                    style="font: italic 35px Calibri"
+                  >
+                    f
+                  </tspan>
+                  <tspan alignment-baseline="Central" style="font: 35px Calibri">
+                    /MHz
+                  </tspan>
+                </text>
+
+                <line
+                  id="YAxisID"
+                  x1="-50"
+                  x2="-50"
+                  y1="10"
+                  y2="-855"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-50"
+                  x2="-50"
+                  y1="50"
+                  y2="20"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-35"
+                  x2="-65"
+                  y1="5"
+                  y2="15"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <line
+                  x1="-35"
+                  x2="-65"
+                  y1="15"
+                  y2="25"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <polyline
+                  points="-60,-835 -50,-855 -40,-835"
+                  fill="none"
+                  stroke="black"
+                  stroke-width="3"
+                />
+                <text
+                  x="-85"
+                  y="-845"
+                  text-anchor="middle"
+                  alignment-baseline="Central"
+                  style="font: italic 35px Calibri"
+                >
+                  I
+                </text>
+
+                <line
+                  x1="-85"
+                  x2="-50"
+                  y1="85"
+                  y2="50"
+                  stroke="#000000"
+                  stroke-width="3"
+                />
+                <text
+                  x="-85"
+                  y="100"
+                  text-anchor="end"
+                  alignment-baseline="Central"
+                  style="font: 30px Calibri"
+                >
+                  0
+                </text>
+                <g id="DataGroupID" />
+                <g id="XScaleGroupID" />
+                <g id="YScaleGroupID" />
+                <script>
+                  const plot=ById("PlotSVGID"); plot.setAttribute("viewBox",
+                  PlotViewBox);
+                </script>
+              </svg>
+            </div>
+            <div class="grid2">
+              <!-- Laser button removed (P2 #11) -->
+            </div>
+            <div class="grid3">
+              <div
+                class="inputField inputFieldWide"
+                id="Y-Controll"
+                style="background-color: #fff"
+              >
+                <label for="YMid1">Y-Abschnitt: </label>
+                <input
+                  type="text"
+                  id="YMid1"
+                  value="18000"
+                  onchange="YMidContr(this);adaptYScale();"
+                />
+                <input
+                  type="range"
+                  class="slider"
+                  id="YMid2"
+                  min="9000"
+                  max="27000"
+                  step="100"
+                  value="18000"
+                  oninput="YMidContr(this);adaptYScale();"
+                />
+                <input
+                  type="checkbox"
+                  id="YMidAuto"
+                  checked="true"
+                  onchange="autoScale()"
+                  style="display: block"
+                />
+              </div>
+              <div
+                class="inputField inputFieldWide"
+                id="YR-Controll"
+                style="background-color: #fff"
+              >
+                <label for="YRange2">Y-Bereich: </label>
+                <input
+                  type="text"
+                  id="YRange1"
+                  value="18000"
+                  onchange="YRangeContr(this);adaptYScale();"
+                />
+                <input
+                  type="range"
+                  class="slider"
+                  id="YRange2"
+                  min="0"
+                  max="8.5"
+                  step="0.1"
+                  value="7"
+                  oninput="YRangeContr2(this);adaptYScale();"
+                />
+                <input
+                  type="checkbox"
+                  id="YRangeAuto"
+                  checked="true"
+                  onchange="autoScale()"
+                  style="display: flex"
+                />
+              </div>
+            </div>
+
+            <div class="grid4">
+              <input
+                type="button"
+                class="Button"
+                id="ConnectSerial"
+                value="Serial verbinden"
+              />
+              <input
+                type="button"
+                class="Button StartButton"
+                id="StartStop"
+                value="Messung starten"
+              />
+              <input
+                type="button"
+                class="Button Toggle"
+                id="AutoMessung"
+                value="Einzelmessung"
+              />
+              <!-- Serial Status Indicator -->
+              <div id="serialStatus" class="mt-2 p-2 border rounded" style="background-color: #f8f9fa; font-size: 12px; max-height: 150px; overflow-y: auto;">
+                <div class="fw-bold mb-1">Serial Status:</div>
+                <div id="serialMessages" style="font-family: monospace; font-size: 11px;">
+                  <span class="text-muted">Nicht verbunden</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="gridb1"></div>
+          </div>
+        </div>
+
+        <!-- ░░ Live Monitor Tab ░░-------------------------------------------- -->
+        <div class="tab-pane fade" id="live-pane" role="tabpanel">
+          <div class="row h-100">
+            <div class="col-md-9">
+              <div class="card h-100">
+                <div class="card-header">
+                  <h5 class="mb-0">Live Intensität Monitor</h5>
+                </div>
+                <div class="card-body p-2">
+                  <canvas id="liveChart" class="w-100" style="height: 60vh;"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card h-100">
+                <div class="card-header">
+                  <h5 class="mb-0">Live Kontrolle</h5>
+                </div>
+                <div class="card-body">
+                  <div class="mb-3">
+                    <button id="startLiveBtn" class="btn btn-success w-100">
+                      Live Monitor starten
+                    </button>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label small">Messintervall:</label>
+                    <select id="liveInterval" class="form-select form-select-sm">
+                      <option value="100">100ms</option>
+                      <option value="250">250ms</option>
+                      <option value="500" selected>500ms</option>
+                      <option value="1000">1s</option>
+                    </select>
+                  </div>
+                  <div class="row text-center">
+                    <div class="col-12 mb-2">
+                      <div class="border rounded p-2">
+                        <small class="text-muted d-block">Intensität</small>
+                        <div id="liveIntensity" class="h4 text-primary mb-0">---</div>
+                      </div>
+                    </div>
+                    <div class="col-12 mb-2">
+                      <div class="border rounded p-2">
+                        <small class="text-muted d-block">B-Feld (T)</small>
+                        <div id="liveBField" class="h4 text-info mb-0">---</div>
+                      </div>
+                    </div>
+                    <div class="col-12 mb-2">
+                      <div class="border rounded p-2">
+                        <small class="text-muted d-block">Messungen</small>
+                        <div id="liveCount" class="h4 text-success mb-0">0</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <button id="resetLiveBtn" class="btn btn-warning btn-sm w-100">
+                      Daten zurücksetzen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ░░ Scan Range Controls ░░------------------------------------------- -->
+      <div class="card mt-2 measurement-section">
+        <div class="card-header py-2">
+          <h6 class="mb-0">Scan-Parameter einstellen</h6>
+        </div>
+        <div class="card-body py-2">
+          <div class="row g-2">
+            <!-- Start Frequency -->
+            <div class="col-md-4">
+              <label for="f_begin" class="form-label small">Startfrequenz (MHz)</label>
+              <div class="input-group input-group-sm">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-100', 'f_begin')">-100</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-10', 'f_begin')">-10</button>
+                <input type="number" class="form-control form-control-sm" id="f_begin" 
+                       value="2820" min="2200" max="3600" step="0.1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('10', 'f_begin')">+10</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('100', 'f_begin')">+100</button>
+              </div>
+            </div>
+            
+            <!-- End Frequency -->
+            <div class="col-md-4">
+              <label for="f_end" class="form-label small">Endfrequenz (MHz)</label>
+              <div class="input-group input-group-sm">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-100', 'f_end')">-100</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-10', 'f_end')">-10</button>
+                <input type="number" class="form-control form-control-sm" id="f_end" 
+                       value="2920" min="2200" max="3600" step="0.1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('10', 'f_end')">+10</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('100', 'f_end')">+100</button>
+              </div>
+            </div>
+            
+            <!-- Step Size -->
+            <div class="col-md-4">
+              <label for="f_step" class="form-label small">Schrittweite (MHz)</label>
+              <div class="input-group input-group-sm">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('-1', 'f_step')">-1</button>
+                <input type="number" class="form-control form-control-sm" id="f_step" 
+                       value="2.0" min="0.1" max="5" step="0.1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        onclick="addValue('1', 'f_step')">+1</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="row mt-2">
+            <div class="col-md-6">
+              <button type="button" class="btn btn-primary btn-sm" id="sendData" disabled>
+                Daten übernehmen
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm ms-1" id="f_Reset">
+                Zurücksetzen
+              </button>
+            </div>
+            <div class="col-md-6 text-end">
+              <button type="button" class="btn btn-success btn-sm" id="MessreiheHerunterladen">
+                Download CSV
+              </button>
+              <button type="button" class="btn btn-warning btn-sm ms-1" id="Clear">
+                Leeren
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ░░ Measurement History ░░------------------------------------------- -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <h5 class="mb-0">Durchgeführte Messungen</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead class="table-dark">
+                <tr>
+                  <th width="40"><input type="checkbox" id="selectAll" title="Alle auswählen"></th>
+                  <th width="60">#</th>
+                  <th width="120">f<sub>Begin</sub> (MHz)</th>
+                  <th width="120">f<sub>End</sub> (MHz)</th>
+                  <th width="100">Δf (MHz)</th>
+                  <th width="100">B (T)</th>
+                  <th width="120">Datenpunkte</th>
+                  <th width="150">Zeitstempel</th>
+                  <th>Aktionen</th>
+                </tr>
+              </thead>
+              <tbody id="Messungen">
+                <!-- Dynamic content will be inserted here -->
+              </tbody>
+            </table>
+            <div id="noMeasurements" class="text-center text-muted py-3" style="display: none;">
+              <i class="bi bi-clipboard-data"></i>
+              <p class="mb-0">Noch keine Messungen durchgeführt</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+      <script>
+        /* Webserial Stuff */
+        /* ---------- Web-Serial glue ---------- */
+        
+        // Check if WebSerial should be enabled
+        let webSerialEnabled = true; // Enable by default
+        
+        // Live monitoring variables
+        let liveMonitorActive = false;
+        let liveChart = null;
+        let liveData = [];
+        let liveCount = 0;
+        const maxLiveDataPoints = 200;
+        
+        async function checkWebSerialAvailability() {
+          // Simply enable WebSerial - remove the server check since it may not exist
+          webSerialEnabled = true;
+          
+          // Check if browser supports WebSerial
+          const connectButton = document.getElementById("ConnectSerial");
+          if (!navigator.serial) {
+            connectButton.disabled = true;
+            connectButton.value = "WebSerial nicht unterstützt";
+            connectButton.title = "Ihr Browser unterstützt WebSerial nicht";
+            
+            // Add warning message
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'alert alert-warning mt-2';
+            warningDiv.innerHTML = '<strong>Hinweis:</strong> Ihr Browser unterstützt die WebSerial API nicht. Bitte verwenden Sie Chrome/Edge oder die "Messung (on Device)" Seite.';
+            connectButton.parentNode.appendChild(warningDiv);
+            webSerialEnabled = false;
+          }
+        }
+        
+        // Initialize live chart
+        function initLiveChart() {
+          const canvas = document.getElementById('liveChart');
+          if (!canvas) return;
+          
+          // Set canvas size to fit container
+          const container = canvas.parentElement;
+          canvas.width = container.clientWidth - 20;
+          canvas.height = container.clientHeight - 20;
+          
+          const ctx = canvas.getContext('2d');
+          
+          liveChart = {
+            canvas: canvas,
+            ctx: ctx,
+            data: [],
+            margin: { top: 20, right: 50, bottom: 50, left: 80 },
+            
+            draw: function() {
+              const { width, height } = this.canvas;
+              const { margin } = this;
+              const plotWidth = width - margin.left - margin.right;
+              const plotHeight = height - margin.top - margin.bottom;
+              
+              this.ctx.clearRect(0, 0, width, height);
+              
+              if (this.data.length < 2) {
+                // Show "waiting for data" message
+                this.ctx.fillStyle = '#666';
+                this.ctx.font = '16px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('Warten auf Daten...', width/2, height/2);
+                return;
+              }
+              
+              // Find min/max for scaling
+              const intensities = this.data.map(d => d.intensity);
+              const minI = Math.min(...intensities);
+              const maxI = Math.max(...intensities);
+              const range = maxI - minI || 1;
+              const padding = range * 0.1; // 10% padding
+              const yMin = minI - padding;
+              const yMax = maxI + padding;
+              const yRange = yMax - yMin;
+              
+              // Draw background
+              this.ctx.fillStyle = '#f8f9fa';
+              this.ctx.fillRect(margin.left, margin.top, plotWidth, plotHeight);
+              
+              // Draw grid
+              this.ctx.strokeStyle = '#e0e0e0';
+              this.ctx.lineWidth = 1;
+              
+              // Horizontal grid lines
+              for (let i = 0; i <= 10; i++) {
+                const y = margin.top + (plotHeight * i / 10);
+                this.ctx.beginPath();
+                this.ctx.moveTo(margin.left, y);
+                this.ctx.lineTo(margin.left + plotWidth, y);
+                this.ctx.stroke();
+                
+                // Y-axis labels
+                const value = yMax - (yRange * i / 10);
+                this.ctx.fillStyle = '#666';
+                this.ctx.font = '12px Arial';
+                this.ctx.textAlign = 'right';
+                this.ctx.fillText(Math.round(value), margin.left - 10, y + 4);
+              }
+              
+              // Vertical grid lines
+              const timeSpan = this.data[this.data.length - 1].timestamp - this.data[0].timestamp;
+              for (let i = 0; i <= 5; i++) {
+                const x = margin.left + (plotWidth * i / 5);
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, margin.top);
+                this.ctx.lineTo(x, margin.top + plotHeight);
+                this.ctx.stroke();
+                
+                // X-axis labels (time)
+                if (timeSpan > 0) {
+                  const timeOffset = (timeSpan * i / 5);
+                  const time = new Date(this.data[0].timestamp + timeOffset);
+                  const timeStr = time.toLocaleTimeString('de-DE', { 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit' 
+                  });
+                  this.ctx.fillStyle = '#666';
+                  this.ctx.font = '10px Arial';
+                  this.ctx.textAlign = 'center';
+                  this.ctx.fillText(timeStr, x, height - 10);
+                }
+              }
+              
+              // Draw data line
+              this.ctx.strokeStyle = '#023773';
+              this.ctx.lineWidth = 2;
+              this.ctx.beginPath();
+              
+              const startTime = this.data[0].timestamp;
+              const endTime = this.data[this.data.length - 1].timestamp;
+              const timeRange = endTime - startTime || 1;
+              
+              for (let i = 0; i < this.data.length; i++) {
+                const x = margin.left + ((this.data[i].timestamp - startTime) / timeRange) * plotWidth;
+                const y = margin.top + plotHeight - ((this.data[i].intensity - yMin) / yRange) * plotHeight;
+                
+                if (i === 0) {
+                  this.ctx.moveTo(x, y);
+                } else {
+                  this.ctx.lineTo(x, y);
+                }
+              }
+              this.ctx.stroke();
+              
+              // Draw current value point
+              if (this.data.length > 0) {
+                const lastPoint = this.data[this.data.length - 1];
+                const x = margin.left + plotWidth;
+                const y = margin.top + plotHeight - ((lastPoint.intensity - yMin) / yRange) * plotHeight;
+                
+                this.ctx.fillStyle = '#85b918';
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                this.ctx.fill();
+              }
+              
+              // Draw axes
+              this.ctx.strokeStyle = '#333';
+              this.ctx.lineWidth = 2;
+              this.ctx.beginPath();
+              // Y-axis
+              this.ctx.moveTo(margin.left, margin.top);
+              this.ctx.lineTo(margin.left, margin.top + plotHeight);
+              // X-axis
+              this.ctx.moveTo(margin.left, margin.top + plotHeight);
+              this.ctx.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+              this.ctx.stroke();
+              
+              // Axis labels
+              this.ctx.fillStyle = '#333';
+              this.ctx.font = '14px Arial';
+              this.ctx.textAlign = 'center';
+              this.ctx.fillText('Zeit', width/2, height - 5);
+              
+              this.ctx.save();
+              this.ctx.translate(15, height/2);
+              this.ctx.rotate(-Math.PI/2);
+              this.ctx.fillText('Intensität', 0, 0);
+              this.ctx.restore();
+            }
+          };
+          
+          // Handle window resize
+          window.addEventListener('resize', () => {
+            setTimeout(() => {
+              const container = canvas.parentElement;
+              canvas.width = container.clientWidth - 20;
+              canvas.height = container.clientHeight - 20;
+              if (liveChart && liveChart.data.length > 0) {
+                liveChart.draw();
+              }
+            }, 100);
+          });
+        }
+        
+        // Live monitoring functions
+        async function startLiveMonitor() {
+          if (!writer) {
+            alert('Bitte erst Serial-Verbindung herstellen');
+            return;
+          }
+          
+          const btn = document.getElementById('startLiveBtn');
+          if (liveMonitorActive) {
+            liveMonitorActive = false;
+            btn.textContent = 'Live Monitor starten';
+            btn.className = 'btn btn-success w-100';
+            return;
+          }
+          
+          liveMonitorActive = true;
+          btn.textContent = 'Live Monitor stoppen';
+          btn.className = 'btn btn-danger w-100';
+          
+          liveData = [];
+          liveCount = 0;
+          initLiveChart();
+          
+          // Start continuous monitoring
+          liveMonitorLoop();
+        }
+        
+        async function liveMonitorLoop() {
+          while (liveMonitorActive) {
+            // Use frequency 0 for live monitoring (current frequency setting)
+            const freq = 0;
+            
+            try {
+              const response = await freqMessung(freq);
+              const timestamp = Date.now();
+              liveCount++;
+              
+              // Update live displays
+              document.getElementById('liveIntensity').textContent = response[1];
+              document.getElementById('liveBField').textContent = response[2].toFixed(3);
+              document.getElementById('liveCount').textContent = liveCount;
+              
+              // Add to chart data
+              liveData.push({
+                timestamp: timestamp,
+                intensity: response[1],
+                bfield: response[2]
+              });
+              
+              // Keep only last N points
+              if (liveData.length > maxLiveDataPoints) {
+                liveData.shift();
+              }
+              
+              // Update chart
+              if (liveChart) {
+                liveChart.data = liveData;
+                liveChart.draw();
+              }
+              
+            } catch (error) {
+              console.error('Live monitoring error:', error);
+            }
+            
+            // Get interval from dropdown
+            const interval = parseInt(document.getElementById('liveInterval').value) || 500;
+            await new Promise(resolve => setTimeout(resolve, interval));
+          }
+        }
+        
+        function resetLiveData() {
+          liveData = [];
+          liveCount = 0;
+          document.getElementById('liveIntensity').textContent = '---';
+          document.getElementById('liveBField').textContent = '---';
+          document.getElementById('liveCount').textContent = '0';
+          
+          if (liveChart) {
+            liveChart.data = [];
+            liveChart.draw();
+          }
+        }
+        
+        async function setFrequency() {
+          if (!writer) {
+            alert('Bitte erst Serial-Verbindung herstellen');
+            return;
+          }
+          
+          const freq = parseFloat(document.getElementById('liveFreq').value);
+          await writer.write(enc.encode(`FREQ ${freq}\n`));
+        }
+        
+        let port, writer, reader;
+        const enc = new TextEncoder();
+        const dec = new TextDecoder();
+        const pending = new Map(); // freq → resolve()
+
+        async function connectSerial() {
+          if (!webSerialEnabled) {
+            alert('WebSerial ist auf diesem Interface nicht verfügbar.');
+            return;
+          }
+          
+          if (!navigator.serial) {
+            alert('WebSerial API wird von diesem Browser nicht unterstützt.');
+            return;
+          }
+          
+          try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 115200 });
+            writer = port.writable.getWriter();
+            reader = port.readable
+              .pipeThrough(new TextDecoderStream())
+              .pipeThrough(new TransformStream(new LineBreakTransformer()))
+              .getReader();
+            readLoop();
+            document.getElementById("ConnectSerial").value = "Verbunden";
+            
+            // Update serial status
+            const messagesDiv = document.getElementById('serialMessages');
+            if (messagesDiv) {
+              messagesDiv.innerHTML = '<span class="text-success">✓ Serial verbunden</span>';
+            }
+          } catch (error) {
+            console.error('Error connecting to serial:', error);
+            alert('Fehler beim Verbinden mit dem seriellen Port: ' + error.message);
+          }
+        }
+
+        async function readLoop() {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            value.split("\n").forEach((raw) => {
+              const line = raw.trim(); // remove \r or extra blanks
+              console.log(line);
+              
+              // Display all serial messages in the status area
+              addSerialMessage(line);
+              if (!line.startsWith("DATA")) return;
+
+              // DATA <freq> <adc> <b-field>
+              const [, fStr, adcStr, bStr] = line.split(/\s+/);
+              const f = parseFloat(fStr); // “2400.0\r” → 2400
+              const adc = parseInt(adcStr, 10);
+              const b = parseFloat(bStr);
+
+              // first waiting caller gets the packet
+              if (pending.has(f)) {
+                pending.get(f)([f, adc, b]);
+                pending.delete(f);
+              }
+            });
+          }
+        }
+
+
+        
+        function addSerialMessage(message) {
+          if (!message) return;
+          
+          const messagesDiv = document.getElementById('serialMessages');
+          if (!messagesDiv) return;
+          
+          const timestamp = new Date().toLocaleTimeString('de-DE');
+          const messageElement = document.createElement('div');
+          messageElement.className = 'mb-1';
+          
+          // Color code different message types
+          let messageClass = 'text-dark';
+          if (message.startsWith('DATA')) {
+            messageClass = 'text-success';
+          } else if (message.includes('ERROR') || message.includes('FAIL')) {
+            messageClass = 'text-danger';
+          } else if (message.includes('OK') || message.includes('SUCCESS')) {
+            messageClass = 'text-primary';
+          }
+          
+          messageElement.innerHTML = `<span class="text-muted">[${timestamp}]</span> <span class="${messageClass}">${message}</span>`;
+          messagesDiv.appendChild(messageElement);
+          
+          // Keep only last 50 messages
+          while (messagesDiv.children.length > 50) {
+            messagesDiv.removeChild(messagesDiv.firstChild);
+          }
+          
+          // Auto-scroll to bottom
+          const statusDiv = document.getElementById('serialStatus');
+          if (statusDiv) {
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+          }
+        }
+
+        class LineBreakTransformer {
+          constructor() {
+            this.buf = "";
+          }
+          transform(chunk, ctrl) {
+            this.buf += chunk;
+            const lines = this.buf.split("\n");
+            this.buf = lines.pop();
+            lines.forEach((l) => ctrl.enqueue(l));
+          }
+          flush(ctrl) {
+            ctrl.enqueue(this.buf);
+          }
+        }
+
+        /* ---------- patch the old functions ---------- */
+        document
+          .getElementById("ConnectSerial")
+          .addEventListener("click", connectSerial);
+
+        async function freqMessung(f) {
+          return new Promise(async (resolve, reject) => {
+            const timeout = setTimeout(() => {
+              pending.delete(f);
+              console.warn(`Timeout for frequency ${f}, skipping...`);
+              // Return null values instead of rejecting to allow sweep to continue
+              resolve([f, null, null]);
+            }, 3000); // 3 second timeout
+            
+            pending.set(f, (data) => {
+              clearTimeout(timeout);
+              resolve(data);
+            });
+            
+            try {
+              await writer.write(enc.encode(`MEASURE ${f}\n`));
+            } catch (error) {
+              clearTimeout(timeout);
+              pending.delete(f);
+              console.error(`Error sending MEASURE command for ${f}:`, error);
+              resolve([f, null, null]);
+            }
+          });
+        }
+
+        // Laser control removed (P2 #11)
+        /* ---------- end of webserial stuff ---------- */
+
+        function YMidContr(_this) {
+          if (isNaN(_this.value)) {
+            _this.value = _this.nextElementSibling.value;
+          } else if (_this.value < IntMin + ById("YRange1").value / 2) {
+            _this.value = IntMin + ById("YRange1").value / 2;
+          } else if (_this.value > IntMax - ById("YRange1").value / 2) {
+            _this.value = IntMax - ById("YRange1").value / 2;
+          }
+          if (_this.type == "text") {
+            _this.nextElementSibling.value = _this.value;
+          } else {
+            _this.previousElementSibling.value = _this.value;
+          }
+          //autoScale();
+        }
+
+        function YRangeContr(_this) {
+          if (isNaN(_this.value)) {
+            _this.value = _this.nextElementSibling.value;
+          } else if ((ById("YMid1").value - IntMin) * 2 < _this.value) {
+            ById("YMid1").value = IntMin + _this.value / 2;
+            ById("YMid2").value = IntMin + _this.value / 2;
+          } else if ((IntMax - ById("YMid1").value) * 2 < _this.value) {
+            ById("YMid1").value = IntMax - _this.value / 2;
+            ById("YMid2").value = IntMax - _this.value / 2;
+          }
+          if (_this.type == "text") {
+            _this.nextElementSibling.value = _this.value;
+          } else {
+            _this.previousElementSibling.value = _this.value;
+          }
+          ById("YMid2").max = IntMax - _this.value / 2;
+          ById("YMid2").min = IntMin + _this.value / 2;
+        }
+        function YRangeContr2(_this) {
+          let IntensitätswertLogarithmisch = Math.min(
+            100 * Math.floor(Math.pow(2, _this.value)),
+            65535
+          );
+          if (
+            (ById("YMid1").value - IntMin) * 2 <
+            IntensitätswertLogarithmisch
+          ) {
+            ById("YMid1").value = IntMin + IntensitätswertLogarithmisch / 2;
+            ById("YMid2").value = IntMin + IntensitätswertLogarithmisch / 2;
+          } else if (
+            (IntMax - ById("YMid1").value) * 2 <
+            IntensitätswertLogarithmisch
+          ) {
+            ById("YMid1").value = IntMax - IntensitätswertLogarithmisch / 2;
+            ById("YMid2").value = IntMax - IntensitätswertLogarithmisch / 2;
+          }
+          _this.previousElementSibling.value = IntensitätswertLogarithmisch;
+          ById("YMid2").max = IntMax - IntensitätswertLogarithmisch / 2;
+          ById("YMid2").min = IntMin + IntensitätswertLogarithmisch / 2;
+        }
+        adaptYScale();
+
+        let ChangeListeners = [
+          ["f_begin", unlockSendData],
+          ["f_end", unlockSendData],
+          ["f_step", unlockSendData],
+        ];
+        let InputListeners = [
+          ["YMid1", () => uncheck("YMidAuto")],
+          ["YMid2", () => uncheck("YMidAuto")],
+          ["YRange1", () => uncheck("YRangeAuto")],
+          ["YRange2", () => uncheck("YRangeAuto")],
+        ];
+        let ClickListeners = [
+          ["sendData", randbedingungenUebernehmen],
+          ["f_Reset", fReset],
+          ["StartStop", MessungStarten],
+          ["AutoMessung", AutoToggle],
+          ["startLiveBtn", startLiveMonitor],
+          ["resetLiveBtn", resetLiveData],
+          ["setFreqBtn", setFrequency],
+          [
+            "Clear",
+            () => {
+              deleteScaleGroup("DataGroupID");
+              AngezeigteDatenpunkte = [];
+              (_YMax = 0), (_YMin = 65535);
+            },
+          ],
+          ["MessreiheHerunterladen", DownloadCSV],
+        ];
+        ChangeListeners.forEach((element) =>
+          ById(element[0]).addEventListener("change", element[1])
+        );
+        InputListeners.forEach((element) =>
+          ById(element[0]).addEventListener("input", element[1])
+        );
+        ClickListeners.forEach((element) =>
+          ById(element[0]).addEventListener("click", element[1])
+        );
+        
+        // Initialize WebSerial availability check
+        document.addEventListener('DOMContentLoaded', function() {
+          checkWebSerialAvailability();
+        });
+      </script>
+    </main>
+    </div>
+
+    <!-- ░░ Footer ░░----------------------------------------------------------- -->
+    <footer class="py-3 mt-auto">
+      <div class="container text-center small">
+      <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+      <div class="mt-1" id="versionInfo" style="opacity: 0.7; font-size: 0.85em;">Loading version...</div>
+    </div>
+    </footer>
+
+  
+  <script>
+    // Multi-language support
+    const translations = {
+      de: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Messung (on Device)",
+        "nav_measurement_webserial": "Messung (WebSerial)",
+        "nav_alignment": "Justage",
+        "nav_info": "Weitere Infos",
+        "title": "NV Experimente - Messung durchführen",
+        "page_title": "Messung der Lichtintensität in Abhängigkeit von der Frequenz",
+        "freq_sweep": "Frequenz-Sweep",
+        "live_monitor": "Live Monitor",
+        "connect_serial": "Serial verbinden",
+        "start_measurement": "Messung starten",
+        "stop_measurement": "Messung stoppen",
+        "serial_status": "Serial Status:",
+        "not_connected": "Nicht verbunden"
+      },
+      en: {
+        "nav_start": "Start",
+        "nav_measurement_device": "Measurement (on Device)",
+        "nav_measurement_webserial": "Measurement (WebSerial)",
+        "nav_alignment": "Alignment",
+        "nav_info": "More Info",
+        "title": "NV Experiments - Perform Measurement",
+        "page_title": "Measurement of Light Intensity as a Function of Frequency",
+        "freq_sweep": "Frequency Sweep",
+        "live_monitor": "Live Monitor",
+        "connect_serial": "Connect Serial",
+        "start_measurement": "Start Measurement",
+        "stop_measurement": "Stop Measurement",
+        "serial_status": "Serial Status:",
+        "not_connected": "Not connected"
+      }
+    };
+    
+    function setLanguage(lang) {
+      localStorage.setItem('language', lang);
+      updateLanguage(lang);
+      
+      // Update dropdown display
+      const langDropdown = document.getElementById('langDropdown');
+      if (langDropdown) {
+        langDropdown.innerHTML = `🌐 ${lang.toUpperCase()}`;
+      }
+    }
+    
+    function updateLanguage(lang) {
+      const elements = document.querySelectorAll('[data-lang-key]');
+      elements.forEach(element => {
+        const key = element.getAttribute('data-lang-key');
+        if (translations[lang] && translations[lang][key]) {
+          element.textContent = translations[lang][key];
+        }
+      });
+      
+      // Update title
+      if (translations[lang] && translations[lang].title) {
+        document.title = translations[lang].title;
+      }
+    }
+    
+    // Initialize language on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedLang = localStorage.getItem('language') || 'de';
+      setLanguage(savedLang);
+    });
+  </script>
+  <script src="bootstrap.bundle.min.js"></script>
+</body>
+</html>

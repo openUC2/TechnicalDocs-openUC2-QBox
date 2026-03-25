@@ -599,11 +599,15 @@ footer a {
    ============================================================================ */
 @media (max-width: 992px) {
   .col-lg-4, .col-lg-6, .col-lg-8 { flex: 0 0 100%; max-width: 100%; }
-  .navbar-collapse { flex-basis: 100%; }
+  .navbar-collapse { flex-basis: 100%; display: none; }
+  .navbar-collapse.show { display: flex; flex-direction: column; width: 100%; }
+  .navbar-toggler { display: block; }
+  .col-lg-3 { flex: 0 0 50%; max-width: 50%; }
 }
 
 @media (max-width: 768px) {
   .col-md-4, .col-md-6, .col-md-8 { flex: 0 0 100%; max-width: 100%; }
+  .col-md-3 { flex: 0 0 100%; max-width: 100%; }
   .col-left, .col-right { max-width: 100%; flex: 1 1 100%; }
   
   h1 { font-size: 1.5rem; }
@@ -622,7 +626,78 @@ footer a {
   .nav-links a, .navbar-nav .nav-link {
     padding: 0.5rem 0;
   }
+  .col-lg-3 { flex: 0 0 100%; max-width: 100%; }
 }
+
+/* ============================================================================
+   Progress Bar
+   ============================================================================ */
+.progress {
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  height: 20px;
+}
+.progress-bar {
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #fff;
+}
+.bg-info { background: var(--uc2-turquoise) !important; }
+
+/* ============================================================================
+   Tutorial / Alignment Step Styles
+   ============================================================================ */
+.tutorial-step {
+  border: 1px solid var(--uc2-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  background: var(--uc2-white);
+}
+.tutorial-step-number {
+  background: var(--uc2-blue);
+  color: #fff;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+.tutorial-step-content { flex: 1; }
+.tutorial-step-content h4 { font-size: 1rem; margin-bottom: 0.25rem; }
+.tutorial-step-content p { margin-bottom: 0; font-size: 0.9rem; }
+.tutorial-svg-placeholder {
+  width: 100%;
+  max-width: 200px;
+  height: 120px;
+  background: #f0f4f8;
+  border: 2px dashed var(--uc2-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--uc2-grey-light);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.tutorial-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+.tutorial-nav .btn { min-width: 80px; }
 
 /* ============================================================================
    Legacy Grid Support (for messung.html etc.)
@@ -655,25 +730,88 @@ footer a {
 .dropdown-menu {
   display: none;
   position: absolute;
-  background: #fff;
+  background: var(--uc2-white);
   border: 1px solid var(--uc2-border);
   border-radius: 4px;
   min-width: 150px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
   z-index: 1000;
   list-style: none;
   padding: 0.5rem 0;
   margin: 0;
+  right: 0;
 }
 .dropdown:hover .dropdown-menu,
 .dropdown-menu.show { display: block; }
 .dropdown-item {
   display: block;
   padding: 0.5rem 1rem;
-  color: var(--uc2-grey);
+  color: var(--uc2-grey) !important;
   text-decoration: none;
+  background: var(--uc2-white);
 }
 .dropdown-item:hover {
-  background: #f8f9fa;
-  color: var(--uc2-blue);
+  background: #f0f0f0;
+  color: var(--uc2-blue) !important;
+}
+
+/* Ensure dropdown items are always readable (fix white-on-white) */
+.navbar .dropdown-menu {
+  background: var(--uc2-white);
+}
+.navbar .dropdown-menu .dropdown-item {
+  color: #333 !important;
+}
+.navbar .dropdown-menu .dropdown-item:hover {
+  background: #e9ecef;
+  color: var(--uc2-blue) !important;
+}
+
+/* Mobile navbar toggle */
+.navbar-toggler {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.navbar-toggler-icon::before { content: "☰"; }
+
+/* Tooltip styles */
+.uc2-tooltip {
+  position: relative;
+  cursor: help;
+}
+.uc2-tooltip .uc2-tooltip-text {
+  visibility: hidden;
+  background: #333;
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  position: absolute;
+  z-index: 1001;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.uc2-tooltip .uc2-tooltip-text::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
+}
+.uc2-tooltip:hover .uc2-tooltip-text {
+  visibility: visible;
+  opacity: 1;
 }
