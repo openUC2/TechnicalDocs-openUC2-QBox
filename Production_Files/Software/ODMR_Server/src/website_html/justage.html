@@ -103,6 +103,7 @@
                 <div><small data-lang-key="y_range_label">Y-Bereich:</small>
                   <select id="plotYRange">
                     <option value="auto" selected>Auto</option>
+                    <option value="stretch" data-lang-key="y_range_stretch">Stretch (Min-Max)</option>
                     <option value="full" data-lang-key="y_range_full">Voll (0-Max)</option>
                   </select>
                 </div>
@@ -342,11 +343,21 @@
       const vis = intensityData.filter(d=>d.time>=mt);
 
       let yMin,yMax;
-      if(ById('plotYRange').value==='auto' && vis.length>1){
-        const vs=vis.map(d=>d.value); const mg=Math.max(50,(Math.max(...vs)-Math.min(...vs))*.1);
-        yMin=Math.max(0,Math.min(...vs)-mg); yMax=Math.max(...vs)+mg;
-        if(yMax-yMin<100){const m=(yMax+yMin)/2;yMin=m-50;yMax=m+50;}
-      } else { yMin=0; yMax=window._maxRange||65535; }
+      const yRangeMode = ById('plotYRange').value;
+      if (yRangeMode==='auto' && vis.length>1) {
+        const vs = vis.map(d=>d.value);
+        const mg = Math.max(50, (Math.max(...vs)-Math.min(...vs))*.1);
+        yMin = Math.max(0, Math.min(...vs) - mg);
+        yMax = Math.max(...vs) + mg;
+        if (yMax - yMin < 100) { const m = (yMax + yMin)/2; yMin = m-50; yMax = m+50; }
+      } else if (yRangeMode==='stretch' && vis.length>0) {
+        const vs = vis.map(d=>d.value);
+        yMin = Math.min(...vs);
+        yMax = Math.max(...vs);
+        if (yMax === yMin) { yMin = yMin - 1; yMax = yMax + 1; }
+      } else {
+        yMin = 0; yMax = window._maxRange||65535;
+      }
 
       // Grid
       ctx.strokeStyle='#eee';ctx.lineWidth=1;
@@ -448,6 +459,7 @@
         alignment_hint:"Justieren Sie den optischen Pfad für maximale Intensität",
         intensity_graph:"📈 Intensitäts-Verlauf",clear_plot:"Leeren",
         time_window:"Zeitfenster:",y_range_label:"Y-Bereich:",y_range_full:"Voll (0-Max)",
+        y_range_stretch:"Stretch (Min-Max)",
         measurement_range:"Messbereich",range_hint:"Werte hängen von Gain und Integrationszeit ab",
         sensor_settings:"Sensor-Einstellungen",gain_label:"Verstärkung (Gain)",
         gain_tooltip:"Höhere Verstärkung = empfindlicher, aber schneller Sättigung bei starkem Licht. Starten Sie mit High (428x).",
@@ -474,6 +486,7 @@
         alignment_hint:"Adjust the optical path for maximum intensity",
         intensity_graph:"📈 Intensity Over Time",clear_plot:"Clear",
         time_window:"Time Window:",y_range_label:"Y-Range:",y_range_full:"Full (0-Max)",
+        y_range_stretch:"Stretch (Min-Max)",
         measurement_range:"Measurement Range",range_hint:"Values depend on Gain and Integration Time",
         sensor_settings:"Sensor Settings",gain_label:"Gain",
         gain_tooltip:"Higher gain = more sensitive, but saturates faster with strong light. Start with High (428x).",
