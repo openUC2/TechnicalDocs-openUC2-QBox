@@ -40,6 +40,7 @@
         <ul class="navbar-nav ms-auto">
           <li class="nav-item"><a class="nav-link" href="index.html" data-lang-key="nav_start">Start</a></li>
           <li class="nav-item"><a class="nav-link " href="messung.html" data-lang-key="nav_measurement_device">Messung (on Device)</a></li>
+          <li class="nav-item" id="webSerialNavItem"><a class="nav-link" href="messung_webserial.html" data-lang-key="nav_measurement_webserial">Messung (WebSerial)</a></li>
           <li class="nav-item"><a class="nav-link active" href="ratio.html" data-lang-key="nav_ratio">B-Field Monitor</a></li>
           <li class="nav-item"><a class="nav-link" href="justage.html" data-lang-key="nav_alignment">Justage</a></li>
           <li class="nav-item"><a class="nav-link" href="infos.html" data-lang-key="nav_info">Weitere Infos</a></li>
@@ -693,6 +694,12 @@
     // Apply saved language on load
     document.addEventListener('DOMContentLoaded', function() {
       setLanguage(localStorage.getItem('language')||'de');
+      // WebSerial nav: show if browser supports it; hide only if ESP32 explicitly disables it
+      (async function(){
+        const ws=document.getElementById('webSerialNavItem'); if(!ws) return;
+        if(!('serial' in navigator)){ws.style.display='none';return;}
+        try{const r=await fetch('/webserial_check');const d=await r.json();if(!d.webserial_enabled)ws.style.display='none';}catch(e){/* hosted site – keep visible */}
+      })();
     });
   </script>
   <script>

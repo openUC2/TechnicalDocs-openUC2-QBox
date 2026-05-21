@@ -10,154 +10,14 @@
 
     <!-- Page-specific styles -->
     <style>
-      /* Custom styles for this page */
-      body {
-        overflow-x: hidden;
-      }
-      
-      .container-fluid {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
-      
-      #measurementTabContent {
-        flex: 1;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      }
-      
-      .tab-pane {
-        flex: 1;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      }
-      
-      .grid-container {
-          grid-template-columns: 1fr 350px;
-          flex: 1;
-          min-height: 0;
-      }
-      .grid1 {
-          grid-area: 1 / 1 / 4 / 2;
-          height: 100%;
-          min-height: 0;
-          overflow: hidden;
-      }
-      .grid2, .grid3, .grid4, .grid5, .grid6 {
-          min-width: 0;
-      }
-      
-      /* Fixed height containers for measurement sections */
-      .measurement-section {
-        max-height: 50vh;
-        overflow-y: auto;
-        overflow-x: hidden;
-      }
-      
-      .measurement-history-section {
-        max-height: 40vh;
-        overflow-y: auto;
-        overflow-x: hidden;
-        border: 1px solid #dee2e6;
-        border-radius: 0.375rem;
-        margin-top: 1rem;
-      }
-      
-      .table-responsive {
-        max-height: 35vh;
-        overflow-y: auto;
-        overflow-x: auto;
-      }
-      
-      /* Sticky table header */
-      .table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background-color: var(--uc2-blue) !important;
-        color: #fff;
-      }
-      
-      .StopButton {
-          background-color: #dc3545 !important;
-          color: white;
-          border: none;
-          padding: 8px 16px;
-          margin: 4px;
-          border-radius: 4px;
-          cursor: pointer;
-      }
-      .StopButton:hover {
-          background-color: #c82333 !important;
-      }
-      
+      /* Match messung.html styling */
       .svg {
           width: 100%;
-          height: calc(100vh - 300px);
-          max-height: 600px;
+          height: auto;
       }
-      
-      /* Measurement table styles */
-      .measurement-row:hover {
-          background-color: var(--uc2-light);
-      }
-      
-      /* Live chart styles */
-      #liveChart {
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          background-color: #fff;
-          display: block;
-      }
-      
-      /* Tab content spacing */
-      .tab-pane .row {
-          height: 100%;
-      }
-      
-      .card.h-100 {
-          height: 100% !important;
-      }
-      
-      /* Ensure cards fill available space */
-      .card-body canvas {
-          flex: 1;
-      }
-      
-      /* Responsive design improvements */
-      @media (max-width: 1200px) {
-          .grid-container {
-              grid-template-columns: 1fr 300px;
-          }
-      }
-      
-      @media (max-width: 992px) {
-          .grid-container {
-              grid-template-columns: 1fr 280px;
-          }
-      }
-      
       @media (max-width: 768px) {
           .grid-container {
               grid-template-columns: 1fr;
-              height: auto;
-          }
-          .grid1 {
-              grid-area: auto;
-          }
-          .input-group .btn {
-              padding: 0.25rem 0.5rem;
-              font-size: 0.875rem;
-          }
-          .svg {
-              height: 400px;
-          }
-          .tab-pane {
-              height: auto;
-              overflow: visible;
           }
       }
     </style>
@@ -1038,95 +898,81 @@
               </svg>
             </div>
             <div class="grid2">
-              <!-- Laser button removed (P2 #11) -->
+              <!-- Serial connection status indicator (matches messung.html LED status) -->
+              <div class="d-flex align-items-center justify-content-center mt-2">
+                <div id="statusLED" class="me-2" style="width:12px;height:12px;border-radius:50%;background-color:#6c757d;border:2px solid #dee2e6;"></div>
+                <small id="statusText" class="text-muted" data-lang-key="not_connected">Nicht verbunden</small>
+              </div>
             </div>
             <div class="grid3">
-              <div
-                class="inputField inputFieldWide"
-                id="Y-Controll"
-                style="background-color: #fff"
-              >
+              <div class="inputField inputFieldWide" id="Y-Controll" style="background-color:#fff">
                 <label for="YMid1">Y-Abschnitt: </label>
-                <input
-                  type="text"
-                  id="YMid1"
-                  value="18000"
-                  onchange="YMidContr(this);adaptYScale();"
-                />
-                <input
-                  type="range"
-                  class="slider"
-                  id="YMid2"
-                  min="9000"
-                  max="27000"
-                  step="100"
-                  value="18000"
-                  oninput="YMidContr(this);adaptYScale();"
-                />
-                <input
-                  type="checkbox"
-                  id="YMidAuto"
-                  checked="true"
-                  onchange="autoScale()"
-                  style="display: block"
-                />
+                <input type="text" id="YMid1" value="18000" onchange="YMidContr(this);adaptYScale();" />
+                <input type="range" class="slider" id="YMid2" min="9000" max="27000" step="100" value="18000" oninput="YMidContr(this);adaptYScale();" />
+                <input type="checkbox" id="YMidAuto" checked="true" onchange="autoScale()" style="display:block" />
               </div>
-              <div
-                class="inputField inputFieldWide"
-                id="YR-Controll"
-                style="background-color: #fff"
-              >
+              <div class="inputField inputFieldWide" id="YR-Controll" style="background-color:#fff">
                 <label for="YRange2">Y-Bereich: </label>
-                <input
-                  type="text"
-                  id="YRange1"
-                  value="18000"
-                  onchange="YRangeContr(this);adaptYScale();"
-                />
-                <input
-                  type="range"
-                  class="slider"
-                  id="YRange2"
-                  min="0"
-                  max="8.5"
-                  step="0.1"
-                  value="7"
-                  oninput="YRangeContr2(this);adaptYScale();"
-                />
-                <input
-                  type="checkbox"
-                  id="YRangeAuto"
-                  checked="true"
-                  onchange="autoScale()"
-                  style="display: flex"
-                />
+                <input type="text" id="YRange1" value="18000" onchange="YRangeContr(this);adaptYScale();" />
+                <input type="range" class="slider" id="YRange2" min="0" max="8.5" step="0.1" value="7" oninput="YRangeContr2(this);adaptYScale();" />
+                <input type="checkbox" id="YRangeAuto" checked="true" onchange="autoScale()" style="display:flex" />
               </div>
             </div>
 
             <div class="grid4">
-              <input
-                type="button"
-                class="Button"
-                id="ConnectSerial"
-                value="Serial verbinden"
-              />
-              <input
-                type="button"
-                class="Button StartButton"
-                id="StartStop"
-                value="Messung starten"
-              />
-              <input
-                type="button"
-                class="Button Toggle"
-                id="AutoMessung"
-                value="Einzelmessung"
-              />
+              <div class="d-grid gap-2">
+                <!-- Serial connect button -->
+                <button type="button" class="btn btn-secondary btn-lg" id="ConnectSerial"
+                        title="Verbindet mit dem seriellen Port des ESP32">
+                  &#x1F50C; <span data-lang-key="connect_serial">Serial verbinden</span>
+                </button>
+                <!-- Start/stop button matching messung.html style -->
+                <button type="button" class="btn btn-success btn-lg" id="StartStop"
+                        title="Startet die ODMR-Messung über den gewählten Frequenzbereich">
+                  <span data-lang-key="start_measurement">Messung starten</span>
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="AutoMessung"
+                        title="Wechselt zwischen Einzel- und Dauermessung">
+                  <span data-lang-key="single_measurement">Einzelmessung</span>
+                </button>
+              </div>
               <!-- Serial Status Indicator -->
-              <div id="serialStatus" class="mt-2 p-2 border rounded" style="background-color: #f8f9fa; font-size: 12px; max-height: 150px; overflow-y: auto;">
-                <div class="fw-bold mb-1">Serial Status:</div>
-                <div id="serialMessages" style="font-family: monospace; font-size: 11px;">
-                  <span class="text-muted">Nicht verbunden</span>
+              <div id="serialStatus" class="mt-2 p-2 border rounded" style="background-color:#f8f9fa;font-size:12px;max-height:120px;overflow-y:auto;">
+                <div class="fw-bold mb-1" data-lang-key="serial_status">Serial Status:</div>
+                <div id="serialMessages" style="font-family:monospace;font-size:11px;">
+                  <span class="text-muted" data-lang-key="not_connected">Nicht verbunden</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sensor settings panel matching messung.html -->
+            <div class="grid5">
+              <div class="card">
+                <div class="card-header py-2">
+                  <h6 class="mb-0" data-lang-key="sensor_settings">Sensor-Einstellungen</h6>
+                </div>
+                <div class="card-body py-2">
+                  <div class="mb-2">
+                    <label class="form-label small" data-lang-key="gain">Verstärkung (Gain):</label>
+                    <select id="gainSelect" class="form-select form-select-sm">
+                      <option value="0x00">Low (1x)</option>
+                      <option value="0x10">Medium (25x)</option>
+                      <option value="0x20" selected>High (428x)</option>
+                      <option value="0x30">Max (9876x)</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label small" data-lang-key="integration_time">Integrationszeit:</label>
+                    <select id="integrationSelect" class="form-select form-select-sm">
+                      <option value="0x00" selected>100 ms</option>
+                      <option value="0x01">200 ms</option>
+                      <option value="0x02">300 ms</option>
+                      <option value="0x03">400 ms</option>
+                      <option value="0x04">500 ms</option>
+                      <option value="0x05">600 ms</option>
+                    </select>
+                  </div>
+                  <p class="small text-muted mb-0" data-lang-key="sensor_note">Einstellungen werden via Serial an den ESP32 übertragen.</p>
                 </div>
               </div>
             </div>
@@ -1912,7 +1758,12 @@
         "webserial_warning": "Ihr Browser unterstützt die WebSerial API nicht. Bitte verwenden Sie Chrome/Edge oder die \"Messung (on Device)\" Seite.",
         "timeout_warning": "Messungen wurden wegen Timeout übersprungen",
         "confirm_delete": "Messung wirklich löschen?",
-        "no_measurements": "Noch keine Messungen durchgeführt"
+        "no_measurements": "Noch keine Messungen durchgeführt",
+        "single_measurement": "Einzelmessung",
+        "sensor_settings": "Sensor-Einstellungen",
+        "gain": "Verstärkung (Gain)",
+        "integration_time": "Integrationszeit",
+        "sensor_note": "Einstellungen werden via Serial an den ESP32 übertragen."
       },
       en: {
         "nav_start": "Start",
@@ -1946,7 +1797,12 @@
         "webserial_warning": "Your browser does not support the WebSerial API. Please use Chrome/Edge or the \"Measurement (on Device)\" page.",
         "timeout_warning": "Measurements were skipped due to timeout",
         "confirm_delete": "Really delete measurement?",
-        "no_measurements": "No measurements performed yet"
+        "no_measurements": "No measurements performed yet",
+        "single_measurement": "Single Measurement",
+        "sensor_settings": "Sensor Settings",
+        "gain": "Gain",
+        "integration_time": "Integration Time",
+        "sensor_note": "Settings will be sent to the ESP32 via Serial."
       }
     };
     

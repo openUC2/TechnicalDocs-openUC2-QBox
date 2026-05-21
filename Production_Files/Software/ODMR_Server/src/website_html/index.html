@@ -43,6 +43,21 @@
 
   <!-- ░░ Main content ░░------------------------------------------------------ -->
   <main class="container">
+
+    <!-- Firmware flash notice -->
+    <div class="alert mb-4" role="alert"
+         style="background:linear-gradient(135deg,var(--uc2-blue,#0266a0),#0a4d8e);color:#fff;border:none;">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <strong data-lang-key="flash_notice_title">&#x1F527; Neue Firmware verfügbar!</strong>&nbsp;
+          <span data-lang-key="flash_notice_text">Flashen Sie die aktuelle Version direkt im Browser auf youseetoo.github.io:</span>
+        </div>
+        <a href="https://youseetoo.github.io/odmr/" target="_blank" rel="noopener"
+           class="btn btn-light btn-sm" style="white-space:nowrap;color:#0a4d8e;font-weight:600;"
+           data-lang-key="flash_notice_btn">Firmware flashen →</a>
+      </div>
+    </div>
+
     <section class="mb-5">
       <h1 class="display-5 mb-3" data-lang-key="welcome_title">Low-Cost Experimente mit NV-Zentren</h1>
       
@@ -289,7 +304,10 @@
         safety_power: "Stromversorgung vor Verkabelungsänderungen trennen",
         quantumminilabs_title: "Das QuantumMiniLabs Projekt",
         quantumminilabs_text: "Das QuantumMiniLabs-Projekt entwickelt ein Open-Source-Ökosystem, das kostengünstige, skalierbare, modulare und reparable Quantentechnologie-Experimente ermöglicht. Das Ziel ist es, das System an 100 Bildungsstandorten in Deutschland einzusetzen.",
-        quantumminilabs_vision: "QuantumMiniLabs bietet die erste erschwingliche DIY-Plattform für Experimente mit Quantensystemen der zweiten Generation. NV-Diamanten ermöglichen stabile Experimente bei Raumtemperatur."
+        quantumminilabs_vision: "QuantumMiniLabs bietet die erste erschwingliche DIY-Plattform für Experimente mit Quantensystemen der zweiten Generation. NV-Diamanten ermöglichen stabile Experimente bei Raumtemperatur.",
+        flash_notice_title: "\uD83D\uDD27 Neue Firmware verfügbar!",
+        flash_notice_text: "Flashen Sie die aktuelle Version direkt im Browser auf youseetoo.github.io:",
+        flash_notice_btn: "Firmware flashen \u2192"
       },
       en: {
         nav_start: "Start",
@@ -345,7 +363,10 @@
         safety_power: "Disconnect power before changing connections",
         quantumminilabs_title: "The QuantumMiniLabs Project",
         quantumminilabs_text: "The QuantumMiniLabs project is developing an open-source ecosystem that enables low-cost, scalable, modular, and repairable quantum tech experiments. The goal is to deploy the system at 100 educational locations across Germany.",
-        quantumminilabs_vision: "QuantumMiniLabs offer the first affordable DIY platform for experimenting with second-generation quantum systems. NV diamonds allow for stable experiments at room temperature."
+        quantumminilabs_vision: "QuantumMiniLabs offer the first affordable DIY platform for experimenting with second-generation quantum systems. NV diamonds allow for stable experiments at room temperature.",
+        flash_notice_title: "\uD83D\uDD27 New Firmware Available!",
+        flash_notice_text: "Flash the latest version directly in your browser at youseetoo.github.io:",
+        flash_notice_btn: "Flash Firmware \u2192"
       }
     };
     
@@ -387,7 +408,7 @@
               const r = await fetch('/webserial_check');
               const d = await r.json();
               if (!d.webserial_enabled) wsNav.style.display = 'none';
-          } catch(e) { wsNav.style.display = 'none'; }
+          } catch(e) { /* hosted site – keep WebSerial nav visible */ }
       })();
       
       // Fetch and display version information
