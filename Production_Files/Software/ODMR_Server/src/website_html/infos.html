@@ -969,7 +969,7 @@
               const r = await fetch('/webserial_check');
               const d = await r.json();
               if (!d.webserial_enabled) wsNav.style.display = 'none';
-          } catch(e) { wsNav.style.display = 'none'; }
+          } catch(e) { /* hosted site – keep WebSerial nav visible */ }
       })();
       
       // Fetch and display version information

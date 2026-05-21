@@ -552,7 +552,7 @@
       (async function(){
         const ws=ById('webSerialNavItem'); if(!ws) return;
         if(!('serial' in navigator)){ws.style.display='none';return;}
-        try{const r=await fetch('/webserial_check');const d=await r.json();if(!d.webserial_enabled)ws.style.display='none';}catch(e){ws.style.display='none';}
+        try{const r=await fetch('/webserial_check');const d=await r.json();if(!d.webserial_enabled)ws.style.display='none';}catch(e){/* hosted site – keep WebSerial nav visible */}
       })();
       // Version
       fetch('/version').then(r=>r.ok?r.json():Promise.reject())
