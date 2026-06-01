@@ -233,7 +233,7 @@
       '0x30_0x00': 37888, '0x30_0x01': 65535, '0x30_0x02': 65535, '0x30_0x03': 65535, '0x30_0x04': 65535, '0x30_0x05': 65535
     };
 
-    window._optThreshold = 4000; window._goodThreshold = 1500; window._maxRange = 65535;
+    window._optThreshold = 4000; window._goodThreshold = 1500; window._maxRange = 65535; window._saturated = 50000;
 
     function updateMeasurementRange() {
       const g = gainMultipliers[ById('gainSelect').value] || 428;
@@ -257,6 +257,7 @@
       window._optThreshold = opt;
       window._goodThreshold = Math.round(opt * 0.375);
       window._maxRange = estMax;
+      window._saturated = optMax;
     }
 
     // =====================================================================
@@ -311,7 +312,10 @@
         const pct = Math.min((v / (window._maxRange||65535))*100, 100);
         ById('intensityBar').style.width = pct+'%';
         const st = ById('alignmentStatus'), bar = ById('intensityBar');
-        if (v > window._optThreshold) {
+        // Oversaturation check (sensor hit or very near max)
+        if (v > window._saturated) {
+          st.textContent = T('status_oversaturated'); st.className='badge bg-danger'; bar.className='progress-bar bg-danger';
+        } else if (v > window._optThreshold) {
           st.textContent = T('status_optimal'); st.className='badge bg-success'; bar.className='progress-bar bg-success';
         } else if (v > window._goodThreshold) {
           st.textContent = T('status_good'); st.className='badge bg-warning'; bar.className='progress-bar bg-warning';
@@ -477,7 +481,7 @@
         intensity_live:"Photodioden-Intensität (Live)",current_value:"Aktueller Wert",
         intensity_bar_title:"Intensitäts-Anzeige",start_monitoring:"Start Überwachung",
         stop_monitoring:"Stop Überwachung",status_label:"Status:",status_ready:"Bereit",
-        status_active:"Überwachung aktiv",status_optimal:"Optimal",status_good:"Gut",
+        status_active:"Überwachung aktiv",status_optimal:"Optimal",status_good:"Gut", status_oversaturated:"Übersteuert",
         status_adjust:"Justage erforderlich",
         alignment_hint:"Justieren Sie den optischen Pfad für maximale Intensität",
         intensity_graph:"📈 Intensitäts-Verlauf",clear_plot:"Leeren",
@@ -504,8 +508,9 @@
         intensity_live:"Photodiode Intensity (Live)",current_value:"Current Value",
         intensity_bar_title:"Intensity Display",start_monitoring:"Start Monitoring",
         stop_monitoring:"Stop Monitoring",status_label:"Status:",status_ready:"Ready",
-        status_active:"Monitoring active",status_optimal:"Optimal",status_good:"Good",
+        status_active:"Monitoring active",status_optimal:"Optimal",status_good:"Good", status_oversaturated:"Saturated",
         status_adjust:"Alignment needed",
+
         alignment_hint:"Adjust the optical path for maximum intensity",
         intensity_graph:"📈 Intensity Over Time",clear_plot:"Clear",
         time_window:"Time Window:",y_range_label:"Y-Range:",y_range_full:"Full (0-Max)",
