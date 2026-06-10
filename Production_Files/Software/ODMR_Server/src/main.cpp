@@ -7,6 +7,8 @@
 #include <Adafruit_TSL2591.h>  // Adafruit TSL2591 light sensor
 #include <Adafruit_NeoPixel.h> // Neopixel-Bibliothek einbinden
 
+
+
 #include "adf4351.h"
 
 // Version info (auto-generated)
@@ -1032,6 +1034,9 @@ void setup()
   server.on("/", HTTP_GET, []()
             { servePROGMEM(INDEX_HTML, "text/html"); });
 
+  // print build time and date 
+  Serial.println("Build date: " + String(BUILD_DATE));
+  Serial.println("Build time: " + String(BUILD_TIME));
   // Captive portal detection endpoints (P0 #1)
   // Returning a non-"Success" HTML page triggers the OS captive portal popup.
   // The page uses platform-specific tricks to open the real browser instead of
