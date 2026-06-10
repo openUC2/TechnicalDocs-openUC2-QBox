@@ -160,7 +160,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && contains(github.ref, 'main'))
     steps:
       # ---------------- GATHER ARTIFACTS ---------------
       - name: Download all ODMR firmware artifacts
