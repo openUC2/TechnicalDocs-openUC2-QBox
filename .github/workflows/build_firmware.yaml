@@ -187,24 +187,31 @@ jobs:
       - name: Copy binaries & commit
         shell: bash
         run: |
-          mkdir -p dest/static/firmware_odmr
-          cp firmware_artifacts/* dest/static/firmware_odmr/
-          
-          cd dest
-          git config user.email 'bene.d@gmx.de'
-          git config user.name  'beniroquai'
-          
-          if git status --porcelain | grep -q '^??\|^ M'; then
-            git add static/firmware_odmr
-            git commit -m "Update ODMR firmware binaries (ESP32-C3 & ESP32-S3) => https://github.com/${{ env.ODMR_REPO }}"
-            git push
-          else
-            echo "No changes to commit"
+          set -euo pipefail
+          shopt -s nullglob
+
+          files=(firmware_artifacts/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No files available to copy from firmware_artifacts/"
+            exit 1
           fi
 
-          # legacy, also copy them to dest/static/firmware/ and push them to the static/firmware/ folder for backward compatibility with old web flasher versions (can be removed in the future)
+          mkdir -p dest/static/firmware_odmr
           mkdir -p dest/static/firmware
-          cp firmware_artifacts/* dest/static/firmware/ 
-          git add static/firmware
-          git commit -m "Update ODMR firmware binaries (ESP32-C3 & ESP32-S3)  => https://github.com/${{ env.ODMR_REPO }}"
+
+          cp "${files[@]}" dest/static/firmware_odmr/
+          cp "${files[@]}" dest/static/firmware/
+
+          cd dest
+          git config user.email 'bene.d@gmx.de'
+          git config user.name 'beniroquai'
+
+          git add static/firmware_odmr static/firmware
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update ODMR firmware binaries (ESP32-C3 & ESP32-S3) => https://github.com/${{ env.ODMR_REPO }}"
           git push
