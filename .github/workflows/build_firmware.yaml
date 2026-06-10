@@ -197,16 +197,21 @@ jobs:
           fi
 
           mkdir -p dest/static/firmware_odmr
-          mkdir -p dest/static/firmware
+          mkdir -p dest/static/firmware_build
 
           cp "${files[@]}" dest/static/firmware_odmr/
-          cp "${files[@]}" dest/static/firmware/
+          # cp files but exclude json manifest files (only copy .bin)
+          for file in "${files[@]}"; do
+            if [[ "$file" == *.bin ]]; then
+              cp "$file" dest/static/firmware_build/
+            fi
+          done
 
           cd dest
           git config user.email 'bene.d@gmx.de'
           git config user.name 'beniroquai'
 
-          git add static/firmware_odmr static/firmware
+          git add static/firmware_odmr static/firmware_build
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
