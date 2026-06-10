@@ -200,7 +200,7 @@ jobs:
           mkdir -p dest/static/firmware
 
           cp "${files[@]}" dest/static/firmware_odmr/
-          cp "${files[@]}" dest/static/firmware/
+          cp "${files[@]}" dest/static/firmware_build/
 
           cd dest
           git config user.email 'bene.d@gmx.de'
