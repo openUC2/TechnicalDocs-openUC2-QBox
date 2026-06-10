@@ -118,8 +118,8 @@
             <div class="card-header"><h5 data-lang-key="measurement_range">Messbereich</h5></div>
             <div class="card-body">
               <p><strong>Minimal:</strong> 0</p>
-              <p><strong>Maximal:</strong> <span id="maxRangeDisplay">65535</span></p>
-              <p><strong>Optimal:</strong> &gt; <span id="optimalThreshold">4000</span></p>
+              <p><strong>Maximal:</strong> <span id="maxRangeDisplay">37.888</span></p>
+              <p><strong>Optimal:</strong> <span id="optimalThreshold">30.000</span></p>
               <p class="small text-muted" data-lang-key="range_hint">Werte hängen von Gain und Integrationszeit ab</p>
             </div>
           </div>
@@ -132,7 +132,7 @@
                   Verstärkung (Gain)
                   <span class="uc2-tooltip-text" data-lang-key="gain_tooltip">Höhere Verstärkung = empfindlicher, aber schneller Sättigung bei starkem Licht. Starten Sie mit High (428x).</span>
                 </label>
-                <select class="form-select" id="gainSelect">
+                <select class="form-select" id="gainSelect" onchange="updateMeasurementRange()">
                   <option value="0x00">Low (1x)</option>
                   <option value="0x10">Medium (25x)</option>
                   <option value="0x20" selected>High (428x)</option>
@@ -144,7 +144,7 @@
                   Integrationszeit
                   <span class="uc2-tooltip-text" data-lang-key="integration_tooltip">Längere Integration = genauere Messung, aber langsamere Aktualisierung. 100ms ist ein guter Standard.</span>
                 </label>
-                <select class="form-select" id="integrationSelect">
+                <select class="form-select" id="integrationSelect" onchange="updateMeasurementRange()">
                   <option value="0x00" selected>100 ms</option>
                   <option value="0x01">200 ms</option>
                   <option value="0x02">300 ms</option>
@@ -221,19 +221,43 @@
     // =====================================================================
     const gainMultipliers  = {'0x00':1,'0x10':25,'0x20':428,'0x30':9876};
     const integrationMs    = {'0x00':100,'0x01':200,'0x02':300,'0x03':400,'0x04':500,'0x05':600};
-    window._optThreshold = 4000; window._goodThreshold = 1500; window._maxRange = 65535;
+    // Manual lookup for estimated max ADC value per (gain, integration) setting.
+    // Fill entries as needed using keys like '0x20_0x00' (gain_integration).
+    // If an entry is missing, the code falls back to a linear estimate and
+    // will auto-populate the lookup (so you can run, copy values and then
+    // hardcode them here to override the estimate).
+    const estMaxLookup = {
+      '0x00_0x00': 879, '0x00_0x01': 1736, '0x00_0x02': 2593, '0x00_0x03': 3451, '0x00_0x04': 4309, '0x00_0x05': 5168,
+      '0x10_0x00': 37888, '0x10_0x01': 65535, '0x10_0x02': 65535, '0x10_0x03': 65535, '0x10_0x04': 65535, '0x10_0x05': 65535,
+      '0x20_0x00': 37888, '0x20_0x01': 65535, '0x20_0x02': 65535, '0x20_0x03': 65535, '0x20_0x04': 65535, '0x20_0x05': 65535,
+      '0x30_0x00': 37888, '0x30_0x01': 65535, '0x30_0x02': 65535, '0x30_0x03': 65535, '0x30_0x04': 65535, '0x30_0x05': 65535
+    };
+
+    window._optThreshold = 4000; window._goodThreshold = 1500; window._maxRange = 65535; window._saturated = 50000;
 
     function updateMeasurementRange() {
       const g = gainMultipliers[ById('gainSelect').value] || 428;
       const t = integrationMs[ById('integrationSelect').value] || 100;
-      const rel = (g * t) / (428 * 100);
-      const estMax = Math.min(65535, Math.round(65535 * Math.min(rel, 1)));
-      const opt = Math.max(100, Math.round(estMax * 0.06));
+      // Prefer a manually provided lookup value if available
+      const key = ById('gainSelect').value + '_' + ById('integrationSelect').value;
+      let estMax;
+      if (typeof estMaxLookup[key] !== 'undefined') {
+        estMax = estMaxLookup[key];
+      } else {
+        // fallback: linear estimate (kept for compatibility)
+        const rel = (g * t) / (428 * 100);
+        estMax = Math.min(65535, Math.round(65535 * Math.min(rel, 1)));
+        // auto-populate lookup so you can inspect and then hardcode values
+        estMaxLookup[key] = estMax;
+      }
+      const opt = Math.max(100, Math.round(estMax * 0.8));
+      const optMax = Math.round(opt * 1.1);
       ById('maxRangeDisplay').textContent = estMax;
-      ById('optimalThreshold').textContent = opt;
+      ById('optimalThreshold').textContent = opt + " - " + optMax;
       window._optThreshold = opt;
       window._goodThreshold = Math.round(opt * 0.375);
       window._maxRange = estMax;
+      window._saturated = optMax;
     }
 
     // =====================================================================
@@ -288,7 +312,10 @@
         const pct = Math.min((v / (window._maxRange||65535))*100, 100);
         ById('intensityBar').style.width = pct+'%';
         const st = ById('alignmentStatus'), bar = ById('intensityBar');
-        if (v > window._optThreshold) {
+        // Oversaturation check (sensor hit or very near max)
+        if (v > window._saturated) {
+          st.textContent = T('status_oversaturated'); st.className='badge bg-danger'; bar.className='progress-bar bg-danger';
+        } else if (v > window._optThreshold) {
           st.textContent = T('status_optimal'); st.className='badge bg-success'; bar.className='progress-bar bg-success';
         } else if (v > window._goodThreshold) {
           st.textContent = T('status_good'); st.className='badge bg-warning'; bar.className='progress-bar bg-warning';
@@ -454,7 +481,7 @@
         intensity_live:"Photodioden-Intensität (Live)",current_value:"Aktueller Wert",
         intensity_bar_title:"Intensitäts-Anzeige",start_monitoring:"Start Überwachung",
         stop_monitoring:"Stop Überwachung",status_label:"Status:",status_ready:"Bereit",
-        status_active:"Überwachung aktiv",status_optimal:"Optimal",status_good:"Gut",
+        status_active:"Überwachung aktiv",status_optimal:"Optimal",status_good:"Gut", status_oversaturated:"Übersteuert",
         status_adjust:"Justage erforderlich",
         alignment_hint:"Justieren Sie den optischen Pfad für maximale Intensität",
         intensity_graph:"📈 Intensitäts-Verlauf",clear_plot:"Leeren",
@@ -481,8 +508,9 @@
         intensity_live:"Photodiode Intensity (Live)",current_value:"Current Value",
         intensity_bar_title:"Intensity Display",start_monitoring:"Start Monitoring",
         stop_monitoring:"Stop Monitoring",status_label:"Status:",status_ready:"Ready",
-        status_active:"Monitoring active",status_optimal:"Optimal",status_good:"Good",
+        status_active:"Monitoring active",status_optimal:"Optimal",status_good:"Good", status_oversaturated:"Saturated",
         status_adjust:"Alignment needed",
+
         alignment_hint:"Adjust the optical path for maximum intensity",
         intensity_graph:"📈 Intensity Over Time",clear_plot:"Clear",
         time_window:"Time Window:",y_range_label:"Y-Range:",y_range_full:"Full (0-Max)",

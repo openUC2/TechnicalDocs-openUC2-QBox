@@ -101,7 +101,7 @@ struct SweepDataPoint {
   float frequency;
   uint32_t intensity;
 };
-static const int MAX_SWEEP_BUFFER = 500;
+static const int MAX_SWEEP_BUFFER = 600;
 SweepDataPoint sweepBuffer[MAX_SWEEP_BUFFER];
 int sweepBufferCount = 0;
 bool sweepInProgress = false;
@@ -575,7 +575,7 @@ void i2c_scan()
 
 // Messen der IR-Intensität bei einer gegebenen Frequenz (in MHz)
 uint32_t measureIntensityAtFrequency(float freqMHz,
-                                     uint8_t averages = 3,
+                                     uint8_t averages = 2,
                                      uint16_t settle_ms = 10)
 {
   if (freqMHz < ADF_FREQ_MIN || freqMHz > ADF_FREQ_MAX)
@@ -593,7 +593,9 @@ uint32_t measureIntensityAtFrequency(float freqMHz,
     sum += readIR();
     delay(1);
   }
-  return (uint32_t)(sum / averages);
+  uint32_t intensity = (uint32_t)(sum / averages);
+  Serial.println(String("Measured intensity at ") + String(freqMHz, 3) + " MHz: " + intensity);
+  return intensity;
 }
 
 // /ratio?f1=2865&f2=2875[&f3=2855][&avg=5]
@@ -722,14 +724,21 @@ void handleSweep()
   }
 
   int totalPoints = (int)((fEnd - fBegin) / fStep) + 1;
-  if (totalPoints > 500)
+  if (totalPoints > MAX_SWEEP_BUFFER)
   {
-    server.send(400, "application/json", "{\"error\":\"too many points (max 500)\"}");
+    server.send(400, "application/json",
+                "{\"error\":\"too many points (max " + String(MAX_SWEEP_BUFFER) + ")\"}");
     return;
   }
 
   Serial.printf("Sweep start: %.1f -> %.1f MHz, step %.1f, avg %d, settle %d ms, %d pts\n",
                 fBegin, fEnd, fStep, averages, settle_ms, totalPoints);
+
+  // Capture the client reference before any response is sent.
+  // We write SSE data directly to this client (bypassing server.sendContent) so
+  // that server.handleClient() can be called safely inside the sweep loop to
+  // process /sweep_stop requests without corrupting _currentClient.
+  WiFiClient client = server.client();
 
   // Reset sweep buffer for this new sweep
   sweepBufferCount = 0;
@@ -739,13 +748,17 @@ void handleSweep()
   setLEDStatus(LED_MEASURING);
   adf.begin();
 
-  // Send SSE response headers
-  server.sendHeader("Cache-Control", "no-cache");
-  server.sendHeader("Connection", "keep-alive");
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "text/event-stream", "");
+  // Send SSE response headers directly to the client socket.
+  // Using raw writes (not server.send/sendContent) lets us call
+  // server.handleClient() later without accidentally redirecting SSE data
+  // to a different _currentClient that handleClient() may install.
+  client.print("HTTP/1.1 200 OK\r\n");
+  client.print("Content-Type: text/event-stream\r\n");
+  client.print("Cache-Control: no-cache\r\n");
+  client.print("Connection: close\r\n");
+  client.print("Access-Control-Allow-Origin: *\r\n");
+  client.print("\r\n");
 
-  WiFiClient client = server.client();
   int pointIndex = 0;
 
   for (float f = fBegin; f <= fEnd + 0.001f; f += fStep)
@@ -769,7 +782,7 @@ void handleSweep()
         delay(1);
     }
     uint32_t intensity = (uint32_t)(sum / averages);
-
+    Serial.println(String("Sweep point ") + (pointIndex + 1) + "/" + totalPoints + ": " + String(f, 1) + " MHz -> " + intensity);
     // Store in buffer for recovery
     if (sweepBufferCount < MAX_SWEEP_BUFFER)
     {
@@ -778,7 +791,7 @@ void handleSweep()
       sweepBufferCount++;
     }
 
-    // Send data point as SSE event
+    // Send data point as SSE event directly to the stored client
     String msg = "data: {\"f\":";
     msg += String(f, 1);
     msg += ",\"I\":";
@@ -788,18 +801,24 @@ void handleSweep()
     msg += ",\"total\":";
     msg += String(totalPoints);
     msg += "}\n\n";
-    server.sendContent(msg);
+    client.print(msg);
 
     pointIndex++;
 
     // Keep captive portal DNS responsive during long sweeps
     dnsServer.processNextRequest();
+    // Allow the HTTP server to process other requests (e.g. /sweep_stop POST).
+    // Safe because SSE data goes directly to 'client', not server._currentClient.
+    server.handleClient();
     updateLEDs();
   }
 
-  // Signal sweep completion
-  server.sendContent("data: {\"done\":true}\n\n");
-  server.sendContent(""); // End chunked transfer
+  // Signal sweep completion (only when not manually stopped)
+  if (!sweepStopRequested)
+  {
+    client.print("data: {\"done\":true}\n\n");
+  }
+  client.stop();
 
   adf.stop();
   sweepInProgress = false;
