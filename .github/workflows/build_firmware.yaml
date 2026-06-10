@@ -201,3 +201,10 @@ jobs:
           else
             echo "No changes to commit"
           fi
+
+          # legacy, also copy them to dest/static/firmware/ and push them to the static/firmware/ folder for backward compatibility with old web flasher versions (can be removed in the future)
+          mkdir -p dest/static/firmware
+          cp firmware_artifacts/* dest/static/firmware/ 
+          git add static/firmware
+          git commit -m "Update ODMR firmware binaries (ESP32-C3 & ESP32-S3)  => https://github.com/${{ env.ODMR_REPO }}"
+          git push
