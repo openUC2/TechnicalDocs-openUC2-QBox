@@ -57,6 +57,12 @@
         // The ESP32 performs the frequency sweep and streams each data point
         // back in real time. No individual HTTP requests per frequency needed.
         function MessungStarten(){
+            // Pre-validate point count against backend MAX_SWEEP_BUFFER (600)
+            var pts = Math.floor((_fEnd - _fBegin) / _fStep) + 1;
+            if (pts > 600) {
+                alert('Zu viele Datenpunkte (' + pts + '). Maximum: 600.\nBitte Schrittweite erhöhen oder Frequenzbereich verkleinern.');
+                return;
+            }
             stopRequested = false;
             ToggleStart(0);
             setLEDStatus('measuring', 'Messung läuft');
@@ -114,14 +120,17 @@
                 stopRequested = false;
             };
         }
-        // Stop measurement handler (P0 #5) - closes SSE connection which
-        // signals the ESP32 to stop the sweep immediately
+        // Stop measurement handler (P0 #5) - closes SSE connection and
+        // sends an explicit stop request to the ESP32
         function MessungStoppen(){
             stopRequested = true;
             if (currentEventSource) {
                 currentEventSource.close();
                 currentEventSource = null;
             }
+            // Signal ESP32 to stop the sweep (needed because TCP CLOSE_WAIT
+            // means client.connected() stays true on the server side)
+            fetch('/sweep_stop', {method: 'POST'}).catch(function(){});
             if(continuousTimeout) { clearTimeout(continuousTimeout); continuousTimeout = null; }
             AutoMessung = 0;
             addDataGroup();
@@ -233,7 +242,22 @@
             
             // Calculate data points
             const dataPoints = Math.floor((fEnd - fBegin) / fStep) + 1;
-            ById("dataPointsCount").textContent = dataPoints;
+            const countEl = ById("dataPointsCount");
+            countEl.textContent = dataPoints;
+            // Warn visually when the backend limit would be exceeded
+            if (dataPoints > 600) {
+                countEl.style.color = '#dc3545';
+                countEl.style.fontWeight = 'bold';
+                countEl.title = 'Zu viele Datenpunkte (max 600)! Schrittweite erhöhen oder Bereich verkleinern.';
+            } else if (dataPoints > 500) {
+                countEl.style.color = '#fd7e14';
+                countEl.style.fontWeight = 'bold';
+                countEl.title = 'Hinweis: Über 500 Datenpunkte — große Messung.';
+            } else {
+                countEl.style.color = '';
+                countEl.style.fontWeight = '';
+                countEl.title = '';
+            }
             
             // Estimate scan time (assuming ~3 seconds per point)
             const estimatedSeconds = dataPoints * 3;
