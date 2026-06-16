@@ -6,4 +6,5 @@ Material: TAC + PVA (standard polarisation filter material)
 Material: Alluminium alloy
 # single/double slit, grating
 Material: PET
-
+# Magnet
+https://www.magnethandel.de/magnete-reach-rohs-konform
