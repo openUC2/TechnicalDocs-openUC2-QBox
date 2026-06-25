@@ -8,3 +8,6 @@ Material: Alluminium alloy
 Material: PET
 # Magnet
 https://www.magnethandel.de/magnete-reach-rohs-konform
+# Emission filter
+they are just color glas, quite the same as here
+https://www.thorlabs.com/item/FGL570
