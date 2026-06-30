@@ -245,6 +245,19 @@ pio device list       # cross-platform
   0x0 build/fw-images/seeed_xiao_esp32c3.bin
 ```
 
+```bash
+/Users/bene/.platformio/penv/bin/python -m esptool \
+  --chip esp32s3 \
+  -p /dev/cu.usbmodem101 \
+  -b 460800 \
+  write-flash \
+  --flash-mode keep \
+  --flash-freq keep \
+  --flash-size keep \
+  0x0 build/fw-images/seeed_xiao_esp32s3.bin
+```
+
+
 > **Always use `keep` flags.** The merged binary carries the correct flash
 > parameters baked in by ESP-IDF (DIO mode for the ROM bootloader stage).
 > Overriding them (e.g. forcing QIO) causes a bootloop at `ets_loader.c`.
@@ -253,7 +266,9 @@ pio device list       # cross-platform
 
 ```bash
 # Upload firmware only
-pio run -e seeed_xiao_esp32c3 -t upload
+/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32c3  --upload-port /dev/cu.usbmodem101
+/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem101
+
 
 # Upload SPIFFS only (no firmware recompile needed for HTML/CSS changes)
 pio run -e seeed_xiao_esp32c3 -t uploadfs

@@ -78,6 +78,19 @@ const char *PASSWORD = ""; // Empty password for open network
 String rxBuf;
 const size_t MAX_SERIAL_BUFFER = 256; // Prevent buffer overflow
 
+// Timestamp of last serial command, used so the status LEDs react to a
+// serial-only host (no WiFi client) the same way they react to a web client.
+unsigned long lastSerialActivity = 0;
+const unsigned long SERIAL_ACTIVITY_TIMEOUT = 5000; // 5 s "connected" window
+
+// Forward declarations for the serial command interface (mirrors the HTTP API
+// so the device can be driven entirely over USB-CDC serial, no WiFi required).
+void initialize_tsl(); // defined later, but used by readTSL2591() above it
+bool applyTSLGain(int gainValue);
+bool applyTSLIntegration(int timeValue);
+void processSerialLine(String line);
+void serialSweep(float fBegin, float fEnd, float fStep, uint8_t averages, uint16_t settle_ms);
+
 // Laser pin example
 static const int LASER_PIN = 10;
 bool laserState = false;
@@ -134,7 +147,7 @@ unsigned long lastLEDUpdate = 0;
 const unsigned long LED_UPDATE_INTERVAL = 20; // Update every 20ms
 unsigned long lastIntensityRequest = 0;
 const unsigned long INTENSITY_TIMEOUT = 2000; // 2 seconds timeout
-
+bool tsl_is_initialized = false;
 // LED control functions
 void setLEDStatus(LEDStatus status)
 {
@@ -304,6 +317,19 @@ void handleFileRequest(const String &path)
 // Example: read TSL2591 sensor (light intensity)
 uint32_t readTSL2591()
 {
+  // reinitialize the light sensor 
+  if (not tsl_is_initialized){
+    if (!tsl.begin())
+      {
+        tsl_is_initialized = false;
+        Serial.println("TSL2591 not found");
+      }
+      else
+      {
+        tsl_is_initialized = true;
+        initialize_tsl();
+      }
+  }
   sensors_event_t event;
   tsl.getEvent(&event);
   // event.light is in lux, but you can read raw channels as well
@@ -432,6 +458,48 @@ void handleIntensity()
   server.send(200, "application/json", response);
 }
 
+// ---------------------------------------------------------------------------
+// Shared TSL2591 setting helpers (used by both the HTTP handlers and the serial
+// command interface). Accept the same encoding the web UI sends: gain as
+// 0x00/0x10/0x20/0x30 and integration time as 0x00..0x05. Return false on an
+// invalid value so callers can report an error.
+// ---------------------------------------------------------------------------
+bool applyTSLGain(int gainValue)
+{
+  tsl2591Gain_t newGain;
+  switch (gainValue)
+  {
+  case 0x00: newGain = TSL2591_GAIN_LOW;  break;
+  case 0x10: newGain = TSL2591_GAIN_MED;  break;
+  case 0x20: newGain = TSL2591_GAIN_HIGH; break;
+  case 0x30: newGain = TSL2591_GAIN_MAX;  break;
+  default: return false;
+  }
+  currentGain = newGain;
+  tsl.setGain(currentGain);
+  Serial.printf("TSL2591 Gain set to: 0x%02X\n", (int)currentGain);
+  return true;
+}
+
+bool applyTSLIntegration(int timeValue)
+{
+  tsl2591IntegrationTime_t newTime;
+  switch (timeValue)
+  {
+  case 0x00: newTime = TSL2591_INTEGRATIONTIME_100MS; break;
+  case 0x01: newTime = TSL2591_INTEGRATIONTIME_200MS; break;
+  case 0x02: newTime = TSL2591_INTEGRATIONTIME_300MS; break;
+  case 0x03: newTime = TSL2591_INTEGRATIONTIME_400MS; break;
+  case 0x04: newTime = TSL2591_INTEGRATIONTIME_500MS; break;
+  case 0x05: newTime = TSL2591_INTEGRATIONTIME_600MS; break;
+  default: return false;
+  }
+  currentIntegrationTime = newTime;
+  tsl.setTiming(currentIntegrationTime);
+  Serial.printf("TSL2591 Integration Time set to: 0x%02X\n", (int)currentIntegrationTime);
+  return true;
+}
+
 // Get current TSL2591 settings
 void handleGetTSLSettings()
 {
@@ -453,30 +521,11 @@ void handleSetTSLGain()
   }
 
   int gainValue = server.arg("gain").toInt();
-  tsl2591Gain_t newGain;
-
-  switch (gainValue)
+  if (!applyTSLGain(gainValue))
   {
-  case 0x00:
-    newGain = TSL2591_GAIN_LOW;
-    break;
-  case 0x10:
-    newGain = TSL2591_GAIN_MED;
-    break;
-  case 0x20:
-    newGain = TSL2591_GAIN_HIGH;
-    break;
-  case 0x30:
-    newGain = TSL2591_GAIN_MAX;
-    break;
-  default:
     server.send(400, "application/json", "{\"error\":\"invalid gain value\"}");
     return;
   }
-
-  currentGain = newGain;
-  tsl.setGain(currentGain);
-  Serial.printf("TSL2591 Gain set to: 0x%02X\n", (int)currentGain);
 
   String response = "{\"status\":\"ok\",\"gain\":";
   response += String((int)currentGain);
@@ -494,41 +543,25 @@ void handleSetTSLIntegrationTime()
   }
 
   int timeValue = server.arg("integration_time").toInt();
-  tsl2591IntegrationTime_t newTime;
-
-  switch (timeValue)
+  if (!applyTSLIntegration(timeValue))
   {
-  case 0x00:
-    newTime = TSL2591_INTEGRATIONTIME_100MS;
-    break;
-  case 0x01:
-    newTime = TSL2591_INTEGRATIONTIME_200MS;
-    break;
-  case 0x02:
-    newTime = TSL2591_INTEGRATIONTIME_300MS;
-    break;
-  case 0x03:
-    newTime = TSL2591_INTEGRATIONTIME_400MS;
-    break;
-  case 0x04:
-    newTime = TSL2591_INTEGRATIONTIME_500MS;
-    break;
-  case 0x05:
-    newTime = TSL2591_INTEGRATIONTIME_600MS;
-    break;
-  default:
     server.send(400, "application/json", "{\"error\":\"invalid integration time value\"}");
     return;
   }
-
-  currentIntegrationTime = newTime;
-  tsl.setTiming(currentIntegrationTime);
-  Serial.printf("TSL2591 Integration Time set to: 0x%02X\n", (int)currentIntegrationTime);
 
   String response = "{\"status\":\"ok\",\"integration_time\":";
   response += String((int)currentIntegrationTime);
   response += "}";
   server.send(200, "application/json", response);
+}
+
+void initialize_tsl(){ 
+    tsl.setGain(currentGain);
+    tsl.setTiming(currentIntegrationTime);
+    // turn off led on TSL2591
+    tsl.enableAutoRange(true);
+    Serial.println("TSL2591 initialized");
+    Serial.printf("TSL2591 Gain: 0x%02X, Integration Time: 0x%02X\n", (int)currentGain, (int)currentIntegrationTime);
 }
 
 // Check if WebSerial should be enabled (not on local AP interface)
@@ -864,6 +897,306 @@ void handleSweepStop()
   }
 }
 
+// ===========================================================================
+//  SERIAL COMMAND INTERFACE
+//  Mirrors the full HTTP/web API over the USB-CDC serial link so the device can
+//  be controlled from a standalone Web-Serial website without any WiFi.
+//
+//  Protocol (one command per line, '\n' terminated, case-insensitive keyword):
+//    PING                         -> PONG
+//    VERSION                      -> VERSION {json}
+//    STATUS                       -> STATUS  {json}
+//    HELP                         -> CMDS ...
+//    MEASURE <f>                  -> DATA <f> <intensity> <bfield>
+//    INTENSITY                    -> INT <intensity>            (cached, fast)
+//    RATIO <f1> <f2> <f3|0> <avg> -> RATIO {json}
+//    SWEEP <fb> <fe> <fs> [avg] [settle]
+//                                 -> SWEEP START {json}
+//                                    SWEEP DATA <idx> <total> <f> <intensity>
+//                                    SWEEP DONE <count>  (or SWEEP STOP <count>)
+//    SWEEPSTOP                    -> stops a running sweep
+//    GAIN <0x00|0x10|0x20|0x30>   -> OK GAIN 0xXX
+//    INTTIME <0..5>               -> OK INTTIME <v>
+//    GETTSL                       -> TSL {json}
+//    ADFON / ADFOFF               -> OK ADF ON|OFF
+// ===========================================================================
+
+// Parse up to maxN space-separated floats from s. Returns the count parsed.
+static int parseFloats(const String &s, float *out, int maxN)
+{
+  int count = 0;
+  int start = 0;
+  int len = s.length();
+  while (count < maxN && start < len)
+  {
+    while (start < len && s.charAt(start) == ' ')
+      start++;
+    if (start >= len)
+      break;
+    int end = s.indexOf(' ', start);
+    if (end < 0)
+      end = len;
+    out[count++] = s.substring(start, end).toFloat();
+    start = end + 1;
+  }
+  return count;
+}
+
+// Non-blocking check for a stop command while a blocking serial sweep runs.
+// Consumes pending serial bytes and returns true if a STOP line was received.
+static bool serialSweepStopCheck()
+{
+  static String buf;
+  while (Serial.available())
+  {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r')
+    {
+      buf.trim();
+      bool stop = buf.equalsIgnoreCase("SWEEPSTOP") || buf.equalsIgnoreCase("STOP");
+      buf = "";
+      if (stop)
+        return true;
+    }
+    else if (c >= 32 && c <= 126)
+    {
+      buf += c;
+      if (buf.length() > 32)
+        buf = "";
+    }
+  }
+  return false;
+}
+
+// Blocking frequency sweep that streams results over serial. Mirrors the SSE
+// handleSweep() endpoint. Honours SWEEPSTOP received mid-sweep.
+void serialSweep(float fBegin, float fEnd, float fStep, uint8_t averages, uint16_t settle_ms)
+{
+  if (fBegin < ADF_FREQ_MIN || fEnd > ADF_FREQ_MAX || fStep <= 0 || fBegin >= fEnd)
+  {
+    Serial.println("SWEEP ERR {\"error\":\"invalid sweep parameters\"}");
+    return;
+  }
+
+  int totalPoints = (int)((fEnd - fBegin) / fStep) + 1;
+  if (totalPoints > MAX_SWEEP_BUFFER)
+  {
+    Serial.printf("SWEEP ERR {\"error\":\"too many points (max %d)\"}\n", MAX_SWEEP_BUFFER);
+    return;
+  }
+
+  sweepBufferCount = 0;
+  sweepInProgress = true;
+  sweepStopRequested = false;
+  setLEDStatus(LED_MEASURING);
+  adf.begin();
+
+  Serial.printf("SWEEP START {\"f_begin\":%.1f,\"f_end\":%.1f,\"f_step\":%.1f,\"avg\":%d,\"settle\":%d,\"total\":%d}\n",
+                fBegin, fEnd, fStep, averages, settle_ms, totalPoints);
+
+  int pointIndex = 0;
+  for (float f = fBegin; f <= fEnd + 0.001f; f += fStep)
+  {
+    if (serialSweepStopCheck())
+      sweepStopRequested = true;
+    if (sweepStopRequested)
+      break;
+
+    adf.updateFrequency(f * 1e6); // MHz -> Hz
+    delay(settle_ms);             // PLL settle
+
+    uint64_t sum = 0;
+    for (uint8_t i = 0; i < averages; i++)
+    {
+      sum += readIR();
+      if (averages > 1)
+        delay(1);
+    }
+    uint32_t intensity = (uint32_t)(sum / averages);
+
+    if (sweepBufferCount < MAX_SWEEP_BUFFER)
+    {
+      sweepBuffer[sweepBufferCount].frequency = f;
+      sweepBuffer[sweepBufferCount].intensity = intensity;
+      sweepBufferCount++;
+    }
+
+    Serial.printf("SWEEP DATA %d %d %.1f %lu\n", pointIndex, totalPoints, f, intensity);
+    pointIndex++;
+    updateLEDs();
+  }
+
+  adf.stop();
+  if (sweepStopRequested)
+    Serial.printf("SWEEP STOP %d\n", pointIndex);
+  else
+    Serial.printf("SWEEP DONE %d\n", pointIndex);
+
+  sweepInProgress = false;
+  sweepStopRequested = false;
+  setLEDStatus(LED_CONNECTED);
+}
+
+// Parse and execute a single serial command line.
+void processSerialLine(String line)
+{
+  line.trim();
+  if (line.length() == 0)
+    return;
+
+  lastSerialActivity = millis();
+
+  int sp = line.indexOf(' ');
+  String cmd = (sp < 0) ? line : line.substring(0, sp);
+  String args = (sp < 0) ? String("") : line.substring(sp + 1);
+  cmd.toUpperCase();
+  args.trim();
+
+  if (cmd == "PING")
+  {
+    Serial.println("PONG");
+  }
+  else if (cmd == "HELP" || cmd == "?")
+  {
+    Serial.println("CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF");
+  }
+  else if (cmd == "VERSION" || cmd == "VER")
+  {
+    Serial.printf("VERSION {\"version\":\"%s\",\"build_date\":\"%s\",\"build_time\":\"%s\",\"git_hash\":\"%s\",\"git_branch\":\"%s\"}\n",
+                  FIRMWARE_VERSION, BUILD_DATE, BUILD_TIME, GIT_HASH, GIT_BRANCH);
+  }
+  else if (cmd == "STATUS")
+  {
+    Serial.printf("STATUS {\"clients\":%d,\"fmin\":%.1f,\"fmax\":%.1f,\"led\":%d,\"sweep\":%s,\"tsl\":%s,\"gain\":%d,\"integration_time\":%d}\n",
+                  WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus,
+                  sweepInProgress ? "true" : "false", tsl_is_initialized ? "true" : "false",
+                  (int)currentGain, (int)currentIntegrationTime);
+  }
+  else if (cmd == "MEASURE")
+  {
+    float f = args.toFloat();
+    if (f >= ADF_FREQ_MIN && f <= ADF_FREQ_MAX)
+    {
+      setLEDStatus(LED_MEASURING);
+      adf.updateFrequency(f * 1e6);
+      delay(10);
+      uint32_t i = readIR();
+      Serial.printf("DATA %.1f %lu 0.0\n", f, i);
+      setLEDStatus(LED_CONNECTED);
+      adf.stop();
+    }
+    else
+    {
+      // Out-of-range (e.g. f=0 used for a plain live read) -> intensity only
+      uint32_t i = readIR();
+      Serial.printf("DATA %.1f %lu 0.0\n", f, i);
+    }
+  }
+  else if (cmd == "INTENSITY" || cmd == "INT")
+  {
+    setLEDStatus(LED_INTENSITY);
+    lastIntensityRequest = millis();
+    Serial.printf("INT %u\n", cachedIR);
+  }
+  else if (cmd == "RATIO")
+  {
+    // RATIO <f1> <f2> <f3|0> <avg>   (f3 = 0 -> 2-point mode)
+    float v[4] = {0, 0, 0, 3};
+    int n = parseFloats(args, v, 4);
+    if (n < 2)
+    {
+      Serial.println("RATIO ERR {\"error\":\"need f1 f2\"}");
+    }
+    else
+    {
+      float f1 = v[0], f2 = v[1];
+      bool hasF3 = (n >= 3 && v[2] > 0.0f);
+      float f3 = hasF3 ? v[2] : 0.0f;
+      uint8_t averages = (n >= 4) ? (uint8_t)constrain((int)v[3], 1, 20) : 3;
+
+      setLEDStatus(LED_MEASURING);
+      uint32_t I1 = measureIntensityAtFrequency(f1, averages);
+      uint32_t I2 = measureIntensityAtFrequency(f2, averages);
+      uint32_t I3 = hasF3 ? measureIntensityAtFrequency(f3, averages) : 0;
+      setLEDStatus(LED_CONNECTED);
+
+      float r12 = (I1 + I2 > 0) ? ((float)I1 - (float)I2) / ((float)I1 + (float)I2) : 0.0f;
+      float r13 = 0.0f, r23 = 0.0f;
+      if (hasF3)
+      {
+        if (I1 + I3 > 0) r13 = ((float)I1 - (float)I3) / ((float)I1 + (float)I3);
+        if (I2 + I3 > 0) r23 = ((float)I2 - (float)I3) / ((float)I2 + (float)I3);
+      }
+
+      String json = "RATIO {\"avg\":" + String(averages) + ",\"points\":[";
+      json += "{\"f\":" + String(f1, 1) + ",\"I\":" + String(I1) + "},";
+      json += "{\"f\":" + String(f2, 1) + ",\"I\":" + String(I2) + "}";
+      if (hasF3)
+        json += ",{\"f\":" + String(f3, 1) + ",\"I\":" + String(I3) + "}";
+      json += "],\"r12\":" + String(r12, 6);
+      json += ",\"r13\":" + String(r13, 6);
+      json += ",\"r23\":" + String(r23, 6) + "}";
+      Serial.println(json);
+    }
+  }
+  else if (cmd == "SWEEP")
+  {
+    // SWEEP <fb> <fe> <fs> [avg] [settle]
+    float v[5] = {0, 0, 0, 1, 10};
+    int n = parseFloats(args, v, 5);
+    if (n < 3)
+    {
+      Serial.println("SWEEP ERR {\"error\":\"need f_begin f_end f_step\"}");
+    }
+    else
+    {
+      uint8_t averages = (n >= 4) ? (uint8_t)constrain((int)v[3], 1, 20) : 1;
+      uint16_t settle = (n >= 5) ? (uint16_t)constrain((int)v[4], 1, 200) : 10;
+      serialSweep(v[0], v[1], v[2], averages, settle);
+    }
+  }
+  else if (cmd == "SWEEPSTOP" || cmd == "STOP")
+  {
+    sweepStopRequested = true;
+    Serial.println("OK SWEEPSTOP");
+  }
+  else if (cmd == "GAIN")
+  {
+    int g = (int)strtol(args.c_str(), nullptr, 0); // accepts 32 or 0x20
+    if (applyTSLGain(g))
+      Serial.printf("OK GAIN 0x%02X\n", (int)currentGain);
+    else
+      Serial.println("ERR invalid gain (use 0x00,0x10,0x20,0x30)");
+  }
+  else if (cmd == "INTTIME")
+  {
+    int t = (int)strtol(args.c_str(), nullptr, 0);
+    if (applyTSLIntegration(t))
+      Serial.printf("OK INTTIME %d\n", (int)currentIntegrationTime);
+    else
+      Serial.println("ERR invalid integration time (use 0..5)");
+  }
+  else if (cmd == "GETTSL")
+  {
+    Serial.printf("TSL {\"gain\":%d,\"integration_time\":%d}\n",
+                  (int)currentGain, (int)currentIntegrationTime);
+  }
+  else if (cmd == "ADFON")
+  {
+    adf.begin();
+    Serial.println("OK ADF ON");
+  }
+  else if (cmd == "ADFOFF")
+  {
+    adf.stop();
+    Serial.println("OK ADF OFF");
+  }
+  else
+  {
+    Serial.printf("ERR unknown command: %s\n", cmd.c_str());
+  }
+}
+
 void setup()
 {
 
@@ -911,6 +1244,12 @@ void setup()
   WiFi.mode(WIFI_OFF);
   delay(1000);
 
+#ifdef SERIAL_ONLY_MODE
+  // Serial-only firmware build: keep the radio off entirely. The full command
+  // set is still available over USB-CDC serial (see processSerialLine()).
+  WiFi.mode(WIFI_OFF);
+  Serial.println("SERIAL_ONLY_MODE: WiFi disabled — serial command interface only");
+#else
   Serial.println("Starting WiFi Access Point...");
   if (IS_WIFI_AP_MODE)
   {
@@ -978,6 +1317,7 @@ void setup()
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
   }
+#endif // SERIAL_ONLY_MODE
 
   // Mount SPIFFS filesystem (holds all web assets)
   if (!SPIFFS.begin(true))
@@ -1011,16 +1351,13 @@ void setup()
   // TSL2591 init
   if (!tsl.begin())
   {
+    tsl_is_initialized = false;
     Serial.println("TSL2591 not found");
   }
   else
   {
-    tsl.setGain(currentGain);
-    tsl.setTiming(currentIntegrationTime);
-    // turn off led on TSL2591
-    tsl.enableAutoRange(true);
-    Serial.println("TSL2591 initialized");
-    Serial.printf("TSL2591 Gain: 0x%02X, Integration Time: 0x%02X\n", (int)currentGain, (int)currentIntegrationTime);
+    tsl_is_initialized = true;
+    initialize_tsl();
   }
 
   // ADF4351 init
@@ -1182,8 +1519,11 @@ void loop()
   // Update LED status indicators
   updateLEDs();
 
-  // Check if any clients are connected to determine LED status
-  if (WiFi.softAPgetStationNum() > 0)
+  // Determine "connected" state from either a WiFi client or recent serial
+  // activity, so the status LEDs work in serial-only operation too.
+  bool hasClient = (WiFi.softAPgetStationNum() > 0) ||
+                   (millis() - lastSerialActivity < SERIAL_ACTIVITY_TIMEOUT);
+  if (hasClient)
   {
     if (currentLEDStatus == LED_NO_CLIENT)
     {
@@ -1205,10 +1545,8 @@ void loop()
   // uint32_t lux = readTSL2591();
   // uint32_t lux = readIR(); // Read IR instead of light for demonstration
 
-  // catch serial commands and process them
-  // Format should be:
-  // COMMAND PARAMETER
-  // e.g. MEASURE 2500
+  // Catch serial commands and dispatch them to the unified parser
+  // (see processSerialLine() for the full command set / protocol).
   while (Serial.available())
   { // collect one line
     char c = Serial.read();
@@ -1216,70 +1554,9 @@ void loop()
     {
       if (rxBuf.length() > 0)
       {
-        rxBuf.trim();
-
-        if (rxBuf.startsWith("MEASURE"))
-        { // MEASURE <freq>
-          // Format: MEASURE 2500
-          float f = rxBuf.substring(7).toFloat();
-          if (f >= ADF_FREQ_MIN && f <= ADF_FREQ_MAX)
-          {
-            setLEDStatus(LED_MEASURING);  // Set LED to red
-            adf.updateFrequency(f * 1e6); // tune synthesiser
-            delay(10);                    // Allow settling time
-            uint32_t i = readIR();        // intensity
-            Serial.printf("DATA %.1f %lu\n", f, i);
-            setLEDStatus(LED_CONNECTED); // Return to connected state
-            adf.stop();                  // Disable output after measurement
-          }
-          else
-          {
-            setLEDStatus(LED_MEASURING); // Set LED to red
-            uint32_t i = readIR();       // intensity
-            Serial.printf("DATA %.1f %lu\n", f, i);
-            setLEDStatus(LED_CONNECTED); // Return to connected state
-
-            // Serial.printf("ERR range: %.1f not in [%.1f, %.1f] MHz\n", f, ADF_FREQ_MIN, ADF_FREQ_MAX);
-          }
-        }
-        else if (rxBuf == "STATUS")
-        {
-          // Add status command for debugging
-          Serial.printf("STATUS connected:%d freq_range:[%.1f,%.1f] led:%d\n",
-                        WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus);
-        }
-        else if (rxBuf.startsWith("RATIO "))
-        {
-          // Format: RATIO f1 f2
-          int sp1 = rxBuf.indexOf(' ');
-          int sp2 = rxBuf.indexOf(' ', sp1 + 1);
-          if (sp2 > sp1)
-          {
-            float f1 = rxBuf.substring(sp1 + 1, sp2).toFloat();
-            float f2 = rxBuf.substring(sp2 + 1).toFloat();
-
-            setLEDStatus(LED_MEASURING);
-            uint32_t I1 = measureIntensityAtFrequency(f1);
-            uint32_t I2 = measureIntensityAtFrequency(f2);
-            float r12 = (I1 + I2 > 0)
-                            ? ((float)I1 - (float)I2) / ((float)I1 + (float)I2)
-                            : 0.0f;
-            setLEDStatus(LED_CONNECTED);
-
-            Serial.printf("RATIO %.3f %.3f %lu %lu %.6f\n",
-                          f1, f2, I1, I2, r12);
-          }
-          else
-          {
-            Serial.println("ERR RATIO syntax");
-          }
-        }
-        else if (rxBuf.length() > 0)
-        {
-          Serial.printf("ERR unknown command: %s\n", rxBuf.c_str());
-        }
+        processSerialLine(rxBuf);
+        rxBuf = "";
       }
-      rxBuf = "";
     }
     else if (c >= 32 && c <= 126) // Only accept printable characters
     {
