@@ -228,6 +228,8 @@ $("sweepStart").addEventListener("click", async () => {
     setSweepStatus(t("stopped"));
   } finally {
     stopSweepUI();
+    // ADF back to idle when not actively sweeping
+    device.adf(false).catch(() => {});
   }
 });
 
@@ -323,6 +325,8 @@ function stopRatio() {
   $("ratioStart").disabled = !device.connected; $("ratioStop").disabled = true;
   $("ratioDot").classList.remove("running");
   $("ratioStatus").textContent = t("stopped");
+  // ADF back to idle when ratio loop ends
+  if (device.connected) device.adf(false).catch(() => {});
 }
 
 async function ratioLoop() {

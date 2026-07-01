@@ -48,6 +48,15 @@
       #serialLog .err { color: #ff7b7b; }
       #serialLog .muted { color: #5b7693; }
       canvas.plot { width: 100%; display: block; }
+      /* Override global nav-link (white, for navbar) for Bootstrap tab nav */
+      .nav-tabs .nav-link { color: var(--uc2-blue) !important; }
+      .nav-tabs .nav-link:hover { border-color: transparent; background: rgba(2,55,115,0.06); }
+      .nav-tabs .nav-link.active {
+        color: var(--uc2-blue) !important;
+        font-weight: 600;
+        background-color: #fff;
+        border-color: var(--uc2-border) var(--uc2-border) #fff;
+      }
       .big-value {
         font-size: 2.6rem;
         font-weight: 700;

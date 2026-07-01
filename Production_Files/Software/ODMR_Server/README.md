@@ -149,6 +149,11 @@ All web assets (HTML, CSS, JS, images) live in `data/` and are served from the
 ESP32's **SPIFFS filesystem**. This keeps them out of the app partition and
 allows images + Bootstrap to be included without hitting flash limits.
 
+> The firmware serves `data/` directly — the old `src/website/*.h` PROGMEM
+> embedding path is no longer compiled in. Always upload the filesystem
+> (`pio run -t uploadfs`) after flashing; if it's missing the device shows a
+> short "upload the filesystem" page instead of blank 404s.
+
 ```
 ODMR_Server/
 ├── src/
@@ -170,6 +175,36 @@ ODMR_Server/
 ├── custom_partition_esp32s3.csv
 └── platformio.ini
 ```
+
+---
+
+## Serving & WiFi performance
+
+The device is a single-radio 2.4 GHz AP serving several clients, so page-load
+speed and connection stability come down to a few things the firmware now
+handles automatically:
+
+- **Async web server.** Built on `ESPAsyncWebServer` (not the blocking
+  `WebServer`), so requests are handled off the main loop and a running sweep no
+  longer stalls the UI. The sweep streams over Server-Sent-Events (`/sweep`) and
+  is measured one point per `loop()` iteration — all SPI/I²C stays on the main
+  thread.
+- **Gzip.** `scripts/gzip_assets.py` runs as a PlatformIO **pre-build** hook and
+  produces a `<file>.gz` for every compressible asset in `data/`. `serveStatic`
+  serves those automatically with `Content-Encoding: gzip`. Bootstrap CSS drops
+  232 KB → ~31 KB, the JS 80 KB → ~24 KB, each HTML page ~75 %. The `.gz` files
+  are git-ignored (regenerated on every build).
+- **Caching.** Third-party assets (`bootstrap.*`, `NVGitter.png`) are sent with
+  `Cache-Control: immutable, max-age=1y`, so after the first visit page
+  navigations don't re-download them; HTML gets a short cache so UI edits still
+  appear.
+- **WiFi channel.** At boot the AP scans and picks the least-congested
+  **non-overlapping** channel (1, 6 or 11) instead of a random 1–11. Random
+  channels frequently landed on an overlapping one, causing adjacent-channel
+  interference — the usual cause of "sometimes fast, sometimes slow".
+
+No extra build steps are needed — gzip happens on `pio run` / `buildfs`. Just
+remember `uploadfs` so the `.gz` assets reach the device.
 
 ---
 
