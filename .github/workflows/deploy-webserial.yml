@@ -1,0 +1,48 @@
+name: Deploy WebSerial App (GitHub Pages)
+
+# Publishes the standalone WebSerial control app
+# (Production_Files/Software/ODMR_Server/webserial-app) to GitHub Pages.
+#
+# One-time setup: in the repo, go to Settings ▸ Pages ▸ "Build and deployment"
+# and set Source = "GitHub Actions". After the first successful run the app is
+# served at https://openuc2.github.io/TechnicalDocs-openUC2-QBox/
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Production_Files/Software/ODMR_Server/webserial-app/**"
+      - ".github/workflows/deploy-webserial.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping queued runs in between.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload WebSerial app artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Production_Files/Software/ODMR_Server/webserial-app
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
