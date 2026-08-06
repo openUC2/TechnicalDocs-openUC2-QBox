@@ -19,6 +19,8 @@ import shutil
 Import("env")  # noqa: F821  (injected by PlatformIO/SCons)
 
 DATA_DIR = os.path.join(env.subst("$PROJECT_DIR"), "data")  # noqa: F821
+SRC_DIR = os.path.join(env.subst("$PROJECT_DIR"), "src/website_html")  # noqa: F821
+
 COMPRESS_EXT = (".html", ".css", ".js", ".json", ".svg", ".ico", ".txt", ".xml", ".map")
 
 
@@ -33,14 +35,14 @@ def gzip_assets(*_args, **_kwargs):
         return
 
     total_in = total_out = 0
-    for name in sorted(os.listdir(DATA_DIR)):
-        src = os.path.join(DATA_DIR, name)
+    for name in sorted(os.listdir(SRC_DIR)):
+        src = os.path.join(SRC_DIR, name)
+        dst = os.path.join(DATA_DIR, name + ".gz")
         if not os.path.isfile(src) or name.endswith(".gz"):
             continue
         if os.path.splitext(name)[1].lower() not in COMPRESS_EXT:
             continue
 
-        dst = src + ".gz"
         # Skip if the .gz is already up to date.
         if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
             continue
