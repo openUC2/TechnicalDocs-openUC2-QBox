@@ -3,3 +3,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# Local Claude Code preview config (machine-specific absolute paths)
+.claude/
+
+# Gzipped web assets — regenerated from data/ by scripts/gzip_assets.py on build
+data/*.gz
