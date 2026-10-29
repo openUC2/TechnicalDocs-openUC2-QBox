@@ -3,7 +3,9 @@
 The ESP32-S3/C3 ODMR firmware exposes a line-based ASCII protocol over USB-CDC
 serial (115200 baud) that mirrors the full HTTP/web API. This lets the device be
 driven entirely over serial — e.g. by the standalone
-[`webserial-app/`](webserial-app/) — with no WiFi connection.
+[`webserial-app/`](webserial-app/) (browser, or the ODMR tab of the
+[UC2 Control Android app](https://github.com/youseetoo/UC2Control)) — with no
+WiFi connection.
 
 - **Host → device:** one command per line, terminated by `\n` (or `\r\n`).
   The command keyword is **case-insensitive**; parameters are space-separated.

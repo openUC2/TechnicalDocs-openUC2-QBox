@@ -143,9 +143,55 @@ MIT License—see `LICENSE` file for details.
 
 # ODMR Server — Build, Flash & Development Guide
 
+## Use it
+
+**Flash** — no toolchain needed: open the [openUC2 web flasher](https://youseetoo.github.io)
+in Chrome/Edge, category **qBOX (ODMR)**, pick *ODMR server (XIAO ESP32-C3)* (or
+-S3), plug the board in by USB-C and click *Install*. The image contains firmware
+and web pages; it is built and published by CI (see [CI](#ci--published-images)).
+
+**Control** — three front ends, same firmware:
+
+| Front end | How it connects | Where |
+|---|---|---|
+| On-device web pages | WiFi: join the board's access point, open `http://192.168.4.1` | served from SPIFFS (`src/website_html/`) |
+| WebSerial app | USB cable, Chrome/Edge on a laptop | <https://youseetoo.github.io/odmr> ([`webserial-app/`](webserial-app/)) |
+| UC2 Control (Android) | USB-C OTG cable to the phone, **ODMR** tab | [APK: UC2Control releases](https://github.com/youseetoo/UC2Control/releases/latest) |
+
+The WebSerial app and the Android app are the same page: UC2 Control bundles
+`webserial-app/` and gives it the phone's USB port. Both speak the
+[serial protocol](SERIAL_PROTOCOL.md) and add a live monitor, cursor readout,
+saved sweep series, CSV/PNG export and sharing on top of the on-device pages.
+
+---
+
+## CI — published images
+
+`.github/workflows/build_firmware.yaml` (repo root) runs on every push to `main`
+that touches `ODMR_Server/`: it builds both boards exactly as in
+[step 2](#2--create-a-single-merged-binary-for-web-flasher--distribution)
+(`pio run`, `-t buildfs`, `-t mergedbin`), writes the ESP Web Tools manifests
+(`chipFamily` `ESP32-C3` / `ESP32-S3`) and pushes them, together with
+`webserial-app/`, to [youseetoo.github.io](https://github.com/youseetoo/youseetoo.github.io):
+
+| Published file | Used by |
+|---|---|
+| `static/firmware_build/odmr-xiao-esp32c3.bin`, `…-manifest.json` (and S3) | web flasher |
+| `odmr/` | <https://youseetoo.github.io/odmr> |
+
+Pull requests only build. Publishing needs the `API_TOKEN_GITHUB` secret.
+`deploy-webserial.yml` additionally serves `webserial-app/` from this repo's
+GitHub Pages.
+
+To bring the WebSerial app into the Android app, run
+`tools/sync_odmr_webapp.sh` in the [UC2Control](https://github.com/youseetoo/UC2Control) repo.
+
+---
+
 ## Architecture
 
-All web assets (HTML, CSS, JS, images) live in `data/` and are served from the
+The web pages are edited in `src/website_html/`, gzipped into `data/` by
+`scripts/gzip_assets.py` on every build, and served from the
 ESP32's **SPIFFS filesystem**. This keeps them out of the app partition and
 allows images + Bootstrap to be included without hitting flash limits.
 
@@ -157,19 +203,15 @@ allows images + Bootstrap to be included without hitting flash limits.
 ```
 ODMR_Server/
 ├── src/
-│   └── main.cpp            ← Firmware (web server, sensor, ADF4351 control)
+│   ├── main.cpp            ← Firmware (web server, serial protocol, sensor, ADF4351)
+│   └── website_html/       ← on-device pages: edit these
 ├── data/                   ← SPIFFS root – served at http://192.168.4.1/
-│   ├── index.html
-│   ├── messung.html
-│   ├── messung_webserial.html
-│   ├── ratio.html
-│   ├── justage.html
-│   ├── infos.html
-│   ├── style.css
-│   ├── bootstrap.min.css       (offline, no CDN)
-│   ├── bootstrap.bundle.min.js (offline, includes Popper)
-│   └── NVGitter.png
+│   ├── *.html.gz, style.css.gz  (generated from src/website_html, git-ignored)
+│   └── NVGitter*.png
+├── webserial-app/          ← USB front end (browser + UC2 Control Android app)
+├── SERIAL_PROTOCOL.md      ← commands the WebSerial app uses
 ├── scripts/
+│   ├── gzip_assets.py        ← PlatformIO pre-script: src/website_html → data/*.gz
 │   └── merge_espwebtools.py  ← PlatformIO post-script: builds merged .bin
 ├── custom_partition_esp32c3.csv
 ├── custom_partition_esp32s3.csv
@@ -320,6 +362,10 @@ pio run -e seeed_xiao_esp32c3 -t upload_merged \
 
 ## 4 — Flash via Browser (ESP Web Tools)
 
+Released firmware: [youseetoo.github.io](https://youseetoo.github.io) → qBOX (ODMR).
+
+Your own build:
+
 1. Build the merged binary (Step 2 above).
 2. Serve it locally:
 
@@ -360,7 +406,7 @@ AP IP: 192.168.4.1
 
 ## 6 — Modify Web Assets
 
-Edit files in `data/` directly. After changes:
+Edit the pages in `src/website_html/` (not `data/`, which is regenerated). After changes:
 
 ```bash
 # Re-build and upload SPIFFS only (no firmware compile needed)
@@ -398,39 +444,11 @@ pio run -e seeed_xiao_esp32c3 -t uploadfs
 
 ## Development Workflow
 
-### 1. Edit HTML/CSS Files
-Edit the web interface files in `src/website_html/`:
-- `index.html` - Main landing page with multi-language support
-- `messung.html` - On-device measurement page
-- `messung_webserial.html` - WebSerial measurement page
-- `justage.html` - Photodiode alignment page with live intensity monitoring
-- `infos.html` - Information page
-- `style.css` - Global styles
+Edit `src/website_html/` (on-device pages) or `webserial-app/` (USB front end),
+then build and flash as in steps 1–3. The old `build_website.py` / PROGMEM
+header path is gone; pages come from SPIFFS.
 
-### 2. Build Header Files
-Run the build script to convert HTML/CSS files to C++ header files:
-
-```bash
-python3 build_website.py
-```
-
-This script automatically:
-- Converts all HTML and CSS files to header files
-- Generates version information with build date and git hash
-- Optimizes and converts images to header files
-- Creates PROGMEM arrays for efficient ESP32 memory usage
-
-### 2a. Image Optimization (Optional)
-If you need to optimize images manually:
-
-```bash
-python3 optimize_image.py  # Optimizes NVGitter.png to 300px (43KB)
-python3 convert_image.py   # Converts optimized image to header file
-```
-
-Images are automatically optimized to 300px width and converted to RGB format to reduce size for ESP32C3 compatibility.
-
-### 3. Flash Firmware
+### Flash Firmware (local shortcuts)
 Use PlatformIO to build and flash the firmware:
 
 ```bash
@@ -474,7 +492,8 @@ cd /Users/bene/Dropbox/Dokumente/Promotion/PROJECTS/TechnicalDocs-openUC2-QBox/P
 - ✅ **ESP32-C3 Serial**: TinyUSB CDC with 1024-byte buffers
 - ✅ **Live Intensity Monitoring**: Real-time photodiode readings for optical alignment
 - ✅ **Multi-Language Support**: German/English with localStorage persistence
-- ✅ **Automated Build System**: HTML→Header conversion with Python script
-- ✅ **Image Support**: Optimized PNG images served from header files (43KB, ESP32C3 compatible)
+- ✅ **Automated Build System**: pages gzipped into SPIFFS on every build, merged image + manifests by CI
+- ✅ **Image Support**: Optimized PNG images served from SPIFFS
 - ✅ **Root Path Handling**: Explicit "/" route to prevent redirection issues
 - ✅ **Version Information**: Build date, git hash displayed on website and available via /version endpoint
+- ✅ **WebSerial + Android front end**: [`webserial-app/`](webserial-app/), also in the UC2 Control Android app (ODMR tab)

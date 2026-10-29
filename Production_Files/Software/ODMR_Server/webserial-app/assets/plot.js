@@ -1,7 +1,8 @@
 /* ===========================================================================
  * Lightweight canvas line plot (no external charting library).
  * Supports multiple series, auto / fixed axis ranges, grid, and labels.
- * Used by the Sweep (f vs I) and B-Field (t vs ratio) tabs.
+ * Hover (mouse) or tap (touch) shows the nearest data point.
+ * Used by the Sweep (f vs I), Live and B-Field (t vs ratio) tabs.
  * =========================================================================== */
 
 const UC2_BLUE = "#023773";
@@ -22,15 +23,29 @@ export class LinePlot {
         emptyText: "No data",
         xTickFmt: (v) => v.toFixed(0),
         yTickFmt: (v) => v.toFixed(0),
+        pointFmt: (p) => `${p.x.toFixed(2)} / ${p.y.toFixed(2)}`, // nearest-point readout
       },
       opts
     );
     this.series = []; // [{points:[{x,y}], color, marker}]
-    this._resize();
-    window.addEventListener("resize", () => {
-      this._resize();
+    this._cursor = null; // {x, y} in CSS px while hovering / after a tap
+    const pick = (e) => {
+      const r = this.canvas.getBoundingClientRect();
+      this._cursor = { x: e.clientX - r.left, y: e.clientY - r.top };
+      this.draw();
+    };
+    canvas.addEventListener("pointermove", pick);
+    canvas.addEventListener("pointerdown", pick);
+    // Touch keeps the readout after the finger lifts; a mouse clears it on leave.
+    canvas.addEventListener("pointerleave", (e) => {
+      if (e.pointerType !== "mouse") return;
+      this._cursor = null;
       this.draw();
     });
+    this._resize();
+    window.addEventListener("resize", () => this.draw());
+    // A plot on a tab that was hidden at load has width 0: redraw when its tab shows.
+    document.addEventListener("shown.bs.tab", () => this.draw());
   }
 
   _resize() {
@@ -53,6 +68,8 @@ export class LinePlot {
   }
 
   draw() {
+    const parent = this.canvas.parentElement;
+    if (parent && parent.clientWidth && parent.clientWidth !== this._w) this._resize();
     const ctx = this.ctx;
     const W = this._w;
     const H = this._h;
@@ -169,6 +186,43 @@ export class LinePlot {
       }
     }
     ctx.restore();
+    this._drawReadout(X, Y, W, H, pad);
+  }
+
+  // Crosshair + label at the data point nearest to the cursor (pixel distance).
+  _drawReadout(X, Y, W, H, pad) {
+    const c = this._cursor;
+    if (!c) return;
+    let best = null, bestD = Infinity;
+    for (const s of this.series) {
+      for (const p of s.points) {
+        const d = (X(p.x) - c.x) ** 2 + (Y(p.y) - c.y) ** 2;
+        if (d < bestD) { bestD = d; best = p; }
+      }
+    }
+    if (!best) return;
+    const ctx = this.ctx, px = X(best.x), py = Y(best.y);
+    if (px < pad.left || px > W - pad.right || py < pad.top || py > H - pad.bottom) return;
+    ctx.strokeStyle = "rgba(2,55,115,0.35)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(px, pad.top); ctx.lineTo(px, H - pad.bottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.left, py); ctx.lineTo(W - pad.right, py); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = UC2_GREEN;
+    ctx.beginPath(); ctx.arc(px, py, 5, 0, 2 * Math.PI); ctx.fill();
+    const label = this.opts.pointFmt(best);
+    ctx.font = "12px sans-serif";
+    const tw = ctx.measureText(label).width + 12;
+    const bx = Math.min(Math.max(px + 8, pad.left), W - pad.right - tw);
+    const by = py - 26 < pad.top ? py + 8 : py - 26;
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.strokeStyle = UC2_BLUE;
+    ctx.fillRect(bx, by, tw, 20);
+    ctx.strokeRect(bx, by, tw, 20);
+    ctx.fillStyle = UC2_BLUE;
+    ctx.textAlign = "left";
+    ctx.fillText(label, bx + 6, by + 14);
   }
 }
 

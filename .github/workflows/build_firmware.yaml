@@ -1,224 +1,135 @@
-# Build ODMR Firmware from external repository
-# This workflow clones and builds the ODMR firmware from TechnicalDocs-openUC2-QBox
-# and uploads binaries to youseetoo.github.io for web flasher integration
+# Build the ODMR firmware (XIAO ESP32-S3 / ESP32-C3) and publish it to
+# youseetoo.github.io:
+#   static/firmware_build/odmr-xiao-<chip>.bin + -manifest.json
+#       read by the web flasher (https://youseetoo.github.io, js/flasher/config.js)
+#   odmr/   the WebSerial app (https://youseetoo.github.io/odmr)
+#
+# Each image is bootloader + partitions + app + SPIFFS (the board's own web
+# pages), merged at 0x0 by scripts/merge_espwebtools.py — the same image
+# `pio run -t mergedbin` gives you locally.
+#
+# Pull requests only build; pushes to main also publish.
 
-name: Build ODMR Firmware (External)
+name: Build ODMR Firmware
 
 on:
   workflow_dispatch:
-  schedule:
-    # Run weekly on Monday at 2 AM UTC
-    - cron: '0 2 * * 1'
   push:
-    branches:
-      - 'main'
-      - 'fix-listoferrors'
+    branches: [main]
+    paths:
+      - 'Production_Files/Software/ODMR_Server/**'
+      - '.github/workflows/build_firmware.yaml'
+  pull_request:
     paths:
       - 'Production_Files/Software/ODMR_Server/**'
       - '.github/workflows/build_firmware.yaml'
 
 env:
-  ODMR_REPO: 'openUC2/TechnicalDocs-openUC2-QBox'
-  WEB_REPO: 'youseetoo/youseetoo.github.io'
+  PROJECT_DIR: Production_Files/Software/ODMR_Server
+  WEB_REPO: youseetoo/youseetoo.github.io
 
 jobs:
-  # ==============================================================
-  # BUILD — compile each ODMR environment in matrix
-  # ==============================================================
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ---------- ESP32‑S3 ----------
           - env_name: seeed_xiao_esp32s3
-            chip: esp32s3
-            flash_size: 4MB
-            partition_csv: custom_partition_esp32s3.csv
-            spiffs_offset: "0x291000"
-            display_name: "ODMR Xiao ESP32S3"
-            board_id: "odmr-xiao-esp32s3"
-          # ---------- ESP32‑C3 ----------
+            board_id: odmr-xiao-esp32s3
+            chip_family: ESP32-S3
+            display_name: ODMR Xiao ESP32S3
           - env_name: seeed_xiao_esp32c3
-            chip: esp32c3
-            flash_size: 4MB
-            partition_csv: custom_partition_esp32c3.csv
-            spiffs_offset: "0x2B0000"
-            display_name: "ODMR Xiao ESP32C3"
-            board_id: "odmr-xiao-esp32c3"
-
+            board_id: odmr-xiao-esp32c3
+            chip_family: ESP32-C3
+            display_name: ODMR Xiao ESP32C3
+    defaults:
+      run:
+        working-directory: ${{ env.PROJECT_DIR }}
     steps:
-      # ---------------- CHECKOUT ODMR SOURCE ----------------
-      - name: Checkout ODMR firmware source (+submodules)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          repository: ${{ env.ODMR_REPO }}
-          fetch-depth: 0
-          submodules: recursive
-          token: ${{ secrets.API_TOKEN_GITHUB }}
+          fetch-depth: 0   # tags, for the version in the manifest
 
-      # ---------------- PYTHON TOOLCHAIN ---------------
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
-      - name: Install PlatformIO & helpers
+      - name: Install PlatformIO and esptool
+        run: pip install platformio esptool
+
+      # App, then SPIFFS (data/, gzipped from src/website_html by
+      # scripts/gzip_assets.py), then the merged image in build/fw-images/.
+      - name: Build firmware, filesystem and merged image
         run: |
-          python -m pip install --upgrade pip
-          pip install platformio esptool
+          pio run -e ${{ matrix.env_name }}
+          pio run -e ${{ matrix.env_name }} -t buildfs
+          pio run -e ${{ matrix.env_name }} -t mergedbin
 
-      # ---------------- SET PROJECT PATH ----------------
-      - name: Navigate to PIO project
+      - name: Name image and write ESP Web Tools manifest
         run: |
-          PROJECT_DIR="${GITHUB_WORKSPACE}/Production_Files/Software/ODMR_Server"
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-          echo "==> PIO project at: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR"
-
-      - name: Install PlatformIO libs
-        run: pio lib install
-        working-directory: ${{ env.PROJECT_DIR }}
-
-      # ---------------- COMPILE APP --------------------
-      - name: Build firmware – ${{ matrix.env_name }}
-        run: pio run -v --environment ${{ matrix.env_name }}
-        working-directory: ${{ env.PROJECT_DIR }}
-
-      # ---------------- BUILD SPIFFS IMAGE ---------------
-      - name: Build SPIFFS filesystem image – ${{ matrix.env_name }}
-        run: pio run -t buildfs --environment ${{ matrix.env_name }}
-        working-directory: ${{ env.PROJECT_DIR }}
-
-      # ---------------- MERGE BINARIES ------------------
-      - name: Merge binaries (firmware + SPIFFS)
-        shell: bash
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          BUILD_DIR=".pio/build/${{ matrix.env_name }}"
-          mkdir -p "${GITHUB_WORKSPACE}/build/fw-images"
-
-          cd "$BUILD_DIR"
-
-          # Determine bootloader address based on chip
-          # ESP32-S3 and ESP32-C3 (and newer "C"/"H" series) place the bootloader at 0x0.
-          # Only the original ESP32 and ESP32-S2 use 0x1000.
-          if [[ "${{ matrix.chip }}" == "esp32s3" || "${{ matrix.chip }}" == "esp32c3" || "${{ matrix.chip }}" == "esp32c6" || "${{ matrix.chip }}" == "esp32h2" ]]; then
-            BOOT_ADDR="0x0"
-          else
-            BOOT_ADDR="0x1000"
-          fi
-
-          # Find boot_app0.bin
-          BOOT_APP0=$(find ~/.platformio -name "boot_app0.bin" | head -1)
-
-          # Merge firmware + SPIFFS filesystem into a single flashable binary
-          python -m esptool --chip ${{ matrix.chip }} merge_bin \
-            -o "${GITHUB_WORKSPACE}/build/fw-images/${{ matrix.board_id }}.bin" \
-            --flash_mode dio --flash_freq 40m --flash_size ${{ matrix.flash_size }} \
-            $BOOT_ADDR bootloader.bin \
-            0x8000 partitions.bin \
-            0xe000 "$BOOT_APP0" \
-            0x10000 firmware.bin \
-            ${{ matrix.spiffs_offset }} spiffs.bin
-
-          echo "==> Merged binary (firmware+SPIFFS) created: ${{ matrix.board_id }}.bin"
-
-      # ---------------- CREATE MANIFEST -----------------
-      - name: Create ESP Web Tools manifest
-        run: |
-          # Get version from ODMR repo
-          cd "${{ env.PROJECT_DIR }}"
-          ODMR_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
-          echo "ODMR Version: $ODMR_VERSION"
-
-          # Create manifest for ESP Web Tools
-          cat > "${GITHUB_WORKSPACE}/build/fw-images/${{ matrix.board_id }}-manifest.json" << EOF
+          mkdir -p out
+          cp build/fw-images/${{ matrix.env_name }}.bin out/${{ matrix.board_id }}.bin
+          VERSION=$(git describe --tags --always)
+          cat > out/${{ matrix.board_id }}-manifest.json <<EOF
           {
             "name": "${{ matrix.display_name }}",
-            "version": "$ODMR_VERSION",
-            "home_assistant_domain": "ODMR-ESP32",
-            "funding_url": "https://github.com/${{ env.ODMR_REPO }}",
+            "version": "$VERSION",
+            "funding_url": "https://github.com/${{ github.repository }}",
             "builds": [
               {
-                "chipFamily": "ESP32-${{ matrix.chip }}",
+                "chipFamily": "${{ matrix.chip_family }}",
                 "parts": [{ "path": "${{ matrix.board_id }}.bin", "offset": 0 }]
               }
             ]
           }
           EOF
+          cat out/${{ matrix.board_id }}-manifest.json
 
-      # ---------------- UPLOAD ARTIFACT ----------------
-      - name: Publish merged artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: odmr-${{ matrix.board_id }}-bin
-          path: build/fw-images/
+          name: odmr-${{ matrix.board_id }}
+          path: ${{ env.PROJECT_DIR }}/out/
 
-  # ==============================================================
-  # DEPLOY — push to youseetoo.github.io
-  # ==============================================================
-  deploy:
+  publish:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && contains(github.ref, 'main'))
     steps:
-      # ---------------- GATHER ARTIFACTS ---------------
-      - name: Download all ODMR firmware artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          path: firmware_artifacts
-          pattern: odmr-*-bin
+          path: src
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: fw
+          pattern: odmr-*
           merge-multiple: true
 
-      - name: List downloaded artifacts
-        run: |
-          echo "==> Downloaded ODMR firmware:"
-          ls -la firmware_artifacts/
-
-      # ---------------- CHECKOUT WEB REPO --------------
-      - name: Checkout youseetoo.github.io (target)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: ${{ env.WEB_REPO }}
           path: dest
           token: ${{ secrets.API_TOKEN_GITHUB }}
 
-      # ---------------- COPY & COMMIT ------------------
-      - name: Copy binaries & commit
-        shell: bash
+      - name: Copy firmware and WebSerial app, commit
         run: |
-          set -euo pipefail
-          shopt -s nullglob
-
-          files=(firmware_artifacts/*)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No files available to copy from firmware_artifacts/"
-            exit 1
-          fi
-
-          mkdir -p dest/static/firmware_odmr
-          mkdir -p dest/static/firmware_build
-
-          cp "${files[@]}" dest/static/firmware_odmr/
-          # cp files but exclude json manifest files (only copy .bin)
-          for file in "${files[@]}"; do
-            if [[ "$file" == *.bin ]]; then
-              cp "$file" dest/static/firmware_build/
-            fi
-          done
+          set -eu
+          ls -la fw
+          # firmware_build is what the flasher reads; firmware_odmr keeps old links working
+          mkdir -p dest/static/firmware_build dest/static/firmware_odmr
+          cp fw/* dest/static/firmware_build/
+          cp fw/* dest/static/firmware_odmr/
+          rm -rf dest/odmr
+          cp -R "src/${PROJECT_DIR}/webserial-app" dest/odmr
 
           cd dest
           git config user.email 'bene.d@gmx.de'
           git config user.name 'beniroquai'
-
-          git add static/firmware_odmr static/firmware_build
-
+          git add -A static/firmware_build static/firmware_odmr odmr
           if git diff --cached --quiet; then
-            echo "No changes to commit"
+            echo "Nothing changed"
             exit 0
           fi
-
-          git commit -m "Update ODMR firmware binaries (ESP32-C3 & ESP32-S3) => https://github.com/${{ env.ODMR_REPO }}"
+          git commit -m "ODMR firmware and WebSerial app from ${{ github.repository }}@${GITHUB_SHA::7}"
           git push

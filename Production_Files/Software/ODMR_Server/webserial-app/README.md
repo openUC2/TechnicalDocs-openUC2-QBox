@@ -7,9 +7,14 @@ A self-contained, **WiFi-free** control interface for the openUC2 ODMR device
 | Tool | Mirrors | Serial commands used |
 |------|---------|----------------------|
 | **Frequenz-Sweep** | `messung.html` / `messung_webserial.html` | `SWEEP`, `SWEEPSTOP` |
+| **Live Monitor** | — (intensity over time at one frequency) | `MEASURE` |
 | **B-Field Monitor** | `ratio.html` | `RATIO` |
-| **Justage (Alignment)** | `justage.html` | `INTENSITY`, `GAIN`, `INTTIME`, `GETTSL` |
+| **Justage (Alignment)** | `justage.html` (plot, range hint, tutorial) | `INTENSITY`, `GAIN`, `INTTIME`, `GETTSL` |
 | Connection bar | `/version`, `/tsl/settings` | `VERSION`, `STATUS`, `GETTSL`, `PING` |
+
+Live at **<https://youseetoo.github.io/odmr>** and, unchanged, in the
+**ODMR** tab of the [UC2 Control Android app](https://github.com/youseetoo/UC2Control/releases/latest)
+(USB-C OTG cable to the phone).
 
 It is a plain static site (no build step) designed to be hosted on **GitHub
 Pages**. All assets (Bootstrap, the shared `style.css`, the NV-lattice image)
@@ -23,13 +28,23 @@ are bundled locally, so it also works fully offline once loaded.
    — see below) and connect the board by **USB**.
 2. Open the app in **Google Chrome, Microsoft Edge, or Opera** on the desktop.
    *(Web Serial is not available in Firefox or Safari, or on iOS.)*
+   On Android, use the UC2 Control app instead (Chrome on Android has no Web
+   Serial): open its **ODMR** tab.
 3. Click **„Gerät verbinden"** and pick the serial port (115200 baud).
 4. The connection bar turns green and shows the firmware version. Use the tabs:
-   - **Frequenz-Sweep** — set start/stop/step (+ averages, settle), run a sweep,
-     overlay multiple series, export CSV.
-   - **B-Field Monitor** — 2- or 3-point ratio monitoring with a live plot.
-   - **Justage** — live photodiode intensity for optical alignment, plus TSL2591
-     gain / integration-time settings.
+   - **Frequenz-Sweep** — set start/stop/step (+ averages, settle), see the
+     estimated duration, run a sweep, overlay multiple series (kept across
+     reloads, last 20), fixed or auto y-range, export CSV or PNG, share.
+   - **Live Monitor** — intensity at a fixed frequency over time, CSV export.
+   - **B-Field Monitor** — 2- or 3-point ratio monitoring with a live plot and
+     selectable y-range.
+   - **Justage** — live photodiode intensity with plot, the optimal range for
+     the current gain / integration time (saturation warning), a step-by-step
+     alignment tutorial, plus TSL2591 gain / integration-time settings.
+
+   Tap or hover a plot for the nearest point (frequency · intensity).
+   Downloads go to the browser's download folder; in the Android app to
+   `Download/UC2 ODMR/`, with a **Share** button.
 
 The **„Log anzeigen"** button reveals the raw serial traffic and a box to send
 manual commands (e.g. `PING`, `STATUS`).
@@ -73,7 +88,7 @@ encoding; integration time is `0..5` → 100…600 ms.
 
 ```
 webserial-app/
-├── index.html          Single-page UI (connection bar + 4 tabs)
+├── index.html          Single-page UI (connection bar + 5 tabs)
 ├── assets/
 │   ├── app.js          UI controller + i18n (DE/EN)
 │   ├── serial.js       SerialDevice — Web Serial driver, command queue, parsing
@@ -102,6 +117,11 @@ https://openuc2.github.io/TechnicalDocs-openUC2-QBox/
 ```
 
 You can also trigger it manually from the **Actions** tab (workflow_dispatch).
+
+[`build_firmware.yaml`](../../../../.github/workflows/build_firmware.yaml) also
+copies this folder to [youseetoo.github.io/odmr](https://youseetoo.github.io/odmr)
+together with the firmware images. The Android app bundles a copy: run
+`tools/sync_odmr_webapp.sh` in the UC2Control repo after changing it.
 
 ---
 

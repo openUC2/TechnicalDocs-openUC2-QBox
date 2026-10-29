@@ -138,6 +138,7 @@
       <!-- ░░ Tab nav ░░ -->
       <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-sweep" type="button" data-i18n="tab_sweep">Frequenz-Sweep</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-live" type="button" data-i18n="tab_live">Live-Monitor</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ratio" type="button" data-i18n="tab_ratio">B-Field Monitor</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-align" type="button" data-i18n="tab_align">Justage</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-info" type="button" data-i18n="tab_info">Infos</button></li>
@@ -154,6 +155,8 @@
                   <div>
                     <button class="btn btn-outline-secondary btn-sm" id="sweepClear" data-i18n="clear">Leeren</button>
                     <button class="btn btn-success btn-sm" id="sweepCsv">CSV ↓</button>
+                    <button class="btn btn-outline-success btn-sm" id="sweepPng">PNG ↓</button>
+                    <button class="btn btn-outline-primary btn-sm d-none" id="sweepShare" data-i18n="share">Teilen</button>
                   </div>
                 </div>
                 <div class="card-body">
@@ -187,6 +190,17 @@
                       <input type="number" class="form-control form-control-sm" id="sweepSettle" value="10" min="1" max="200" />
                     </div>
                   </div>
+                  <div class="row g-2 mb-2">
+                    <div class="col-6">
+                      <label class="form-label small" data-i18n="y_min">Y min</label>
+                      <input type="number" class="form-control form-control-sm" id="sweepYMin" placeholder="auto" />
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label small" data-i18n="y_max">Y max</label>
+                      <input type="number" class="form-control form-control-sm" id="sweepYMax" placeholder="auto" />
+                    </div>
+                  </div>
+                  <div class="small text-muted mb-2" id="sweepSummary"></div>
                   <button class="btn btn-success w-100 mb-2" id="sweepStart" disabled data-i18n="start_sweep">▶ Sweep starten</button>
                   <div class="small text-muted" id="sweepStatus" data-i18n="ready">Bereit</div>
                 </div>
@@ -203,6 +217,59 @@
                     <tbody id="sweepSeriesTable"></tbody>
                   </table>
                   <div class="p-2 text-muted small" id="noSeries" data-i18n="no_series">Noch keine Messreihen.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ LIVE MONITOR TAB ════════ -->
+        <div class="tab-pane fade" id="tab-live" role="tabpanel">
+          <div class="row">
+            <div class="col-lg-8">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <span data-i18n="live_plot">📈 Intensität vs. Zeit</span>
+                  <div>
+                    <select id="liveWindow" style="width:auto;display:inline-block;padding:.25rem;">
+                      <option value="10">10 s</option>
+                      <option value="30" selected>30 s</option>
+                      <option value="60">60 s</option>
+                      <option value="120">120 s</option>
+                    </select>
+                    <button class="btn btn-outline-secondary btn-sm" id="liveClear" data-i18n="clear">Leeren</button>
+                    <button class="btn btn-success btn-sm" id="liveCsv">CSV ↓</button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <canvas class="plot" id="liveCanvas" data-height="300"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="card">
+                <div class="card-header" data-i18n="live_control">🎛 Live-Kontrolle</div>
+                <div class="card-body">
+                  <div class="mb-2">
+                    <label class="form-label small" data-i18n="live_freq">Frequenz (MHz)</label>
+                    <input type="number" class="form-control form-control-sm" id="liveFreq" value="2870" min="2200" max="4400" step="0.1" />
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label small" data-i18n="interval">Messintervall (ms)</label>
+                    <select class="form-select form-select-sm" id="liveInterval">
+                      <option value="100">100 ms</option>
+                      <option value="250">250 ms</option>
+                      <option value="500" selected>500 ms</option>
+                      <option value="1000">1 s</option>
+                    </select>
+                  </div>
+                  <button class="btn btn-success w-100 mb-3" id="liveStart" disabled data-i18n="start_live">▶ Live-Monitor starten</button>
+                  <div class="text-center">
+                    <small class="text-muted" data-i18n="current_value">Aktueller Wert</small>
+                    <div class="big-value" id="liveValue">---</div>
+                    <small class="text-muted"><span data-i18n="measurements">Messungen</span>: <span id="liveCount">0</span></small>
+                  </div>
+                  <p class="small text-muted mt-3 mb-0" data-i18n="live_hint">Misst die Fluoreszenz fortlaufend bei einer festen Mikrowellenfrequenz, z. B. um die Wirkung eines Magneten direkt zu sehen.</p>
                 </div>
               </div>
             </div>
@@ -292,6 +359,12 @@
                       <option value="60">60 s</option>
                       <option value="120">120 s</option>
                     </select>
+                    <select id="ratioYRange" style="width:auto;display:inline-block;padding:.25rem;">
+                      <option value="auto" selected>Y: Auto</option>
+                      <option value="0.1">±0.1</option>
+                      <option value="0.5">±0.5</option>
+                      <option value="1">±1.0</option>
+                    </select>
                     <button class="btn btn-outline-secondary btn-sm" id="ratioClear" data-i18n="clear">Leeren</button>
                     <button class="btn btn-success btn-sm" id="ratioCsv">CSV ↓</button>
                   </div>
@@ -335,6 +408,28 @@
                 </div>
               </div>
               <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <span data-i18n="align_plot">📈 Intensitäts-Verlauf</span>
+                  <div>
+                    <select id="alignWindow" style="width:auto;display:inline-block;padding:.25rem;">
+                      <option value="10">10 s</option>
+                      <option value="30" selected>30 s</option>
+                      <option value="60">60 s</option>
+                      <option value="120">120 s</option>
+                    </select>
+                    <select id="alignYRange" style="width:auto;display:inline-block;padding:.25rem;">
+                      <option value="auto" selected>Y: Auto</option>
+                      <option value="stretch" data-i18n="y_stretch">Stretch (Min–Max)</option>
+                      <option value="full" data-i18n="y_full">Voll (0–Max)</option>
+                    </select>
+                    <button class="btn btn-outline-secondary btn-sm" id="alignClear" data-i18n="clear">Leeren</button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <canvas class="plot" id="alignCanvas" data-height="220"></canvas>
+                </div>
+              </div>
+              <div class="card">
                 <div class="card-header" data-i18n="align_guide">Justage-Anleitung</div>
                 <div class="card-body">
                   <ol class="small mb-0">
@@ -346,14 +441,28 @@
                   </ol>
                 </div>
               </div>
+              <div class="card">
+                <div class="card-header" data-i18n="tutorial_title">Aufbau Schritt für Schritt (10 Schritte)</div>
+                <div class="card-body">
+                  <h6 id="tutorialStepTitle" class="mb-1"></h6>
+                  <p class="small mb-2" id="tutorialStepText"></p>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <button class="btn btn-outline-secondary btn-sm" id="tutorialPrev" data-i18n="prev">← Zurück</button>
+                    <span class="small text-muted" id="tutorialProgress">1 / 10</span>
+                    <button class="btn btn-primary btn-sm" id="tutorialNext" data-i18n="next">Weiter →</button>
+                  </div>
+                  <ol class="small mt-3 mb-0" id="tutorialStepList"></ol>
+                </div>
+              </div>
             </div>
             <div class="col-md-4">
               <div class="card">
                 <div class="card-header" data-i18n="range">Messbereich</div>
                 <div class="card-body small">
                   <p class="mb-1"><strong>Min:</strong> 0</p>
-                  <p class="mb-1"><strong>Max:</strong> 65535</p>
-                  <p class="mb-0"><strong>Optimal:</strong> &gt; 4000</p>
+                  <p class="mb-1"><strong>Max:</strong> <span id="alignMax">37888</span></p>
+                  <p class="mb-1"><strong>Optimal:</strong> <span id="alignOptimal">30310 – 33341</span></p>
+                  <p class="mb-0 text-muted" data-i18n="range_hint">Hängt von Verstärkung und Integrationszeit ab.</p>
                 </div>
               </div>
               <div class="card">
@@ -400,6 +509,11 @@
               <div class="alert alert-info">
                 <strong data-i18n="info_browser_title">Browser:</strong>
                 <span data-i18n="info_browser">Web Serial funktioniert in Chrome, Edge und Opera (Desktop). Firefox/Safari werden nicht unterstützt.</span>
+              </div>
+              <div class="alert alert-success">
+                <strong data-i18n="android_title">Android:</strong>
+                <span data-i18n="android_text">Dieselbe Oberfläche steckt im ODMR-Tab der App „UC2 Control“: Board per USB-OTG anschließen, Messungen landen als Dateien auf dem Handy und lassen sich teilen.</span>
+                <a href="https://github.com/youseetoo/UC2Control/releases/latest" target="_blank" rel="noopener" data-i18n="android_link">App herunterladen</a>
               </div>
               <h3 class="h5 mt-3" data-i18n="odmr_title">ODMR-Prinzip</h3>
               <p class="small" data-i18n="odmr_text">
