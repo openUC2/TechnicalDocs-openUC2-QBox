@@ -20,6 +20,10 @@ Import("env")  # noqa: F821  (injected by PlatformIO/SCons)
 
 DATA_DIR = os.path.join(env.subst("$PROJECT_DIR"), "data")  # noqa: F821
 SRC_DIR = os.path.join(env.subst("$PROJECT_DIR"), "src/website_html")  # noqa: F821
+# The WebSerial app is served from the board too (/app/, talking HTTP instead of
+# Web Serial): its files go flat into data/a/ — SPIFFS names max. 31 characters.
+APP_DIR = os.path.join(env.subst("$PROJECT_DIR"), "webserial-app")  # noqa: F821
+APP_DATA_DIR = os.path.join(DATA_DIR, "a")
 
 COMPRESS_EXT = (".html", ".css", ".js", ".json", ".svg", ".ico", ".txt", ".xml", ".map")
 
@@ -34,10 +38,16 @@ def gzip_assets(*_args, **_kwargs):
         print("gzip_assets: no data/ directory, skipping")
         return
 
+    os.makedirs(APP_DATA_DIR, exist_ok=True)
+    sources = [(os.path.join(SRC_DIR, n), DATA_DIR) for n in sorted(os.listdir(SRC_DIR))]
+    sources.append((os.path.join(APP_DIR, "index.html"), APP_DATA_DIR))
+    app_assets = os.path.join(APP_DIR, "assets")
+    sources += [(os.path.join(app_assets, n), APP_DATA_DIR) for n in sorted(os.listdir(app_assets))]
+
     total_in = total_out = 0
-    for name in sorted(os.listdir(SRC_DIR)):
-        src = os.path.join(SRC_DIR, name)
-        dst = os.path.join(DATA_DIR, name + ".gz")
+    for src, out_dir in sources:
+        name = os.path.basename(src)
+        dst = os.path.join(out_dir, name + ".gz")
         if not os.path.isfile(src) or name.endswith(".gz"):
             continue
         if os.path.splitext(name)[1].lower() not in COMPRESS_EXT:

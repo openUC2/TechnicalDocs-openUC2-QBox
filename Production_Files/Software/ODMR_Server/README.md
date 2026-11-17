@@ -157,11 +157,29 @@ and web pages; it is built and published by CI (see [CI](#ci--published-images))
 | On-device web pages | WiFi: join the board's access point, open `http://192.168.4.1` | served from SPIFFS (`src/website_html/`) |
 | WebSerial app | USB cable, Chrome/Edge on a laptop | <https://youseetoo.github.io/odmr> ([`webserial-app/`](webserial-app/)) |
 | UC2 Control (Android) | USB-C OTG cable to the phone, **ODMR** tab | [APK: UC2Control releases](https://github.com/youseetoo/UC2Control/releases/latest) |
+| iPad / iPhone (XIAO ESP32-S3 only) | USB cable: the board appears as a wired network, open `http://192.168.7.1` in Safari | same pages as over WiFi; full app at `/app/` |
 
-The WebSerial app and the Android app are the same page: UC2 Control bundles
-`webserial-app/` and gives it the phone's USB port. Both speak the
-[serial protocol](SERIAL_PROTOCOL.md) and add a live monitor, cursor readout,
-saved sweep series, CSV/PNG export and sharing on top of the on-device pages.
+The WebSerial app and the Android app's native ODMR tab offer the same tools
+and CSV columns. Both speak the [serial protocol](SERIAL_PROTOCOL.md) and add a
+live monitor, cursor readout, saved sweep series, CSV/PNG export and sharing on
+top of the on-device pages.
+
+### iPad and iPhone over the USB cable (ESP32-S3)
+
+The S3 build runs USB serial and a USB network (CDC-NCM) on the same cable, next
+to the WiFi network. iOS shows the board under Settings ▸ **Ethernet** and gets
+`192.168.7.x`; every page and API is then at `http://192.168.7.1`, without WiFi,
+Bluetooth or an app. `/app/` is the WebSerial app served by the board, talking
+HTTP instead of Web Serial. Code: `src/usb_net.cpp`.
+
+- USB-C iPad/iPhone: USB-C to USB-C data cable. Lightning: Lightning to USB 3
+  Camera Adapter with its charger plugged in.
+- The S3 build uses Arduino core 3 (pioarduino platform) with USB in TinyUSB mode.
+  Uploads still need no button: the board restarts into download mode when
+  PlatformIO, esptool or the web flasher asks over USB serial.
+- `http://192.168.7.1/update` uploads a new program (`firmware.bin`) or web pages
+  (`spiffs.bin`), also from the iPad. Only over the USB cable, not over the open WiFi.
+- The C3 has no USB hardware for this and keeps serial + WiFi (Arduino core 2).
 
 ---
 
@@ -177,14 +195,12 @@ that touches `ODMR_Server/`: it builds both boards exactly as in
 | Published file | Used by |
 |---|---|
 | `static/firmware_build/odmr-xiao-esp32c3.bin`, `…-manifest.json` (and S3) | web flasher |
+| `…-firmware.bin`, `…-spiffs.bin` | the board's update page (`/update`) |
 | `odmr/` | <https://youseetoo.github.io/odmr> |
 
 Pull requests only build. Publishing needs the `API_TOKEN_GITHUB` secret.
 `deploy-webserial.yml` additionally serves `webserial-app/` from this repo's
 GitHub Pages.
-
-To bring the WebSerial app into the Android app, run
-`tools/sync_odmr_webapp.sh` in the [UC2Control](https://github.com/youseetoo/UC2Control) repo.
 
 ---
 
@@ -204,12 +220,15 @@ allows images + Bootstrap to be included without hitting flash limits.
 ODMR_Server/
 ├── src/
 │   ├── main.cpp            ← Firmware (web server, serial protocol, sensor, ADF4351)
+│   ├── usb_net.cpp         ← USB network for iPad/iPhone (S3)
 │   └── website_html/       ← on-device pages: edit these
 ├── data/                   ← SPIFFS root – served at http://192.168.4.1/
 │   ├── *.html.gz, style.css.gz  (generated from src/website_html, git-ignored)
+│   ├── a/                  (webserial-app for /app/, generated, git-ignored)
 │   └── NVGitter*.png
-├── webserial-app/          ← USB front end (browser + UC2 Control Android app)
+├── webserial-app/          ← USB front end for the browser
 ├── SERIAL_PROTOCOL.md      ← commands the WebSerial app uses
+├── examples/usb_network_s3/ ← ESP-IDF test: S3 with USB serial + USB network, for iPhone/iPad
 ├── scripts/
 │   ├── gzip_assets.py        ← PlatformIO pre-script: src/website_html → data/*.gz
 │   └── merge_espwebtools.py  ← PlatformIO post-script: builds merged .bin
@@ -344,7 +363,18 @@ pio device list       # cross-platform
 ```bash
 # Upload firmware only
 /Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32c3  --upload-port /dev/cu.usbmodem101
-/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem101
+/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem4
+
+/Users/bene/.platformio/penv/bin/platformio run   --target uploadfs --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodemCCBA971636E41
+
+
+# open questions 
+how can we fuse the upload to a single binary to upload it via the flasher?
+can we form a network with multiple esps with some kind of router/switch?
+
+/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem4
+/Users/bene/.platformio/penv/bin/platformio run   --target uploadfs --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodemCCBA971636E41
+
 
 
 # Upload SPIFFS only (no firmware recompile needed for HTML/CSS changes)
@@ -496,4 +526,4 @@ cd /Users/bene/Dropbox/Dokumente/Promotion/PROJECTS/TechnicalDocs-openUC2-QBox/P
 - ✅ **Image Support**: Optimized PNG images served from SPIFFS
 - ✅ **Root Path Handling**: Explicit "/" route to prevent redirection issues
 - ✅ **Version Information**: Build date, git hash displayed on website and available via /version endpoint
-- ✅ **WebSerial + Android front end**: [`webserial-app/`](webserial-app/), also in the UC2 Control Android app (ODMR tab)
+- ✅ **WebSerial + Android front end**: [`webserial-app/`](webserial-app/) in the browser, native ODMR tab in the UC2 Control Android app

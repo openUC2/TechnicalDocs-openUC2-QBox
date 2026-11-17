@@ -70,6 +70,9 @@ jobs:
         run: |
           mkdir -p out
           cp build/fw-images/${{ matrix.env_name }}.bin out/${{ matrix.board_id }}.bin
+          # Program and web pages on their own, for the board's update page (/update)
+          cp .pio/build/${{ matrix.env_name }}/firmware.bin out/${{ matrix.board_id }}-firmware.bin
+          cp .pio/build/${{ matrix.env_name }}/spiffs.bin out/${{ matrix.board_id }}-spiffs.bin
           VERSION=$(git describe --tags --always)
           cat > out/${{ matrix.board_id }}-manifest.json <<EOF
           {

@@ -11,6 +11,8 @@
 
 
 #include "adf4351.h"
+#include <Update.h>
+#include "usb_net.h"
 
 // Version info (auto-generated)
 #include "version_info.h"
@@ -244,6 +246,34 @@ static const char FS_MISSING_HTML[] PROGMEM =
 // True once we've confirmed SPIFFS actually contains the web UI.
 bool webAssetsPresent = false;
 
+// Firmware upload page (/update). Only clients on the USB network may use it:
+// the WiFi network is open, a USB cable means physical access to the box.
+static const char UPDATE_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ODMR firmware update</title>
+<style>body{font:17px -apple-system,system-ui,sans-serif;margin:24px;max-width:560px;color:#1a1a1a}
+h1{font-size:22px;color:#023773}form{margin:18px 0;padding:14px;border:1px solid #ddd;border-radius:10px}
+button{margin-top:10px;padding:8px 16px}#msg{font-weight:600}</style>
+<h1>Firmware update</h1>
+<p>Files from the ODMR firmware build: <code>firmware.bin</code> (the program) and
+<code>spiffs.bin</code> (the web pages). The board restarts after each upload.</p>
+<form data-target="app"><b>Program</b><br><input type="file" accept=".bin" required><br><button>Upload</button></form>
+<form data-target="fs"><b>Web pages</b><br><input type="file" accept=".bin" required><br><button>Upload</button></form>
+<p id="msg"></p>
+<script>
+for (const form of document.forms) form.onsubmit = async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg"), body = new FormData();
+  body.append("file", form.querySelector("input").files[0]);
+  msg.textContent = "Uploading… do not unplug the board.";
+  try {
+    const res = await fetch("/update?target=" + form.dataset.target, { method: "POST", body });
+    msg.textContent = await res.text();
+  } catch (err) { msg.textContent = "Upload failed: " + err.message; }
+};
+</script></html>)HTML";
+unsigned long restartAt = 0; // millis() at which loop() restarts after an update
+
 // Example: read TSL2591 sensor (light intensity)
 uint32_t readTSL2591()
 {
@@ -441,7 +471,8 @@ void handleWebSerialCheck(AsyncWebServerRequest *request)
 {
   // Check if request is coming from the local AP (192.168.4.x)
   IPAddress clientIP = request->client()->remoteIP();
-  bool isLocalAP = (clientIP[0] == 192 && clientIP[1] == 168 && clientIP[2] == 4);
+  // ... or from the USB network: an iPad has no Web Serial either.
+  bool isLocalAP = (clientIP[0] == 192 && clientIP[1] == 168 && clientIP[2] == 4) || isUsbNetClient(clientIP);
 
   String response = String("{\"webserial_enabled\":") + (!isLocalAP ? "true" : "false") + "}";
   request->send(200, "application/json", response);
@@ -1308,6 +1339,9 @@ void setup()
   }
 #endif // SERIAL_ONLY_MODE
 
+  // USB network next to USB serial (ESP32-S3): http://192.168.7.1 over the cable.
+  usbNetBegin();
+
   // Mount SPIFFS filesystem (holds all web assets)
   if (!SPIFFS.begin(true))
   {
@@ -1425,6 +1459,37 @@ void setup()
     request->send(200, "application/json", json);
   });
 
+  // Firmware upload over the USB network (also from an iPad).
+  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (!isUsbNetClient(request->client()->remoteIP()))
+      return request->send(403, "text/plain", "Firmware upload only over the USB cable: http://192.168.7.1/update");
+    request->send(200, "text/html", UPDATE_HTML);
+  });
+  server.on(
+      "/update", HTTP_POST,
+      [](AsyncWebServerRequest *request) {
+        if (!isUsbNetClient(request->client()->remoteIP()))
+          return request->send(403, "text/plain", "Firmware upload only over the USB cable");
+        bool ok = !Update.hasError();
+        request->send(200, "text/plain", ok ? "Done. The board restarts now." : String("Failed: ") + Update.errorString());
+        if (ok)
+          restartAt = millis() + 1000;
+      },
+      [](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!isUsbNetClient(request->client()->remoteIP()))
+          return;
+        if (index == 0)
+        {
+          bool fs = reqArg(request, "target") == "fs";
+          Serial.printf("Update: %s (%s)\n", filename.c_str(), fs ? "web pages" : "program");
+          Update.begin(UPDATE_SIZE_UNKNOWN, fs ? U_SPIFFS : U_FLASH);
+        }
+        if (Update.isRunning() && Update.write(data, len) != len)
+          Update.printError(Serial);
+        if (final && Update.isRunning() && !Update.end(true))
+          Update.printError(Serial);
+      });
+
   // --- Captive portal detection endpoints (P0 #1) ---------------------------
   // Android: return 200 + HTML so the "Sign in to network" notification shows.
   server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -1458,9 +1523,16 @@ void setup()
   // Content-Encoding: gzip (see scripts/gzip_assets.py). Large third-party
   // assets never change -> cache them "forever"; the HTML pages get a short
   // cache so UI updates still show up.
-  server.serveStatic("/bootstrap.min.css", SPIFFS, "/bootstrap.min.css").setCacheControl("max-age=31536000, immutable");
-  server.serveStatic("/bootstrap.bundle.min.js", SPIFFS, "/bootstrap.bundle.min.js").setCacheControl("max-age=31536000, immutable");
+  // Bootstrap is stored once, with the WebSerial app under /a/ (SPIFFS names
+  // are limited to 31 characters, hence the short folder).
+  server.serveStatic("/bootstrap.min.css", SPIFFS, "/a/bootstrap.min.css").setCacheControl("max-age=31536000, immutable");
+  server.serveStatic("/bootstrap.bundle.min.js", SPIFFS, "/a/bootstrap.bundle.min.js").setCacheControl("max-age=31536000, immutable");
   server.serveStatic("/NVGitter.png", SPIFFS, "/NVGitter.png").setCacheControl("max-age=31536000, immutable");
+  // The WebSerial app (webserial-app/), talking HTTP to this board: /app/
+  server.serveStatic("/app/assets/NVGitter.png", SPIFFS, "/NVGitter.png").setCacheControl("max-age=31536000, immutable");
+  server.serveStatic("/app/assets/", SPIFFS, "/a/").setCacheControl("max-age=3600");
+  server.serveStatic("/app/", SPIFFS, "/a/").setDefaultFile("index.html").setCacheControl("max-age=3600");
+  server.on("/app", HTTP_GET, [](AsyncWebServerRequest *request) { request->redirect("/app/"); });
   server.serveStatic("/style.css", SPIFFS, "/style.css").setCacheControl("max-age=86400");
   // Catch-all: every other path (incl. "/") -> SPIFFS, defaulting to index.html.
   server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html").setCacheControl("max-age=3600");
@@ -1504,6 +1576,9 @@ void setup()
 
 void loop()
 {
+  if (restartAt && millis() > restartAt)
+    ESP.restart(); // after a firmware upload (/update)
+
   // Process DNS requests for captive portal
   dnsServer.processNextRequest();
 
@@ -1523,7 +1598,7 @@ void loop()
 
   // Determine "connected" state from either a WiFi client or recent serial
   // activity, so the status LEDs work in serial-only operation too.
-  bool hasClient = (WiFi.softAPgetStationNum() > 0) ||
+  bool hasClient = (WiFi.softAPgetStationNum() > 0) || usbNetActive() ||
                    (millis() - lastSerialActivity < SERIAL_ACTIVITY_TIMEOUT);
   if (hasClient)
   {
