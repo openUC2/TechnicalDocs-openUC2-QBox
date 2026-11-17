@@ -8,3 +8,4 @@
 
 # Gzipped web assets — regenerated from data/ by scripts/gzip_assets.py on build
 data/*.gz
+data/a/

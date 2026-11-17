@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USB network test</title>
+<style>
+  body { font: 17px -apple-system, system-ui, sans-serif; margin: 24px; color: #1a1a1a; }
+  h1 { font-size: 22px; color: #023773; }
+  #link { padding: 12px 16px; border-radius: 10px; color: #fff; font-weight: 600; background: #999; }
+  #link.ok { background: #6b9413; }
+  #link.bad { background: #c0392b; }
+  td { padding: 3px 18px 3px 0; }
+  td:last-child { font-family: ui-monospace, monospace; }
+</style>
+<h1>USB network test</h1>
+<p id="link">Waiting for the board…</p>
+<table id="rows"></table>
+<script>
+  // Asks the board once a second and keeps score, so a lock or sleep of the
+  // phone shows up here afterwards: did the link come back, and did the board reboot?
+  let replies = 0, failed = 0, reboots = 0, longestGap = 0, lastReply = Date.now(), last = null;
+  const link = document.getElementById("link");
+  const rows = document.getElementById("rows");
+
+  function show(s) {
+    const values = [
+      ["Replies", replies],
+      ["Failed polls", failed],
+      ["Longest gap", (longestGap / 1000).toFixed(1) + " s"],
+      ["Board reboots", reboots],
+      ["Board uptime", s.uptime_s + " s"],
+      ["USB attached", s.attached],
+      ["USB detached", s.detached],
+      ["USB suspended", s.suspended],
+      ["USB resumed", s.resumed],
+      ["Addresses assigned", s.leases],
+      ["USB send errors", s.tx_failed],
+    ];
+    rows.innerHTML = values.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+  }
+
+  async function poll() {
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 1500);
+    try {
+      const status = await (await fetch("/status", { cache: "no-store", signal: abort.signal })).json();
+      const now = Date.now();
+      longestGap = Math.max(longestGap, now - lastReply);
+      lastReply = now;
+      replies++;
+      if (last && status.uptime_s < last.uptime_s) reboots++;
+      last = status;
+      link.className = "ok";
+      link.textContent = "Link OK";
+    } catch (e) {
+      failed++;
+      link.className = "bad";
+      link.textContent = `No reply for ${Math.round((Date.now() - lastReply) / 1000)} s`;
+    }
+    clearTimeout(timeout);
+    if (last) show(last);
+    setTimeout(poll, 1000);
+  }
+  poll();
+</script>
+</html>
