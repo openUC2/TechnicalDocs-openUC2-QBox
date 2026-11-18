@@ -6,11 +6,15 @@
 import { SerialDevice } from "./serial.js";
 import { HttpDevice } from "./http.js";
 import { LinePlot } from "./plot.js";
+import { SCENES, STEPS } from "./guide.js";
 
 const $ = (id) => document.getElementById(id);
-// Served by the board itself (http://192.168.4.1/app/ over WiFi,
-// http://192.168.7.1/app/ over the USB cable): talk HTTP, else Web Serial.
-const ON_BOARD = /^192\.168\.\d+\.1$/.test(location.hostname);
+// The same app runs on https://youseetoo.github.io/odmr (Web Serial) and on the
+// board itself, http://192.168.4.1 over WiFi or http://192.168.7.1 over the USB
+// network. Web Serial needs https or localhost, so plain http means the board
+// (?board forces it, for testing against a local mock).
+const ON_BOARD = !window.isSecureContext || new URLSearchParams(location.search).has("board");
+const VIA_USB_NET = location.hostname.startsWith("192.168.7.");
 const device = ON_BOARD ? new HttpDevice() : new SerialDevice();
 
 /* ---------------------------------------------------------------------------
@@ -34,14 +38,15 @@ const I18N = {
     card_plot: "📈 Live-Plot", ratio_help: "Das normalisierte Verhältnis r = (I₁-I₂)/(I₁+I₂) ist proportional zur Magnetfeldverschiebung. f₁ und f₂ symmetrisch um das ODMR-Dip-Minimum wählen.",
     align_live: "Photodioden-Intensität (Live)", current_value: "Aktueller Wert", intensity_display: "Intensitäts-Anzeige",
     start_align: "Start Überwachung", stop_align: "Stop", status: "Status",
-    align_hint: "Optischen Pfad für maximale Intensität justieren.", align_guide: "Justage-Anleitung",
-    align_s1: "Auf „Start Überwachung\" klicken.", align_s2: "Die Board-LED leuchtet blau (Intensitätsmodus aktiv).",
-    align_s3: "Optische Komponenten (Laser, Linsen, Spiegel) justieren.", align_s4: "Intensitätswerte beobachten und maximieren.",
-    align_s5: "Nach Abschluss „Stop\" klicken.", range: "Messbereich", sensor_settings: "Sensor-Einstellungen",
+    wifi_on: "WLAN an", wifi_off: "WLAN aus",
+    wifi_confirm_on: "WLAN des Geräts einschalten?\n\nAchtung: Das Gerät ist mit ausgeschaltetem Funk CE-konform. Mit eingeschaltetem WLAN gilt diese Konformitätsbewertung nicht mehr – Betrieb auf eigene Verantwortung.\n\nDas WLAN bleibt auch nach einem Neustart an, bis du es hier wieder ausschaltest. Danach mit dem WLAN „openUC2_ODMR_…“ verbinden und http://192.168.4.1 öffnen.",
+    wifi_confirm_off: "WLAN des Geräts ausschalten? Alle über WLAN verbundenen Geräte verlieren die Verbindung.",
+    wifi_title: "WLAN-Zugangspunkt des Geräts (standardmäßig aus)",
+    align_hint: "Optischen Pfad für maximale Intensität justieren.", align_guide: "📘 Schritt-für-Schritt-Anleitung", range: "Messbereich", sensor_settings: "Sensor-Einstellungen",
     gain: "Verstärkung (Gain)", integration: "Integrationszeit", apply: "Einstellungen anwenden",
     optimal: "Optimal", good: "Gut", adjust: "Justage erforderlich", monitoring: "Überwachung aktiv",
     applied: "Einstellungen angewendet", applying: "Wird angewendet…", apply_err: "Fehler beim Anwenden",
-    info_title: "Über dieses WebSerial-Interface", protocol_title: "Serielles Protokoll",
+    protocol_title: "Serielles Protokoll",
     col_cmd: "Befehl", col_resp: "Antwort", no_serial_title: "Web Serial wird nicht unterstützt",
     tab_live: "Live-Monitor", live_plot: "📈 Intensität vs. Zeit", live_control: "🎛 Live-Kontrolle",
     live_freq: "Frequenz (MHz)", start_live: "▶ Live-Monitor starten", stop_live: "⏹ Live-Monitor stoppen",
@@ -50,7 +55,23 @@ const I18N = {
     share: "Teilen", no_data: "Keine Daten.", sweep_invalid: "Startfrequenz < Endfrequenz und Schrittweite > 0 erforderlich.",
     align_plot: "📈 Intensitäts-Verlauf", y_stretch: "Stretch (Min–Max)", y_full: "Voll (0–Max)",
     range_hint: "Hängt von Verstärkung und Integrationszeit ab.", saturated: "Übersteuert – Gain senken",
-    tutorial_title: "Aufbau Schritt für Schritt (10 Schritte)", prev: "← Zurück", next: "Weiter →",
+    prev: "← Zurück", next: "Weiter →", fit: "↕ Auto",
+    tab_guide: "Anleitung", guide_header: "📘 Aufbau & Justage", step: "Schritt",
+    g_mirror: "Spiegel 45°", g_dichroic: "Strahlteiler", g_stage: "Diamant", g_pd: "Photodiode", g_filter: "Rotfilter",
+    goto_tab_align: "Zu den Sensor-Einstellungen →", goto_tab_sweep: "Zum Frequenz-Sweep →", goto_tab_ratio: "Zum B-Field Monitor →",
+    mode_serial: "WebSerial", mode_wifi: "WLAN", mode_usb: "USB-Netzwerk",
+    info_title: "Über diese App", info_intro: "Dieselbe App steuert das ODMR-Gerät auf drei Wegen:",
+    info_way_serial: "USB-Kabel am Computer: https://youseetoo.github.io/odmr in Chrome oder Edge öffnen, „Gerät verbinden“ klicken und den Port wählen (Web Serial).",
+    info_way_wifi: "WLAN (ab Werk aus): erst per USB verbinden und oben „📶 WLAN aus“ antippen. Dann mit dem WLAN openUC2_ODMR_… verbinden und http://192.168.4.1 öffnen. Geht mit jedem Browser.",
+    partners_title: "Projekt & Partner",
+    partners_text: "Entwickelt im Verbundprojekt QuantumMiniLabs, gefördert vom Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR). Ziel: 100 Lernorte in Deutschland mit günstigen Quantenexperimenten aus Open Hardware ausstatten.",
+    refs_title: "Weiterführende Links", ref_docs: "Anleitung zum ODMR-Experiment (openUC2 Docs)",
+    ref_press: "Pressemitteilung zum Projektstart (idw)", ref_infos: "Mehr über NV-Zentren und das Experiment",
+    offline_note: "Die App läuft komplett offline vom Gerät; nur die Links nach außen brauchen Internet.",
+    info_way_usb: "USB-Kabel am iPad/iPhone (XIAO ESP32-S3): das Gerät erscheint als kabelgebundenes Netzwerk, http://192.168.7.1 in Safari öffnen.",
+    odmr_title: "ODMR-Prinzip",
+    odmr_text: "NV-Zentren in Diamant zeigen spinabhängige Fluoreszenz. Mikrowellen bei der Resonanzfrequenz (~2,87 GHz) senken die Fluoreszenz messbar. Externe Magnetfelder verschieben die Resonanz über den Zeeman-Effekt – die Basis der Magnetfeldmessung.",
+    safety_title: "⚠️ Sicherheit:", safety_text: "Nie direkt in den Laser blicken. Vorsicht mit Magneten bei Implantaten/Elektronik.",
     android_title: "Android:", android_link: "App herunterladen",
     android_text: "Dieselben Messungen gibt es im ODMR-Tab der App „UC2 Control“: Board per USB-OTG anschließen, Messungen landen als Dateien auf dem Handy und lassen sich teilen.",
   },
@@ -71,14 +92,15 @@ const I18N = {
     card_plot: "📈 Live Plot", ratio_help: "The normalised ratio r = (I₁-I₂)/(I₁+I₂) is proportional to the magnetic field shift. Choose f₁ and f₂ symmetrically around the ODMR dip minimum.",
     align_live: "Photodiode Intensity (Live)", current_value: "Current value", intensity_display: "Intensity Display",
     start_align: "Start monitoring", stop_align: "Stop", status: "Status",
-    align_hint: "Adjust the optical path for maximum intensity.", align_guide: "Alignment Guide",
-    align_s1: "Click \"Start monitoring\".", align_s2: "The board LED turns blue (intensity mode active).",
-    align_s3: "Adjust optics (laser, lenses, mirrors).", align_s4: "Watch the intensity and maximise it.",
-    align_s5: "Click \"Stop\" when done.", range: "Measurement Range", sensor_settings: "Sensor Settings",
+    wifi_on: "WiFi on", wifi_off: "WiFi off",
+    wifi_confirm_on: "Switch on the device's WiFi?\n\nNote: the device is CE compliant with its radio switched off. With WiFi on, that conformity assessment no longer applies – operate at your own responsibility.\n\nWiFi stays on after a restart until you switch it off here. Then join the network \u201copenUC2_ODMR_…\u201d and open http://192.168.4.1.",
+    wifi_confirm_off: "Switch off the device's WiFi? Everything connected over WiFi loses its connection.",
+    wifi_title: "The device's WiFi access point (off by default)",
+    align_hint: "Adjust the optical path for maximum intensity.", align_guide: "📘 Step-by-step guide", range: "Measurement Range", sensor_settings: "Sensor Settings",
     gain: "Gain", integration: "Integration time", apply: "Apply settings",
     optimal: "Optimal", good: "Good", adjust: "Adjustment required", monitoring: "Monitoring active",
     applied: "Settings applied", applying: "Applying…", apply_err: "Failed to apply",
-    info_title: "About this WebSerial interface", protocol_title: "Serial Protocol",
+    protocol_title: "Serial Protocol",
     col_cmd: "Command", col_resp: "Response", no_serial_title: "Web Serial not supported",
     tab_live: "Live Monitor", live_plot: "📈 Intensity vs. Time", live_control: "🎛 Live Control",
     live_freq: "Frequency (MHz)", start_live: "▶ Start live monitor", stop_live: "⏹ Stop live monitor",
@@ -87,7 +109,23 @@ const I18N = {
     share: "Share", no_data: "No data.", sweep_invalid: "Start frequency < end frequency and step > 0 required.",
     align_plot: "📈 Intensity History", y_stretch: "Stretch (min–max)", y_full: "Full (0–max)",
     range_hint: "Depends on gain and integration time.", saturated: "Saturated – lower the gain",
-    tutorial_title: "Setup step by step (10 steps)", prev: "← Back", next: "Next →",
+    prev: "← Back", next: "Next →", fit: "↕ Auto",
+    tab_guide: "Guide", guide_header: "📘 Setup & alignment", step: "Step",
+    g_mirror: "Mirror 45°", g_dichroic: "Beam splitter", g_stage: "Diamond", g_pd: "Photodiode", g_filter: "Red filter",
+    goto_tab_align: "To the sensor settings →", goto_tab_sweep: "To the frequency sweep →", goto_tab_ratio: "To the B-field monitor →",
+    mode_serial: "WebSerial", mode_wifi: "WiFi", mode_usb: "USB network",
+    info_title: "About this app", info_intro: "The same app controls the ODMR device in three ways:",
+    info_way_serial: "USB cable to a computer: open https://youseetoo.github.io/odmr in Chrome or Edge, click \"Connect device\" and pick the port (Web Serial).",
+    info_way_wifi: "WiFi (off by default): connect over USB first and tap “📶 WiFi off” at the top. Then join the network openUC2_ODMR_… and open http://192.168.4.1. Works in any browser.",
+    partners_title: "Project & partners",
+    partners_text: "Developed in the joint project QuantumMiniLabs, funded by the German Federal Ministry of Research, Technology and Space (BMFTR). Goal: equip 100 learning sites in Germany with low-cost open-hardware quantum experiments.",
+    refs_title: "Further reading", ref_docs: "ODMR experiment instructions (openUC2 Docs)",
+    ref_press: "Press release on the project start (idw, German)", ref_infos: "More about NV centres and the experiment",
+    offline_note: "The app runs fully offline from the device; only the outbound links need internet.",
+    info_way_usb: "USB cable to an iPad/iPhone (XIAO ESP32-S3): the device shows up as a wired network; open http://192.168.7.1 in Safari.",
+    odmr_title: "ODMR principle",
+    odmr_text: "NV centres in diamond show spin-dependent fluorescence. Microwaves at the resonance frequency (~2.87 GHz) lower the fluorescence measurably. External magnetic fields shift the resonance via the Zeeman effect – the basis of the magnetic field measurement.",
+    safety_title: "⚠️ Safety:", safety_text: "Never look directly into the laser. Take care with magnets near implants/electronics.",
     android_title: "Android:", android_link: "Download the app",
     android_text: "The same measurements are in the ODMR tab of the \"UC2 Control\" app: connect the board via USB-OTG; measurements are saved as files on the phone and can be shared.",
   },
@@ -139,6 +177,7 @@ function setControlsEnabled(on) {
   $("liveStart").disabled = !on;
   $("ratioStart").disabled = !on;
   $("alignStart").disabled = !on;
+  $("guideLiveBtn").disabled = !on;
   $("applyTsl").disabled = !on;
   $("btnDisconnect").disabled = !on;
   $("btnConnect").disabled = on;
@@ -163,13 +202,33 @@ device.onStateChange(async (connected) => {
       updateAlignRange();
       updateSweepSummary();
     } catch (e) { /* sensor may be absent */ }
+    try { showWifi(await device.wifi()); } catch (e) { showWifi(null); } // older firmware: no switch
   } else {
     dot.className = "conn-dot";
     txt.textContent = t("not_connected");
     $("deviceVersion").textContent = "";
+    showWifi(null);
     setControlsEnabled(false);
     stopSweepUI(); stopLive(); stopRatio(); stopAlign();
   }
+});
+
+/* ---- WiFi switch (radio off by default, CE) ---------------------------- */
+let wifiState = null;
+function showWifi(w) {
+  wifiState = w;
+  const b = $("btnWifi");
+  b.classList.toggle("d-none", !w);
+  if (!w) return;
+  b.title = t("wifi_title");
+  b.classList.toggle("btn-warning", w.enabled);
+  b.classList.toggle("btn-outline-secondary", !w.enabled);
+  b.textContent = "📶 " + (w.enabled ? `${t("wifi_on")} · ${w.ssid}` : t("wifi_off"));
+}
+$("btnWifi").addEventListener("click", async () => {
+  const on = !wifiState.enabled;
+  if (!confirm(t(on ? "wifi_confirm_on" : "wifi_confirm_off"))) return;
+  try { showWifi(await device.wifi(on)); } catch (e) { log("! wifi: " + e.message, "err"); }
 });
 
 $("btnConnect").addEventListener("click", async () => {
@@ -345,6 +404,11 @@ $("sweepShare").addEventListener("click", async () => {
   try { await navigator.share({ files: [file], title: "ODMR sweep" }); } catch (e) { /* cancelled */ }
 });
 ["sweepYMin", "sweepYMax"].forEach((id) => $(id).addEventListener("input", renderSweepPlot));
+// "↕ Auto": back to the data's min–max, on every plot.
+$("sweepFit").addEventListener("click", () => { $("sweepYMin").value = ""; $("sweepYMax").value = ""; renderSweepPlot(); });
+$("liveFit").addEventListener("click", () => { $("liveYRange").value = "auto"; drawLive(); });
+$("ratioFit").addEventListener("click", () => { $("ratioYRange").value = "auto"; drawRatio(); });
+$("alignFit").addEventListener("click", () => { $("alignYRange").value = "auto"; drawAlign(); });
 
 // Points and duration of the planned sweep: per point the PLL settle time plus
 // one TSL2591 integration per average.
@@ -372,6 +436,7 @@ let liveRunning = false, liveData = [], liveStartT = 0, liveCount = 0;
 
 $("liveStart").addEventListener("click", () => (liveRunning ? stopLive() : startLive()));
 $("liveWindow").addEventListener("change", drawLive);
+$("liveYRange").addEventListener("change", drawLive);
 $("liveClear").addEventListener("click", () => {
   liveData = []; liveCount = 0; liveStartT = Date.now();
   $("liveCount").textContent = "0"; $("liveValue").textContent = "---";
@@ -419,6 +484,7 @@ function drawLive() {
   const now = liveData.length ? liveData[liveData.length - 1].t : 0;
   const minT = Math.max(0, now - win);
   livePlot.opts.xRange = [minT, minT + win];
+  livePlot.opts.yRange = $("liveYRange").value === "full" ? [0, alignRange.max] : null;
   livePlot.setSeries([{
     points: liveData.filter((d) => d.t >= minT).map((d) => ({ x: d.t, y: d.I })),
     color: "#023773", markerColor: "#85b918",
@@ -568,8 +634,10 @@ function updateAlignRange() {
   const opt = Math.max(100, Math.round(max * 0.8));
   alignRange = { max, opt, good: Math.round(opt * 0.375), saturated: Math.round(opt * 1.1) };
   $("alignMax").textContent = max;
+  $("liveMax").textContent = max;
   $("alignOptimal").textContent = `${opt} – ${alignRange.saturated}`;
   drawAlign();
+  drawLive();
 }
 $("gainSelect").addEventListener("change", updateAlignRange);
 $("intSelect").addEventListener("change", updateAlignRange);
@@ -609,11 +677,13 @@ async function startAlign() {
   if (!alignData.length) alignStartT = Date.now();
   $("alignStart").disabled = true; $("alignStop").disabled = false;
   $("alignStatus").textContent = t("monitoring"); $("alignStatus").className = "badge bg-info";
+  $("guideLiveBtn").textContent = t("stop_align"); $("guideLiveBtn").className = "btn btn-danger btn-sm ms-auto";
   alignLoop();
 }
 function stopAlign() {
   alignRunning = false;
   $("alignStart").disabled = !device.connected; $("alignStop").disabled = true;
+  $("guideLiveBtn").textContent = t("start_align"); $("guideLiveBtn").className = "btn btn-success btn-sm ms-auto";
   if ($("alignStatus").className.includes("bg-info")) {
     $("alignStatus").textContent = t("ready"); $("alignStatus").className = "badge bg-secondary";
   }
@@ -622,17 +692,20 @@ async function alignLoop() {
   while (alignRunning && device.connected) {
     try {
       const v = await device.intensity();
-      $("alignValue").textContent = v;
       const r = alignRange;
       const pct = Math.min((v / r.max) * 100, 100);
-      const bar = $("alignBar");
-      bar.style.width = pct.toFixed(1) + "%";
-      bar.textContent = pct.toFixed(1) + "%";
-      const st = $("alignStatus");
-      if (v > r.saturated) { st.textContent = t("saturated"); st.className = "badge bg-danger"; bar.style.background = "var(--uc2-danger)"; }
-      else if (v > r.opt) { st.textContent = t("optimal"); st.className = "badge bg-success"; bar.style.background = "var(--uc2-green)"; }
-      else if (v > r.good) { st.textContent = t("good"); st.className = "badge bg-warning"; bar.style.background = "var(--uc2-warning)"; }
-      else { st.textContent = t("adjust"); st.className = "badge bg-danger"; bar.style.background = "var(--uc2-danger)"; }
+      const [key, cls, color] = v > r.saturated ? ["saturated", "bg-danger", "--uc2-danger"]
+        : v > r.opt ? ["optimal", "bg-success", "--uc2-green"]
+        : v > r.good ? ["good", "bg-warning", "--uc2-warning"] : ["adjust", "bg-danger", "--uc2-danger"];
+      // Same readout on the alignment tab and in the guide
+      for (const [val, bar, st] of [["alignValue", "alignBar", "alignStatus"], ["guideValue", "guideBar", "guideStatus"]]) {
+        $(val).textContent = v;
+        $(bar).style.width = pct.toFixed(1) + "%";
+        $(bar).style.background = `var(${color})`;
+        $(st).textContent = t(key);
+        $(st).className = "badge " + cls;
+      }
+      $("alignBar").textContent = pct.toFixed(1) + "%";
       alignData.push({ x: (Date.now() - alignStartT) / 1000, y: v });
       if (alignData.length > 5000) alignData.shift();
       drawAlign();
@@ -658,55 +731,74 @@ async function applyTsl() {
   }
 }
 
-// 10-step setup guide (same steps as the device's justage page).
-const TUTORIAL = {
-  de: [
-    ["Grundplatte aufstellen", "Stellen Sie die UC2-Grundplatte auf eine stabile, vibrationsarme Oberfläche. Alle optischen Komponenten werden darauf montiert."],
-    ["Laser-Modul einsetzen", "Setzen Sie das Lasermodul (532 nm grüne Diode) in den vorgesehenen Würfel ein. Noch NICHT einschalten! Schutzbrille bereithalten."],
-    ["Spiegel positionieren", "Platzieren Sie den 45°-Spiegel so, dass er den Laserstrahl um 90° in Richtung der Probe umlenkt."],
-    ["Strahlteiler einsetzen", "Setzen Sie den Strahlteiler mit Langpass-Filter ein. Dieser trennt das Anregungslicht (grün) vom Fluoreszenzlicht (rot)."],
-    ["Linse einsetzen", "Platzieren Sie die konvergente Linse im Strahlengang. Sie fokussiert den Laser auf die NV-Diamant-Probe."],
-    ["NV-Probe positionieren", "Setzen Sie den NV-Diamant auf die XY-Bühne. Positionieren Sie ihn grob im Fokuspunkt der Linse."],
-    ["Photodiode ausrichten", "Platzieren Sie die Photodiode (TSL2591) hinter dem Strahlteiler. Sie empfängt das rote Fluoreszenzlicht."],
-    ["Grob-Justage", "Schalten Sie den Laser ein. Starten Sie oben die Überwachung. Bewegen Sie die Probe langsam, bis ein Signal erscheint. Ziel: Status „Gut“."],
-    ["Fein-Justage", "Optimieren Sie die Position von Probe und Linse für maximale Intensität und beobachten Sie den Intensitäts-Verlauf. Ziel: Status „Optimal“."],
-    ["Mikrowellen-Antenne", "Positionieren Sie die Mikrowellenantenne nahe an der Probe. Wechseln Sie zum Tab „Frequenz-Sweep“ und führen Sie einen ersten ODMR-Scan durch."],
-  ],
-  en: [
-    ["Set up base plate", "Place the UC2 base plate on a stable, vibration-free surface. All optical components will be mounted on it."],
-    ["Insert laser module", "Insert the laser module (532 nm green diode) into the designated cube. Do NOT turn it on yet! Have safety glasses ready."],
-    ["Position mirror", "Place the 45° mirror so it deflects the laser beam by 90° toward the sample."],
-    ["Insert beam splitter", "Insert the beam splitter with longpass filter. It separates the excitation light (green) from the fluorescence light (red)."],
-    ["Insert lens", "Place the converging lens in the beam path. It focuses the laser onto the NV diamond sample."],
-    ["Position NV sample", "Place the NV diamond on the XY stage. Roughly position it in the focal point of the lens."],
-    ["Align photodiode", "Place the photodiode (TSL2591) behind the beam splitter. It receives the red fluorescence light."],
-    ["Coarse alignment", "Turn on the laser. Start monitoring above. Slowly move the sample until a signal appears. Target: status \"Good\"."],
-    ["Fine alignment", "Optimise sample and lens position for maximum intensity while watching the intensity history. Target: status \"Optimal\"."],
-    ["Microwave antenna", "Position the microwave antenna close to the sample. Switch to the \"Frequency Sweep\" tab and run a first ODMR scan."],
-  ],
-};
-let tutorialStep = 0;
-function renderTutorial() {
-  const steps = TUTORIAL[lang] || TUTORIAL.de;
-  const [title, text] = steps[tutorialStep];
-  $("tutorialStepTitle").textContent = `${tutorialStep + 1}. ${title}`;
-  $("tutorialStepText").textContent = text;
-  $("tutorialProgress").textContent = `${tutorialStep + 1} / ${steps.length}`;
-  $("tutorialPrev").disabled = tutorialStep === 0;
-  $("tutorialNext").disabled = tutorialStep === steps.length - 1;
-  const list = $("tutorialStepList");
-  list.innerHTML = "";
-  steps.forEach(([stepTitle], i) => {
+/* ===========================================================================
+ * GUIDE TAB — steps and scenes in guide.js
+ * ========================================================================= */
+let guideStep = 0;
+try { guideStep = Math.min(SCENES.length - 1, parseInt(localStorage.getItem("odmr_guide_step"), 10) || 0); } catch (e) { /* blocked */ }
+
+function renderGuide() {
+  const steps = STEPS[lang] || STEPS.de;
+  const [title, text, checks] = steps[guideStep];
+  const scene = SCENES[guideStep];
+  $("guideTitle").textContent = `${guideStep + 1}. ${title}`;
+  $("guideText").textContent = text;
+  $("guideProgress").textContent = `${t("step")} ${guideStep + 1} / ${steps.length}`;
+  $("guideChecks").replaceChildren(...checks.map((c) => {
+    const li = document.createElement("li"), label = document.createElement("label"), box = document.createElement("input");
+    box.type = "checkbox";
+    label.append(box, c);
+    li.append(label);
+    return li;
+  }));
+  $("guideLive").classList.toggle("d-none", !scene.live);
+  $("guideGoto").classList.toggle("d-none", !scene.goto);
+  if (scene.goto) $("guideGoto").textContent = t("goto_" + scene.goto.replace("-", "_"));
+  $("guidePrev").disabled = guideStep === 0;
+  $("guideNext").disabled = guideStep === steps.length - 1;
+  $("guideList").replaceChildren(...steps.map(([stepTitle], i) => {
     const li = document.createElement("li");
     li.textContent = stepTitle;
-    li.style.cursor = "pointer";
-    if (i === tutorialStep) li.style.fontWeight = "600";
-    li.addEventListener("click", () => { tutorialStep = i; renderTutorial(); });
-    list.appendChild(li);
-  });
+    li.classList.toggle("active", i === guideStep);
+    li.addEventListener("click", () => showGuideStep(i));
+    return li;
+  }));
+  // Scene: which parts show, which are highlighted, which animate
+  const has = (list, id) => (list || "").split(" ").includes(id);
+  for (const el of $("guideScene").querySelectorAll("[id^='g-']")) {
+    const id = el.id.slice(2);
+    el.classList.toggle("hidden", !has(scene.show, id));
+    el.classList.toggle("focus", has(scene.focus, id));
+    el.classList.toggle("run", has(scene.run, id));
+    el.classList.remove("draw");
+  }
+  void $("guideScene").getBoundingClientRect();   // restart the draw animation
+  for (const id of (scene.draw || "").split(" ").filter(Boolean)) $("g-" + id).classList.add("draw");
 }
-$("tutorialPrev").addEventListener("click", () => { tutorialStep = Math.max(0, tutorialStep - 1); renderTutorial(); });
-$("tutorialNext").addEventListener("click", () => { tutorialStep = Math.min(9, tutorialStep + 1); renderTutorial(); });
+function showGuideStep(i) {
+  guideStep = Math.max(0, Math.min(SCENES.length - 1, i));
+  try { localStorage.setItem("odmr_guide_step", guideStep); } catch (e) { /* blocked */ }
+  renderGuide();
+}
+$("guidePrev").addEventListener("click", () => showGuideStep(guideStep - 1));
+$("guideNext").addEventListener("click", () => showGuideStep(guideStep + 1));
+$("guideLiveBtn").addEventListener("click", () => (alignRunning ? stopAlign() : startAlign()));
+$("guideGoto").addEventListener("click", () => showTab(SCENES[guideStep].goto));
+
+/* ---------------------------------------------------------------------------
+ * Tabs: #tab-… in the URL opens a tab, else the one used last
+ * ------------------------------------------------------------------------- */
+function showTab(id) {
+  const btn = document.querySelector(`[data-bs-target="#${id}"]`);
+  if (btn) bootstrap.Tab.getOrCreateInstance(btn).show();
+}
+document.addEventListener("shown.bs.tab", (e) => {
+  const id = e.target.dataset.bsTarget.slice(1);
+  history.replaceState(null, "", location.pathname + location.search + "#" + id);
+  try { localStorage.setItem("odmr_tab", id); } catch (err) { /* blocked */ }
+});
+document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 
 /* ---------------------------------------------------------------------------
  * Helpers
@@ -732,10 +824,13 @@ function refreshDynamicLabels() {
   if (!sweepRunning) { const b = $("sweepStart"); if (b) b.textContent = t("start_sweep"); }
   else { const b = $("sweepStart"); if (b) b.textContent = t("stop_sweep"); }
   $("liveStart").textContent = liveRunning ? t("stop_live") : t("start_live");
-  renderTutorial();
+  $("guideLiveBtn").textContent = alignRunning ? t("stop_align") : t("start_align");
+  $("modeBadge").textContent = t(!ON_BOARD ? "mode_serial" : VIA_USB_NET ? "mode_usb" : "mode_wifi");
+  renderGuide();
   updateSweepSummary();
   $("btnToggleLog").textContent = $("logWrap").style.display === "none" ? t("show_log") : t("hide_log");
   $("connText").textContent = deviceConnected ? t("connected") : t("not_connected");
+  showWifi(wifiState);
 }
 
 /* ---------------------------------------------------------------------------
@@ -750,8 +845,12 @@ function refreshDynamicLabels() {
   renderSweepPlot();
   drawLive();
   drawRatio();
+  let tab = location.hash.slice(1);
+  try { tab = tab || localStorage.getItem("odmr_tab"); } catch (e) { /* blocked */ }
+  if (tab) showTab(tab);
 
   if (ON_BOARD) {
+    document.body.classList.add("on-board");
     device.connect().catch((e) => log("! connect: " + e.message, "err"));
     return;
   }

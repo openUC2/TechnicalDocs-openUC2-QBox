@@ -56,6 +56,8 @@ a:hover { color: var(--uc2-turquoise); }
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1030; /* above the sticky connection bar, so the language menu stays clickable */
 }
 
 .navbar a,
@@ -690,3 +692,17 @@ footer a {
   background: #f8f9fa;
   color: var(--uc2-blue);
 }
+/* .navbar a is white: keep menu entries readable on the white menu */
+.navbar .dropdown-item { color: var(--uc2-grey) !important; }
+.navbar .dropdown-item:hover { color: var(--uc2-blue) !important; }
+
+/* Partner logos (Info tab, infos.html) */
+.partner-logo { height: 48px; width: auto; max-width: 100%; }
+.partner-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem; }
+.partner-grid > * {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  padding: 0.5rem; border: 1px solid var(--uc2-border); border-radius: 6px;
+  text-align: center; font-size: 0.75rem; line-height: 1.2; color: inherit;
+}
+.partner-grid img { height: 34px; width: 100%; object-fit: contain; margin-bottom: 0.25rem; }
+.partner-grid small { color: var(--uc2-grey); }

@@ -130,6 +130,12 @@ export class HttpDevice {
     return this._request("POST", on ? "/ADF_Enable" : "/ADF_Disable");
   }
 
+  async wifi(on) {
+    return JSON.parse(on === undefined
+      ? await this._request("GET", "/wifi", {}, 2000)
+      : await this._request("POST", "/wifi", { on: on ? 1 : 0 }));
+  }
+
   // Streams over Server-Sent Events: {"f","I","idx","total"} per point, then {"done":true}.
   sweep(fBegin, fEnd, fStep, avg, settle, { onStart, onPoint } = {}) {
     return this._enqueue(

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>openUC2 ODMR — WebSerial Control</title>
+    <title>openUC2 ODMR</title>
 
     <link rel="stylesheet" href="assets/bootstrap.min.css" />
     <link rel="stylesheet" href="assets/style.css" />
@@ -83,6 +83,38 @@
       body.no-serial .needs-serial { display: none; }
       body.no-serial .nounsupported { display: block; }
       .tab-btn.active { background: var(--uc2-blue); color: #fff; }
+      body.on-board .serial-only { display: none !important; }
+
+      /* Guide: setup scene (top view) */
+      #guideScene { width: 100%; height: auto; display: block; }
+      #guideScene .lbl { font-size: 10px; fill: #4a5a6c; text-anchor: middle; }
+      #guideScene .hidden { display: none; }
+      #guideScene .beam { fill: none; stroke: #33c24d; stroke-width: 5; stroke-linecap: round; opacity: 0.85; }
+      #guideScene .beam-cone { fill: #33c24d; opacity: 0.6; }
+      #guideScene .fluo { fill: none; stroke: #e23b3b; stroke-width: 2.5; stroke-dasharray: 6 6; }
+      #guideScene .fluo-cone { fill: #e23b3b; opacity: 0.25; }
+      #guideScene .trace { fill: none; stroke: #023773; stroke-width: 2; }
+      #guideScene .focus { animation: hl 1.4s ease-in-out infinite; }
+      #guideScene .draw { stroke-dasharray: 400; animation: draw 1.4s ease-out both; }
+      #guideScene .run .fluo { animation: flow 0.8s linear infinite; }
+      #guideScene .run#g-card { animation: card 3.2s ease-in-out infinite; }
+      #guideScene .run#g-arrows { animation: blink 1.2s ease-in-out infinite; }
+      #guideScene .run#g-spot { transform-box: fill-box; transform-origin: center; animation: spot 3s ease-in-out infinite; }
+      #guideScene .run#g-magnet { animation: magnet 3s ease-in-out infinite; }
+      #guideScene .run .cable { stroke-dasharray: 5 4; animation: flow 1s linear infinite; }
+      @keyframes hl { 50% { filter: drop-shadow(0 0 5px #1f9c7c) drop-shadow(0 0 2px #1f9c7c); } }
+      @keyframes draw { from { stroke-dashoffset: 400; } to { stroke-dashoffset: 0; } }
+      @keyframes flow { to { stroke-dashoffset: -12; } }
+      @keyframes card { 50% { transform: translateX(-52px); } }
+      @keyframes blink { 50% { opacity: 0.25; } }
+      @keyframes spot { 0%, 100% { transform: scale(2.2); } 55%, 80% { transform: scale(0.8); } }
+      @keyframes magnet { 50% { transform: translateX(-10px); } }
+      @media (prefers-reduced-motion: reduce) { #guideScene * { animation: none !important; } }
+      .guide-checks { list-style: none; padding-left: 0; }
+      .guide-checks label { display: flex; gap: 0.4rem; align-items: flex-start; cursor: pointer; }
+      .guide-checks input { margin-top: 0.2rem; }
+      .guide-list li { cursor: pointer; padding: 1px 0; }
+      .guide-list li.active { font-weight: 600; color: var(--uc2-blue); }
     </style>
   </head>
 
@@ -90,9 +122,9 @@
     <!-- ░░ Navbar ░░ -->
     <nav class="navbar navbar-expand-lg shadow-sm">
       <div class="container">
-        <a class="navbar-brand fw-bold" href="#">NV-Experimente · <span style="font-weight:400">WebSerial</span></a>
+        <a class="navbar-brand fw-bold" href="#">NV-Experimente</a>
         <div class="ms-auto d-flex align-items-center gap-2">
-          <span class="badge bg-secondary" id="modeBadge">Serial-only</span>
+          <span class="badge bg-secondary" id="modeBadge">WebSerial</span>
           <div class="dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="langDropdown" role="button"
                data-bs-toggle="dropdown" aria-expanded="false">🌐 DE</a>
@@ -109,11 +141,12 @@
     <div class="conn-bar py-2 mb-3">
       <div class="container">
         <div class="d-flex flex-wrap align-items-center gap-2">
-          <button class="btn btn-primary btn-sm needs-serial" id="btnConnect" data-i18n="connect">Gerät verbinden</button>
-          <button class="btn btn-outline-secondary btn-sm needs-serial" id="btnDisconnect" disabled data-i18n="disconnect">Trennen</button>
+          <button class="btn btn-primary btn-sm needs-serial serial-only" id="btnConnect" data-i18n="connect">Gerät verbinden</button>
+          <button class="btn btn-outline-secondary btn-sm needs-serial serial-only" id="btnDisconnect" disabled data-i18n="disconnect">Trennen</button>
           <span class="conn-dot" id="connDot"></span>
           <span id="connText" class="small" data-i18n="not_connected">Nicht verbunden</span>
           <span class="text-muted small ms-2" id="deviceVersion"></span>
+          <button class="btn btn-outline-secondary btn-sm d-none" id="btnWifi">📶</button>
           <div class="ms-auto d-flex align-items-center gap-2">
             <button class="btn btn-outline-secondary btn-sm" id="btnToggleLog" data-i18n="show_log">Log anzeigen</button>
           </div>
@@ -125,9 +158,9 @@
         <div id="logWrap" class="mt-2" style="display: none;">
           <div id="serialLog"></div>
           <div class="d-flex gap-2 mt-1">
-            <input type="text" class="form-control form-control-sm" id="manualCmd"
+            <input type="text" class="form-control form-control-sm serial-only" id="manualCmd"
                    placeholder="Manueller Befehl, z. B. PING" style="max-width: 320px;" />
-            <button class="btn btn-secondary btn-sm" id="btnSendCmd" data-i18n="send">Senden</button>
+            <button class="btn btn-secondary btn-sm serial-only" id="btnSendCmd" data-i18n="send">Senden</button>
             <button class="btn btn-outline-secondary btn-sm" id="btnClearLog" data-i18n="clear_log">Log leeren</button>
           </div>
         </div>
@@ -137,7 +170,8 @@
     <main class="container needs-serial">
       <!-- ░░ Tab nav ░░ -->
       <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-sweep" type="button" data-i18n="tab_sweep">Frequenz-Sweep</button></li>
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-guide" type="button" data-i18n="tab_guide">Anleitung</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-sweep" type="button" data-i18n="tab_sweep">Frequenz-Sweep</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-live" type="button" data-i18n="tab_live">Live-Monitor</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ratio" type="button" data-i18n="tab_ratio">B-Field Monitor</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-align" type="button" data-i18n="tab_align">Justage</button></li>
@@ -145,14 +179,158 @@
       </ul>
 
       <div class="tab-content">
+        <!-- ════════ GUIDE TAB: build and align the setup step by step ════════ -->
+        <div class="tab-pane fade show active" id="tab-guide" role="tabpanel">
+          <div class="row">
+            <div class="col-lg-8">
+              <div class="card">
+                <div class="card-body p-2">
+                  <!-- Top view of the setup. assets/guide.js says per step which parts show,
+                       which are highlighted and which animations run. -->
+                  <svg id="guideScene" viewBox="0 0 460 300" role="img" aria-labelledby="guideTitle">
+                    <g id="g-plate">
+                      <rect x="40" y="30" width="380" height="200" rx="8" fill="#f1f4f8" stroke="#c9d3df" />
+                      <g fill="#fff" stroke="#c9d3df" stroke-dasharray="4 3">
+                        <rect x="50" y="40" width="90" height="90" /><rect x="140" y="40" width="90" height="90" />
+                        <rect x="230" y="40" width="90" height="90" /><rect x="320" y="40" width="90" height="90" />
+                        <rect x="50" y="130" width="90" height="90" /><rect x="140" y="130" width="90" height="90" />
+                        <rect x="230" y="130" width="90" height="90" /><rect x="320" y="130" width="90" height="90" />
+                      </g>
+                    </g>
+                    <!-- light paths (under the parts) -->
+                    <path id="g-beam1" class="beam" d="M120 175 H275" />
+                    <path id="g-beam2" class="beam" d="M275 175 V85" />
+                    <path id="g-beam3" class="beam" d="M275 85 H185" />
+                    <path id="g-beam3b" class="beam" d="M185 85 H52" />
+                    <path id="g-beam4" class="beam-cone" d="M185 79 L124 85 L185 91 Z" />
+                    <g id="g-fluo">
+                      <path class="fluo-cone" d="M124 85 L185 76 L185 94 Z" />
+                      <path class="fluo" d="M185 85 H350" />
+                    </g>
+                    <!-- parts -->
+                    <g id="g-laser">
+                      <rect x="58" y="160" width="62" height="30" rx="4" fill="#2b2b2b" />
+                      <rect x="114" y="168" width="8" height="14" fill="#85b918" />
+                      <text x="89" y="210" class="lbl">Laser 532 nm</text>
+                    </g>
+                    <g id="g-warn">
+                      <path d="M89 136 L103 158 H75 Z" fill="#ffc107" stroke="#7a5a00" />
+                      <text x="89" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="#7a5a00">!</text>
+                    </g>
+                    <g id="g-mirror">
+                      <rect x="250" y="150" width="50" height="50" rx="5" fill="none" stroke="#8a97a8" />
+                      <line x1="257" y1="193" x2="293" y2="157" stroke="#7d8b9c" stroke-width="5" stroke-linecap="round" />
+                      <text x="275" y="214" class="lbl" data-i18n="g_mirror">Spiegel 45°</text>
+                    </g>
+                    <g id="g-dichroic">
+                      <rect x="250" y="60" width="50" height="50" rx="5" fill="none" stroke="#8a97a8" />
+                      <line x1="257" y1="67" x2="293" y2="103" stroke="#3fae8f" stroke-width="5" stroke-linecap="round" opacity="0.8" />
+                      <text x="275" y="54" class="lbl" data-i18n="g_dichroic">Strahlteiler</text>
+                    </g>
+                    <g id="g-lens">
+                      <ellipse cx="185" cy="85" rx="6" ry="28" fill="#cfe6f7" stroke="#5b8db8" />
+                      <text x="185" y="54" class="lbl">f = 40 mm</text>
+                    </g>
+                    <g id="g-stage">
+                      <rect x="62" y="55" width="50" height="60" rx="4" fill="#d9dee5" stroke="#8a97a8" />
+                      <rect x="112" y="58" width="10" height="54" fill="#1d5e3a" />
+                      <text x="88" y="54" class="lbl" data-i18n="g_stage">Diamant</text>
+                    </g>
+                    <circle id="g-spot" cx="122" cy="85" r="4" fill="#e23b3b" />
+                    <g id="g-arrows" stroke="#023773" stroke-width="2" fill="none" stroke-linecap="round">
+                      <path d="M88 66 V104 M83 71 L88 66 L93 71 M83 99 L88 104 L93 99" />
+                      <path d="M70 120 H106 M75 115 L70 120 L75 125 M101 115 L106 120 L101 125" />
+                    </g>
+                    <g id="g-pd">
+                      <rect x="347" y="64" width="50" height="42" rx="4" fill="#3b4a5c" />
+                      <rect x="341" y="66" width="6" height="38" fill="#d9302c" />
+                      <ellipse cx="354" cy="85" rx="3" ry="14" fill="#cfe6f7" />
+                      <text x="372" y="54" class="lbl" data-i18n="g_pd">Photodiode</text>
+                    </g>
+                    <g id="g-box">
+                      <rect x="334" y="148" width="66" height="48" rx="5" fill="#023773" />
+                      <text x="367" y="169" text-anchor="middle" font-size="10" fill="#fff">ESP32</text>
+                      <text x="367" y="183" text-anchor="middle" font-size="9" fill="#cfe3f7">+ MW</text>
+                    </g>
+                    <g id="g-cables" fill="none" stroke-width="3" stroke-linecap="round">
+                      <path class="cable" d="M380 106 V148" stroke="#e0b000" />
+                      <path class="cable" d="M340 192 C 300 245, 150 245, 117 112" stroke="#e07b00" />
+                      <path class="cable" d="M400 172 H452" stroke="#555" />
+                      <text x="426" y="164" class="lbl">USB</text>
+                      <text x="392" y="130" class="lbl">I²C</text>
+                      <text x="318" y="210" class="lbl">SMA</text>
+                    </g>
+                    <g id="g-puzzle" fill="rgba(2,55,115,0.08)" stroke="#023773" stroke-dasharray="2 4">
+                      <rect x="50" y="40" width="360" height="180" rx="6" />
+                    </g>
+                    <g id="g-magnet">
+                      <rect x="40" y="70" width="14" height="30" fill="#c0392b" />
+                      <rect x="40" y="85" width="14" height="15" fill="#7f8c8d" />
+                    </g>
+                    <g id="g-filter">
+                      <rect x="60" y="8" width="56" height="24" rx="5" fill="rgba(220,40,40,0.55)" stroke="#9b1c1c" />
+                      <text x="88" y="24" text-anchor="middle" font-size="10" fill="#fff" data-i18n="g_filter">Rotfilter</text>
+                    </g>
+                    <g id="g-card">
+                      <rect x="178" y="68" width="4" height="34" fill="#fff" stroke="#555" />
+                    </g>
+                    <g id="g-targets" fill="none" stroke="#dc3545" stroke-width="1.5">
+                      <circle cx="275" cy="175" r="9" /><circle cx="275" cy="85" r="9" /><circle cx="185" cy="85" r="9" />
+                    </g>
+                    <!-- ODMR spectrum inset: one dip, or two with a magnet -->
+                    <g id="g-plot">
+                      <rect x="50" y="238" width="190" height="56" rx="4" fill="#fff" stroke="#c9d3df" />
+                      <path id="g-dip1" class="trace" d="M58 252 H120 C 132 252, 136 284, 145 284 C 154 284, 158 252, 170 252 H232" />
+                      <path id="g-dip2" class="trace" d="M58 252 H95 C 104 252, 108 282, 114 282 C 120 282, 124 252, 132 252 H158 C 166 252, 170 282, 176 282 C 182 282, 186 252, 195 252 H232" />
+                      <text x="145" y="248" class="lbl" font-size="8">2870 MHz</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <span data-i18n="guide_header">📘 Aufbau & Justage</span>
+                  <span class="small text-muted" id="guideProgress"></span>
+                </div>
+                <div class="card-body">
+                  <h5 id="guideTitle" class="mb-2"></h5>
+                  <p class="small mb-2" id="guideText"></p>
+                  <ul class="guide-checks small mb-2" id="guideChecks"></ul>
+                  <div class="guide-live d-none mb-2" id="guideLive">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <span class="big-value" style="font-size:1.8rem" id="guideValue">---</span>
+                      <span class="badge bg-secondary" id="guideStatus" data-i18n="ready">Bereit</span>
+                      <button class="btn btn-success btn-sm ms-auto" id="guideLiveBtn" disabled data-i18n="start_align">Start Überwachung</button>
+                    </div>
+                    <div class="progress mt-2" style="height:14px"><div class="progress-bar" id="guideBar" style="width:0%"></div></div>
+                  </div>
+                  <button class="btn btn-outline-primary btn-sm d-none mb-2" id="guideGoto"></button>
+                  <div class="d-flex justify-content-between align-items-center mt-2">
+                    <button class="btn btn-outline-secondary btn-sm" id="guidePrev" data-i18n="prev">← Zurück</button>
+                    <button class="btn btn-primary btn-sm" id="guideNext" data-i18n="next">Weiter →</button>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-body py-2">
+                  <ol class="small mb-0 guide-list" id="guideList"></ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- ════════ SWEEP TAB ════════ -->
-        <div class="tab-pane fade show active" id="tab-sweep" role="tabpanel">
+        <div class="tab-pane fade" id="tab-sweep" role="tabpanel">
           <div class="row">
             <div class="col-lg-8">
               <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                   <span data-i18n="sweep_plot">📈 Intensität vs. Frequenz</span>
                   <div>
+                    <button class="btn btn-outline-secondary btn-sm" id="sweepFit" title="Y: min–max" data-i18n="fit">↕ Auto</button>
                     <button class="btn btn-outline-secondary btn-sm" id="sweepClear" data-i18n="clear">Leeren</button>
                     <button class="btn btn-success btn-sm" id="sweepCsv">CSV ↓</button>
                     <button class="btn btn-outline-success btn-sm" id="sweepPng">PNG ↓</button>
@@ -237,6 +415,11 @@
                       <option value="60">60 s</option>
                       <option value="120">120 s</option>
                     </select>
+                    <select id="liveYRange" style="width:auto;display:inline-block;padding:.25rem;">
+                      <option value="auto" selected>Y: Auto</option>
+                      <option value="full" data-i18n="y_full">Voll (0–Max)</option>
+                    </select>
+                    <button class="btn btn-outline-secondary btn-sm" id="liveFit" title="Y: min–max" data-i18n="fit">↕ Auto</button>
                     <button class="btn btn-outline-secondary btn-sm" id="liveClear" data-i18n="clear">Leeren</button>
                     <button class="btn btn-success btn-sm" id="liveCsv">CSV ↓</button>
                   </div>
@@ -267,7 +450,8 @@
                   <div class="text-center">
                     <small class="text-muted" data-i18n="current_value">Aktueller Wert</small>
                     <div class="big-value" id="liveValue">---</div>
-                    <small class="text-muted"><span data-i18n="measurements">Messungen</span>: <span id="liveCount">0</span></small>
+                    <small class="text-muted"><span data-i18n="measurements">Messungen</span>: <span id="liveCount">0</span></small><br />
+                    <small class="text-muted"><span data-i18n="range">Messbereich</span>: 0 – <span id="liveMax">37888</span></small>
                   </div>
                   <p class="small text-muted mt-3 mb-0" data-i18n="live_hint">Misst die Fluoreszenz fortlaufend bei einer festen Mikrowellenfrequenz, z. B. um die Wirkung eines Magneten direkt zu sehen.</p>
                 </div>
@@ -365,6 +549,7 @@
                       <option value="0.5">±0.5</option>
                       <option value="1">±1.0</option>
                     </select>
+                    <button class="btn btn-outline-secondary btn-sm" id="ratioFit" title="Y: min–max" data-i18n="fit">↕ Auto</button>
                     <button class="btn btn-outline-secondary btn-sm" id="ratioClear" data-i18n="clear">Leeren</button>
                     <button class="btn btn-success btn-sm" id="ratioCsv">CSV ↓</button>
                   </div>
@@ -422,6 +607,7 @@
                       <option value="stretch" data-i18n="y_stretch">Stretch (Min–Max)</option>
                       <option value="full" data-i18n="y_full">Voll (0–Max)</option>
                     </select>
+                    <button class="btn btn-outline-secondary btn-sm" id="alignFit" title="Y: min–max" data-i18n="fit">↕ Auto</button>
                     <button class="btn btn-outline-secondary btn-sm" id="alignClear" data-i18n="clear">Leeren</button>
                   </div>
                 </div>
@@ -429,31 +615,7 @@
                   <canvas class="plot" id="alignCanvas" data-height="220"></canvas>
                 </div>
               </div>
-              <div class="card">
-                <div class="card-header" data-i18n="align_guide">Justage-Anleitung</div>
-                <div class="card-body">
-                  <ol class="small mb-0">
-                    <li data-i18n="align_s1">Auf „Start Überwachung" klicken.</li>
-                    <li data-i18n="align_s2">Die Board-LED leuchtet blau (Intensitätsmodus aktiv).</li>
-                    <li data-i18n="align_s3">Optische Komponenten (Laser, Linsen, Spiegel) justieren.</li>
-                    <li data-i18n="align_s4">Intensitätswerte beobachten und maximieren.</li>
-                    <li data-i18n="align_s5">Nach Abschluss „Stop" klicken.</li>
-                  </ol>
-                </div>
-              </div>
-              <div class="card">
-                <div class="card-header" data-i18n="tutorial_title">Aufbau Schritt für Schritt (10 Schritte)</div>
-                <div class="card-body">
-                  <h6 id="tutorialStepTitle" class="mb-1"></h6>
-                  <p class="small mb-2" id="tutorialStepText"></p>
-                  <div class="d-flex justify-content-between align-items-center">
-                    <button class="btn btn-outline-secondary btn-sm" id="tutorialPrev" data-i18n="prev">← Zurück</button>
-                    <span class="small text-muted" id="tutorialProgress">1 / 10</span>
-                    <button class="btn btn-primary btn-sm" id="tutorialNext" data-i18n="next">Weiter →</button>
-                  </div>
-                  <ol class="small mt-3 mb-0" id="tutorialStepList"></ol>
-                </div>
-              </div>
+              <button class="btn btn-outline-primary btn-sm mb-3" data-goto="tab-guide" data-i18n="align_guide">📘 Schritt-für-Schritt-Anleitung</button>
             </div>
             <div class="col-md-4">
               <div class="card">
@@ -499,17 +661,14 @@
         <!-- ════════ INFO TAB ════════ -->
         <div class="tab-pane fade" id="tab-info" role="tabpanel">
           <div class="row">
-            <div class="col-lg-7">
-              <h2 class="h4" data-i18n="info_title">Über dieses WebSerial-Interface</h2>
-              <p data-i18n="info_intro">
-                Diese Seite steuert das openUC2 ODMR-Gerät vollständig über die serielle
-                USB-Schnittstelle (Web Serial API) – ganz ohne WLAN. Verbinde das Board per
-                USB, klicke oben auf „Gerät verbinden" und wähle den seriellen Port (115200 Baud).
-              </p>
-              <div class="alert alert-info">
-                <strong data-i18n="info_browser_title">Browser:</strong>
-                <span data-i18n="info_browser">Web Serial funktioniert in Chrome, Edge und Opera (Desktop). Firefox/Safari werden nicht unterstützt.</span>
-              </div>
+            <div class="col-lg-8">
+              <h2 class="h4" data-i18n="info_title">Über diese App</h2>
+              <p data-i18n="info_intro">Dieselbe App steuert das ODMR-Gerät auf drei Wegen:</p>
+              <ul class="small">
+                <li data-i18n="info_way_serial">USB-Kabel am Computer: https://youseetoo.github.io/odmr in Chrome oder Edge öffnen, „Gerät verbinden“ klicken und den Port wählen (Web Serial).</li>
+                <li data-i18n="info_way_wifi">WLAN: mit dem WLAN des Geräts (ODMR-…) verbinden und http://192.168.4.1 öffnen. Geht mit jedem Browser.</li>
+                <li data-i18n="info_way_usb">USB-Kabel am iPad/iPhone (XIAO ESP32-S3): das Gerät erscheint als kabelgebundenes Netzwerk, http://192.168.7.1 in Safari öffnen.</li>
+              </ul>
               <div class="alert alert-success">
                 <strong data-i18n="android_title">Android:</strong>
                 <span data-i18n="android_text">Dieselben Messungen gibt es im ODMR-Tab der App „UC2 Control“: Board per USB-OTG anschließen, Messungen landen als Dateien auf dem Handy und lassen sich teilen.</span>
@@ -527,7 +686,7 @@
                 <span data-i18n="safety_text">Nie direkt in den Laser blicken. Vorsicht mit Magneten bei Implantaten/Elektronik.</span>
               </div>
             </div>
-            <div class="col-lg-5">
+            <div class="col-lg-4">
               <div class="card">
                 <div class="card-header" data-i18n="protocol_title">Serielles Protokoll</div>
                 <div class="card-body p-0">
@@ -552,6 +711,32 @@
               </div>
             </div>
           </div>
+          <div class="card mt-3">
+            <div class="card-body">
+              <h3 class="h5" data-i18n="partners_title">Projekt &amp; Partner</h3>
+              <p class="small" data-i18n="partners_text">Entwickelt im Verbundprojekt QuantumMiniLabs, gefördert vom Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR).</p>
+              <div class="partner-grid">
+                <a href="https://openuc2.com" target="_blank" rel="noopener"><img src="assets/logo-openuc2.svg" alt="" loading="lazy"><b>openUC2 GmbH</b></a>
+                <a href="https://acp.uni-jena.de/4279/quantumminilabs" target="_blank" rel="noopener"><img src="assets/logo-qml.svg" alt="" loading="lazy"><b>QuantumMiniLabs</b></a>
+                <a href="https://www.bmftr.bund.de" target="_blank" rel="noopener"><img src="assets/logo-bmftr.svg" alt="" loading="lazy"><b>BMFTR</b></a>
+                <a href="https://hrw-fablab.de" target="_blank" rel="noopener"><img src="assets/logo-hrw.svg" alt="" loading="lazy"><b>Hochschule Ruhr West</b><small>FabLab</small></a>
+                <a href="https://www.uni-muenster.de/Physik.DP/" target="_blank" rel="noopener"><img src="assets/logo-unims.svg" alt="" loading="lazy"><b>Universität Münster</b><small>Didaktik der Physik</small></a>
+                <a href="https://www.fh-muenster.de" target="_blank" rel="noopener"><img src="assets/logo-fhms.svg" alt="" loading="lazy"><b>Hochschule Münster</b><small>Physikingenieurwesen</small></a>
+                <a href="https://www.uni-jena.de" target="_blank" rel="noopener"><img src="assets/logo-jena.svg" alt="" loading="lazy"><b>Universität Jena</b><small>Lichtwerkstatt</small></a>
+                <a href="https://www.uni-saarland.de" target="_blank" rel="noopener"><img src="assets/logo-uds.svg" alt="" loading="lazy"><b>Universität des Saarlandes</b><small>Physik</small></a>
+                <span><img src="assets/logo-wisnet.svg" alt="" loading="lazy"><b>wisnet</b><small>Innovation Research Institute</small></span>
+              </div>
+              <h3 class="h6 mt-3" data-i18n="refs_title">Weiterführende Links</h3>
+              <ul class="small mb-1">
+                <li><a href="https://docs.openuc2.com/usage/disc/qbox/ODMR/en/odmr_experiment_eng" target="_blank" rel="noopener" data-i18n="ref_docs">Anleitung zum ODMR-Experiment (openUC2 Docs)</a></li>
+                <li><a href="https://idw-online.de/de/news830145" target="_blank" rel="noopener" data-i18n="ref_press">Pressemitteilung zum Projektstart (idw)</a></li>
+                <li><a href="https://github.com/openUC2" target="_blank" rel="noopener">openUC2 · GitHub</a></li>
+                <li><a href="infos.html" data-i18n="ref_infos">Mehr über NV-Zentren und das Experiment</a></li>
+                <li><a href="mailto:hello@openuc2.com">hello@openuc2.com</a></li>
+              </ul>
+              <p class="small text-muted mb-0" data-i18n="offline_note">Die App läuft komplett offline vom Gerät; nur die Links nach außen brauchen Internet.</p>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -570,8 +755,8 @@
 
     <footer class="py-3 mt-auto">
       <div class="container text-center small">
-        <div>Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
-        <div class="mt-1" style="opacity: 0.7; font-size: 0.85em;">openUC2 ODMR · WebSerial Standalone</div>
+        <div>QuantumMiniLabs · Uni Münster · openUC2 GmbH – <a class="text-white text-decoration-none" href="mailto:hello@openuc2.com">hello@openuc2.com</a></div>
+        <div class="mt-1" style="opacity: 0.7; font-size: 0.85em;">openUC2 ODMR · QuantumMiniLabs</div>
       </div>
     </footer>
 

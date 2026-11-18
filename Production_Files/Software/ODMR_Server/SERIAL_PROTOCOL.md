@@ -119,11 +119,20 @@ Enable / disable the ADF4351 RF output.
 < OK ADF OFF
 ```
 
+### `WIFI` / `WIFI ON` / `WIFI OFF`
+Read or switch the WiFi access point. Off by default (the device is CE compliant
+with the radio off); the setting is stored and survives restarts. The AP starts
+a moment after the reply (channel scan, ~2 s).
+```
+> WIFI ON
+< WIFI {"enabled":true,"active":false,"ssid":"openUC2_ODMR_A1B2C3","clients":0}
+```
+
 ### `HELP`
 List available commands.
 ```
 > HELP
-< CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF
+< CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF WIFI
 ```
 
 ---

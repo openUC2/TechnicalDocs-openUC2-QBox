@@ -10,13 +10,17 @@
 
 #include "esp32-hal-tinyusb.h"
 #include "esp_event.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "freertos/semphr.h"
 #include "tusb.h"
 #include "device/usbd_pvt.h"
 
-static const char HOST_MAC[] = "020211223301";                         // host side of the link
-static const uint8_t BOARD_MAC[6] = {0x02, 0x02, 0x11, 0x22, 0x33, 0x02}; // must differ from the host's
+// The host's side of the link uses the chip's own Ethernet MAC. A locally
+// administered one (02:...) would make Linux and Android name the interface
+// usb0 instead of eth0, and Android only takes eth* as Ethernet.
+static char s_hostMac[13];
+static const uint8_t BOARD_MAC[6] = {0x02, 0x02, 0x11, 0x22, 0x33, 0x02}; // board side, differs from the host's
 
 static esp_netif_t *s_netif;
 static volatile unsigned long s_lastRx;   // millis() of the last packet from the host
@@ -26,7 +30,11 @@ static volatile unsigned long s_lastRx;   // millis() of the last packet from th
 static uint16_t loadNcmDescriptor(uint8_t *dst, uint8_t *itf)
 {
   uint8_t name = tinyusb_add_string_descriptor("ODMR USB network");
-  uint8_t mac = tinyusb_add_string_descriptor(HOST_MAC);
+  uint8_t hostMac[6];
+  esp_read_mac(hostMac, ESP_MAC_ETH);
+  snprintf(s_hostMac, sizeof(s_hostMac), "%02X%02X%02X%02X%02X%02X", hostMac[0], hostMac[1], hostMac[2],
+           hostMac[3], hostMac[4], hostMac[5]);
+  uint8_t mac = tinyusb_add_string_descriptor(s_hostMac);
   uint8_t epNotif = tinyusb_get_free_in_endpoint();
   uint8_t epIn = tinyusb_get_free_in_endpoint();
   uint8_t epOut = tinyusb_get_free_out_endpoint();

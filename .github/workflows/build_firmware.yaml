@@ -8,14 +8,15 @@
 # pages), merged at 0x0 by scripts/merge_espwebtools.py — the same image
 # `pio run -t mergedbin` gives you locally.
 #
-# Pull requests only build; pushes to main also publish.
+# Pull requests only build; pushes to main publish, pushes to odmr-* branches
+# publish a beta image (odmr-xiao-<chip>-beta*) next to it, without the web app.
 
 name: Build ODMR Firmware
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'odmr-*']
     paths:
       - 'Production_Files/Software/ODMR_Server/**'
       - '.github/workflows/build_firmware.yaml'
@@ -58,7 +59,7 @@ jobs:
       - name: Install PlatformIO and esptool
         run: pip install platformio esptool
 
-      # App, then SPIFFS (data/, gzipped from src/website_html by
+      # App, then SPIFFS (data/a/, the web app gzipped from webserial-app/ by
       # scripts/gzip_assets.py), then the merged image in build/fw-images/.
       - name: Build firmware, filesystem and merged image
         run: |
@@ -69,12 +70,13 @@ jobs:
       - name: Name image and write ESP Web Tools manifest
         run: |
           mkdir -p out
-          cp build/fw-images/${{ matrix.env_name }}.bin out/${{ matrix.board_id }}.bin
+          ID=${{ matrix.board_id }}$([ "$GITHUB_REF_NAME" = main ] || echo -beta)
+          cp build/fw-images/${{ matrix.env_name }}.bin out/$ID.bin
           # Program and web pages on their own, for the board's update page (/update)
-          cp .pio/build/${{ matrix.env_name }}/firmware.bin out/${{ matrix.board_id }}-firmware.bin
-          cp .pio/build/${{ matrix.env_name }}/spiffs.bin out/${{ matrix.board_id }}-spiffs.bin
+          cp .pio/build/${{ matrix.env_name }}/firmware.bin out/$ID-firmware.bin
+          cp .pio/build/${{ matrix.env_name }}/spiffs.bin out/$ID-spiffs.bin
           VERSION=$(git describe --tags --always)
-          cat > out/${{ matrix.board_id }}-manifest.json <<EOF
+          cat > out/$ID-manifest.json <<EOF
           {
             "name": "${{ matrix.display_name }}",
             "version": "$VERSION",
@@ -82,12 +84,12 @@ jobs:
             "builds": [
               {
                 "chipFamily": "${{ matrix.chip_family }}",
-                "parts": [{ "path": "${{ matrix.board_id }}.bin", "offset": 0 }]
+                "parts": [{ "path": "$ID.bin", "offset": 0 }]
               }
             ]
           }
           EOF
-          cat out/${{ matrix.board_id }}-manifest.json
+          cat out/$ID-manifest.json
 
       - uses: actions/upload-artifact@v4
         with:
@@ -123,8 +125,10 @@ jobs:
           mkdir -p dest/static/firmware_build dest/static/firmware_odmr
           cp fw/* dest/static/firmware_build/
           cp fw/* dest/static/firmware_odmr/
-          rm -rf dest/odmr
-          cp -R "src/${PROJECT_DIR}/webserial-app" dest/odmr
+          if [ "$GITHUB_REF_NAME" = main ]; then   # beta builds leave the live web app alone
+            rm -rf dest/odmr
+            cp -R "src/${PROJECT_DIR}/webserial-app" dest/odmr
+          fi
 
           cd dest
           git config user.email 'bene.d@gmx.de'

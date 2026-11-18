@@ -266,6 +266,13 @@ export class SerialDevice {
     return this.request(on ? "ADFON" : "ADFOFF", "OK");
   }
 
+  // WiFi access point: no arg -> state, true/false -> switch.
+  // Returns {enabled, active, ssid, clients}. Older firmware has no WIFI -> timeout.
+  async wifi(on) {
+    const line = await this.request(on === undefined ? "WIFI" : on ? "WIFI ON" : "WIFI OFF", "WIFI", 1500);
+    return JSON.parse(line.slice(line.indexOf("{")));
+  }
+
   /* ---- streaming sweep ------------------------------------------------ */
 
   // Run a sweep. onPoint(idx, total, f, intensity) is called per point.
