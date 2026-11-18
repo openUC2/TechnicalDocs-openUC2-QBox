@@ -150,25 +150,61 @@ in Chrome/Edge, category **qBOX (ODMR)**, pick *ODMR server (XIAO ESP32-C3)* (or
 -S3), plug the board in by USB-C and click *Install*. The image contains firmware
 and web pages; it is built and published by CI (see [CI](#ci--published-images)).
 
-**Control** — three front ends, same firmware:
+**Control** — one web app ([`webserial-app/`](webserial-app/)), three ways to
+reach it, plus the Android app:
 
-| Front end | How it connects | Where |
+| Way | How it connects | Where |
 |---|---|---|
-| On-device web pages | WiFi: join the board's access point, open `http://192.168.4.1` | served from SPIFFS (`src/website_html/`) |
-| WebSerial app | USB cable, Chrome/Edge on a laptop | <https://youseetoo.github.io/odmr> ([`webserial-app/`](webserial-app/)) |
+| USB cable, Chrome/Edge on a computer | Web Serial | <https://youseetoo.github.io/odmr> |
+| WiFi, any browser (**off by default**, see below) | join the board's access point | `http://192.168.4.1`, served by the board |
+| iPad / iPhone (XIAO ESP32-S3 only) | USB cable: the board appears as a wired network | `http://192.168.7.1` in Safari, served by the board |
 | UC2 Control (Android) | USB-C OTG cable to the phone, **ODMR** tab | [APK: UC2Control releases](https://github.com/youseetoo/UC2Control/releases/latest) |
 
-The WebSerial app and the Android app are the same page: UC2 Control bundles
-`webserial-app/` and gives it the phone's USB port. Both speak the
-[serial protocol](SERIAL_PROTOCOL.md) and add a live monitor, cursor readout,
-saved sweep series, CSV/PNG export and sharing on top of the on-device pages.
+The board serves the same files as GitHub Pages; served over plain `http` the
+app talks to the board's HTTP API (`assets/http.js`), on `https`/`localhost` it
+uses Web Serial (`assets/serial.js`). Tabs: step-by-step setup and alignment
+guide, frequency sweep, live monitor, B-field monitor, alignment, info. The
+Android app's native ODMR tab offers the same tools and CSV columns over the
+[serial protocol](SERIAL_PROTOCOL.md). Everything the app needs is on the board,
+so it runs without internet; only the outbound links in the Info tab need it.
+
+### WiFi is off by default
+
+The board starts with its radio off: the device is CE compliant with WiFi off.
+The user switches the access point on in the app (**📶 WiFi off** button in the
+connection bar, over Web Serial or the USB network), after a warning that the
+CE assessment no longer applies with WiFi on. The choice is stored in NVS and
+survives restarts until it is switched off the same way.
+
+- Serial: `WIFI` → `WIFI {"enabled":false,"active":false,"ssid":"openUC2_ODMR_XXXXXX","clients":0}`,
+  `WIFI ON`, `WIFI OFF` (same reply).
+- HTTP: `GET /wifi` (same JSON), `POST /wifi` with `on=1|0`.
+- The AP starts in `loop()`, not in the request: the channel scan blocks ~2 s.
+- XIAO ESP32-S3: the u.FL rod antenna must be attached, without it the AP is
+  only visible at very short range.
+
+### iPad and iPhone over the USB cable (ESP32-S3)
+
+The S3 build runs USB serial and a USB network (CDC-NCM) on the same cable, next
+to the WiFi network. iOS shows the board under Settings ▸ **Ethernet** and gets
+`192.168.7.x`; every page and API is then at `http://192.168.7.1`, without WiFi,
+Bluetooth or an app. Code: `src/usb_net.cpp`.
+
+- USB-C iPad/iPhone: USB-C to USB-C data cable. Lightning: Lightning to USB 3
+  Camera Adapter with its charger plugged in.
+- The S3 build uses Arduino core 3 (pioarduino platform) with USB in TinyUSB mode.
+  Uploads still need no button: the board restarts into download mode when
+  PlatformIO, esptool or the web flasher asks over USB serial.
+- `http://192.168.7.1/update` uploads a new program (`firmware.bin`) or web pages
+  (`spiffs.bin`), also from the iPad. Only over the USB cable, not over the open WiFi.
+- The C3 has no USB hardware for this and keeps serial + WiFi (Arduino core 2).
 
 ---
 
 ## CI — published images
 
 `.github/workflows/build_firmware.yaml` (repo root) runs on every push to `main`
-that touches `ODMR_Server/`: it builds both boards exactly as in
+(and, as beta images, to `odmr-*` branches) that touches `ODMR_Server/`: it builds both boards exactly as in
 [step 2](#2--create-a-single-merged-binary-for-web-flasher--distribution)
 (`pio run`, `-t buildfs`, `-t mergedbin`), writes the ESP Web Tools manifests
 (`chipFamily` `ESP32-C3` / `ESP32-S3`) and pushes them, together with
@@ -177,41 +213,36 @@ that touches `ODMR_Server/`: it builds both boards exactly as in
 | Published file | Used by |
 |---|---|
 | `static/firmware_build/odmr-xiao-esp32c3.bin`, `…-manifest.json` (and S3) | web flasher |
-| `odmr/` | <https://youseetoo.github.io/odmr> |
+| `…-firmware.bin`, `…-spiffs.bin` | the board's update page (`/update`) |
+| `odmr/` (`webserial-app/`, from `main` only) | <https://youseetoo.github.io/odmr> |
 
 Pull requests only build. Publishing needs the `API_TOKEN_GITHUB` secret.
 `deploy-webserial.yml` additionally serves `webserial-app/` from this repo's
 GitHub Pages.
 
-To bring the WebSerial app into the Android app, run
-`tools/sync_odmr_webapp.sh` in the [UC2Control](https://github.com/youseetoo/UC2Control) repo.
-
 ---
 
 ## Architecture
 
-The web pages are edited in `src/website_html/`, gzipped into `data/` by
+The web app is edited in `webserial-app/`, gzipped into `data/a/` by
 `scripts/gzip_assets.py` on every build, and served from the
-ESP32's **SPIFFS filesystem**. This keeps them out of the app partition and
-allows images + Bootstrap to be included without hitting flash limits.
+ESP32's **SPIFFS filesystem** at `/`. This keeps it out of the app partition.
 
-> The firmware serves `data/` directly — the old `src/website/*.h` PROGMEM
-> embedding path is no longer compiled in. Always upload the filesystem
-> (`pio run -t uploadfs`) after flashing; if it's missing the device shows a
-> short "upload the filesystem" page instead of blank 404s.
+> Always upload the filesystem (`pio run -t uploadfs`) after flashing, or flash
+> the merged image; if it's missing the device shows a short "upload the
+> filesystem" page instead of blank 404s.
 
 ```
 ODMR_Server/
 ├── src/
 │   ├── main.cpp            ← Firmware (web server, serial protocol, sensor, ADF4351)
-│   └── website_html/       ← on-device pages: edit these
-├── data/                   ← SPIFFS root – served at http://192.168.4.1/
-│   ├── *.html.gz, style.css.gz  (generated from src/website_html, git-ignored)
-│   └── NVGitter*.png
-├── webserial-app/          ← USB front end (browser + UC2 Control Android app)
+│   ├── usb_net.cpp         ← USB network for iPad/iPhone (S3)
+├── data/a/                 ← SPIFFS content, generated from webserial-app/ (git-ignored)
+├── webserial-app/          ← the web app: GitHub Pages and the board's own pages
 ├── SERIAL_PROTOCOL.md      ← commands the WebSerial app uses
+├── examples/usb_network_s3/ ← ESP-IDF test: S3 with USB serial + USB network, for iPhone/iPad
 ├── scripts/
-│   ├── gzip_assets.py        ← PlatformIO pre-script: src/website_html → data/*.gz
+│   ├── gzip_assets.py        ← PlatformIO pre-script: webserial-app → data/a/*.gz
 │   └── merge_espwebtools.py  ← PlatformIO post-script: builds merged .bin
 ├── custom_partition_esp32c3.csv
 ├── custom_partition_esp32s3.csv
@@ -232,15 +263,12 @@ handles automatically:
   is measured one point per `loop()` iteration — all SPI/I²C stays on the main
   thread.
 - **Gzip.** `scripts/gzip_assets.py` runs as a PlatformIO **pre-build** hook and
-  produces a `<file>.gz` for every compressible asset in `data/`. `serveStatic`
-  serves those automatically with `Content-Encoding: gzip`. Bootstrap CSS drops
-  232 KB → ~31 KB, the JS 80 KB → ~24 KB, each HTML page ~75 %. The `.gz` files
-  are git-ignored (regenerated on every build).
-- **Caching.** Third-party assets (`bootstrap.*`, `NVGitter.png`) are sent with
-  `Cache-Control: immutable, max-age=1y`, so after the first visit page
-  navigations don't re-download them; HTML gets a short cache so UI edits still
-  appear.
-- **WiFi channel.** At boot the AP scans and picks the least-congested
+  gzips every file of `webserial-app/` into `data/a/`. `serveStatic` serves
+  those with `Content-Encoding: gzip`. Bootstrap CSS drops 232 KB → ~31 KB, the
+  JS 80 KB → ~24 KB. `data/` is git-ignored (regenerated on every build).
+- **Caching.** The app's files are cached for an hour, so UI updates show up
+  soon after flashing.
+- **WiFi channel.** When WiFi is switched on, the AP scans and picks the least-congested
   **non-overlapping** channel (1, 6 or 11) instead of a random 1–11. Random
   channels frequently landed on an overlapping one, causing adjacent-channel
   interference — the usual cause of "sometimes fast, sometimes slow".
@@ -344,7 +372,18 @@ pio device list       # cross-platform
 ```bash
 # Upload firmware only
 /Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32c3  --upload-port /dev/cu.usbmodem101
-/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem101
+/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem114401
+
+/Users/bene/.platformio/penv/bin/platformio run   --target uploadfs --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodemCCBA971636E41
+
+
+# open questions 
+how can we fuse the upload to a single binary to upload it via the flasher?
+can we form a network with multiple esps with some kind of router/switch?
+
+/Users/bene/.platformio/penv/bin/platformio run   --target upload --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodem4
+/Users/bene/.platformio/penv/bin/platformio run   --target uploadfs --environment seeed_xiao_esp32s3  --upload-port /dev/cu.usbmodemCCBA971636E41
+
 
 
 # Upload SPIFFS only (no firmware recompile needed for HTML/CSS changes)
@@ -394,9 +433,7 @@ Expected boot output (no bootloop):
 ```
 SPIFFS mounted OK
 Files on SPIFFS:
-  /index.html  /messung.html  /ratio.html  /justage.html
-  /infos.html  /messung_webserial.html  /style.css
-  /bootstrap.min.css  /bootstrap.bundle.min.js  /NVGitter.png
+  /a/index.html.gz  /a/infos.html.gz  /a/app.js.gz  /a/guide.js.gz …
 DNS Server started for captive portal
 HTTP server started
 AP IP: 192.168.4.1
@@ -406,7 +443,8 @@ AP IP: 192.168.4.1
 
 ## 6 — Modify Web Assets
 
-Edit the pages in `src/website_html/` (not `data/`, which is regenerated). After changes:
+Edit `webserial-app/` (not `data/`, which is regenerated). Try it in the browser
+first (`python3 -m http.server -d webserial-app`, Web Serial). After changes:
 
 ```bash
 # Re-build and upload SPIFFS only (no firmware compile needed)
@@ -436,7 +474,6 @@ pio run -e seeed_xiao_esp32c3 -t uploadfs
 |---------|-------|-----|
 | Bootloop `TG0WDT_SYS_RST` at `ets_loader.c` | Merged binary has wrong flash mode (QIO instead of DIO) | Always use `--flash-mode keep` when flashing at 0x0 |
 | 404 for all pages | SPIFFS not flashed or mount failed | Run `pio run -t uploadfs` |
-| Mobile hamburger menu not visible | Dark navbar background + default Bootstrap icon is dark | Fixed in `style.css` — toggler icon overridden to white |
 | Captive portal shows "Success" | Old firmware with old portal responses | Reflash with merged binary |
 | Bootstrap not loading (no styles) | Files missing from SPIFFS | Check `data/` directory, re-run `buildfs` |
 | `mergedbin` error: "app .bin not found" | `firmware.bin` not yet built | Run `pio run` first, then `-t mergedbin` |
@@ -444,9 +481,7 @@ pio run -e seeed_xiao_esp32c3 -t uploadfs
 
 ## Development Workflow
 
-Edit `src/website_html/` (on-device pages) or `webserial-app/` (USB front end),
-then build and flash as in steps 1–3. The old `build_website.py` / PROGMEM
-header path is gone; pages come from SPIFFS.
+Edit `webserial-app/`, then build and flash as in steps 1–3.
 
 ### Flash Firmware (local shortcuts)
 Use PlatformIO to build and flash the firmware:
@@ -496,4 +531,4 @@ cd /Users/bene/Dropbox/Dokumente/Promotion/PROJECTS/TechnicalDocs-openUC2-QBox/P
 - ✅ **Image Support**: Optimized PNG images served from SPIFFS
 - ✅ **Root Path Handling**: Explicit "/" route to prevent redirection issues
 - ✅ **Version Information**: Build date, git hash displayed on website and available via /version endpoint
-- ✅ **WebSerial + Android front end**: [`webserial-app/`](webserial-app/), also in the UC2 Control Android app (ODMR tab)
+- ✅ **WebSerial + Android front end**: [`webserial-app/`](webserial-app/) in the browser, native ODMR tab in the UC2 Control Android app

@@ -11,6 +11,9 @@
 
 
 #include "adf4351.h"
+#include <Update.h>
+#include <Preferences.h>
+#include "usb_net.h"
 
 // Version info (auto-generated)
 #include "version_info.h"
@@ -82,10 +85,12 @@ const unsigned long SERIAL_ACTIVITY_TIMEOUT = 5000; // 5 s "connected" window
 
 // Forward declarations for the serial command interface (mirrors the HTTP API
 // so the device can be driven entirely over USB-CDC serial, no WiFi required).
-void initialize_tsl(); // defined later, but used by readTSL2591() above it
+void initialize_tsl(); // defined later, but used by tslPresent() above it
 bool applyTSLGain(int gainValue);
 bool applyTSLIntegration(int timeValue);
 void processSerialLine(String line);
+String wifiJson();
+void setWifi(bool on);
 void serialSweep(float fBegin, float fEnd, float fStep, uint8_t averages, uint16_t settle_ms);
 int pickBestChannel();
 
@@ -126,6 +131,15 @@ AsyncEventSource sweepSource("/sweep");
 
 // DNS Server for captive portal
 DNSServer dnsServer;
+
+// WiFi access point: OFF by default (the device's CE assessment assumes the radio
+// is off). The user switches it from the app (serial "WIFI ON|OFF", POST /wifi
+// over the USB network); the choice is kept in NVS and applied in loop(), since
+// starting the AP blocks ~2 s for the channel scan.
+Preferences prefs;
+bool wifiWanted = false;
+bool wifiOn = false;
+String apSSID;
 const byte DNS_PORT = 53;
 
 // --- Async request parameter helpers -------------------------------------
@@ -244,22 +258,58 @@ static const char FS_MISSING_HTML[] PROGMEM =
 // True once we've confirmed SPIFFS actually contains the web UI.
 bool webAssetsPresent = false;
 
+// Firmware upload page (/update). Only clients on the USB network may use it:
+// the WiFi network is open, a USB cable means physical access to the box.
+static const char UPDATE_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ODMR firmware update</title>
+<style>body{font:17px -apple-system,system-ui,sans-serif;margin:24px;max-width:560px;color:#1a1a1a}
+h1{font-size:22px;color:#023773}form{margin:18px 0;padding:14px;border:1px solid #ddd;border-radius:10px}
+button{margin-top:10px;padding:8px 16px}#msg{font-weight:600}</style>
+<h1>Firmware update</h1>
+<p>Files from the ODMR firmware build: <code>firmware.bin</code> (the program) and
+<code>spiffs.bin</code> (the web pages). The board restarts after each upload.</p>
+<form data-target="app"><b>Program</b><br><input type="file" accept=".bin" required><br><button>Upload</button></form>
+<form data-target="fs"><b>Web pages</b><br><input type="file" accept=".bin" required><br><button>Upload</button></form>
+<p id="msg"></p>
+<script>
+for (const form of document.forms) form.onsubmit = async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg"), body = new FormData();
+  body.append("file", form.querySelector("input").files[0]);
+  msg.textContent = "Uploading… do not unplug the board.";
+  try {
+    const res = await fetch("/update?target=" + form.dataset.target, { method: "POST", body });
+    msg.textContent = await res.text();
+  } catch (err) { msg.textContent = "Upload failed: " + err.message; }
+};
+</script></html>)HTML";
+unsigned long restartAt = 0; // millis() at which loop() restarts after an update
+
+// The sensor may be plugged in or out at any time: probe its I2C address before
+// each reading and set it up again when it (re)appears.
+bool tslPresent()
+{
+  Wire.beginTransmission(TSL2591_ADDR);
+  if (Wire.endTransmission() != 0)
+  {
+    if (tsl_is_initialized)
+      Serial.println("TSL2591 disconnected");
+    tsl_is_initialized = false;
+  }
+  else if (!tsl_is_initialized && tsl.begin())
+  {
+    tsl_is_initialized = true;
+    initialize_tsl();
+  }
+  return tsl_is_initialized;
+}
+
 // Example: read TSL2591 sensor (light intensity)
 uint32_t readTSL2591()
 {
-  // reinitialize the light sensor 
-  if (not tsl_is_initialized){
-    if (!tsl.begin())
-      {
-        tsl_is_initialized = false;
-        Serial.println("TSL2591 not found");
-      }
-      else
-      {
-        tsl_is_initialized = true;
-        initialize_tsl();
-      }
-  }
+  if (!tslPresent())
+    return 0;
   sensors_event_t event;
   tsl.getEvent(&event);
   // event.light is in lux, but you can read raw channels as well
@@ -271,8 +321,7 @@ uint32_t readTSL2591()
 // read IR from TSL2591
 uint16_t readIR()
 {
-  uint16_t x = tsl.getLuminosity(TSL2591_INFRARED);
-  return x;
+  return tslPresent() ? tsl.getLuminosity(TSL2591_INFRARED) : 0;
 }
 
 // (Legacy /laser_act and /odmr_act demo handlers removed — the laser control
@@ -434,17 +483,6 @@ void initialize_tsl(){
     tsl.enableAutoRange(true);
     Serial.println("TSL2591 initialized");
     Serial.printf("TSL2591 Gain: 0x%02X, Integration Time: 0x%02X\n", (int)currentGain, (int)currentIntegrationTime);
-}
-
-// Check if WebSerial should be enabled (not on local AP interface)
-void handleWebSerialCheck(AsyncWebServerRequest *request)
-{
-  // Check if request is coming from the local AP (192.168.4.x)
-  IPAddress clientIP = request->client()->remoteIP();
-  bool isLocalAP = (clientIP[0] == 192 && clientIP[1] == 168 && clientIP[2] == 4);
-
-  String response = String("{\"webserial_enabled\":") + (!isLocalAP ? "true" : "false") + "}";
-  request->send(200, "application/json", response);
 }
 
 void i2c_scan()
@@ -984,7 +1022,7 @@ void processSerialLine(String line)
   }
   else if (cmd == "HELP" || cmd == "?")
   {
-    Serial.println("CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF");
+    Serial.println("CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF WIFI");
   }
   else if (cmd == "VERSION" || cmd == "VER")
   {
@@ -994,7 +1032,7 @@ void processSerialLine(String line)
   else if (cmd == "STATUS")
   {
     Serial.printf("STATUS {\"clients\":%d,\"fmin\":%.1f,\"fmax\":%.1f,\"led\":%d,\"sweep\":%s,\"tsl\":%s,\"gain\":%d,\"integration_time\":%d}\n",
-                  WiFi.softAPgetStationNum(), ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus,
+                  wifiOn ? WiFi.softAPgetStationNum() : 0, ADF_FREQ_MIN, ADF_FREQ_MAX, (int)currentLEDStatus,
                   sweepInProgress ? "true" : "false", tsl_is_initialized ? "true" : "false",
                   (int)currentGain, (int)currentIntegrationTime);
   }
@@ -1107,6 +1145,14 @@ void processSerialLine(String line)
     Serial.printf("TSL {\"gain\":%d,\"integration_time\":%d}\n",
                   (int)currentGain, (int)currentIntegrationTime);
   }
+  else if (cmd == "WIFI") // WIFI [ON|OFF] -> WIFI {"enabled":..,"active":..,"ssid":..,"clients":..}
+  {
+    if (args.equalsIgnoreCase("ON"))
+      setWifi(true);
+    else if (args.equalsIgnoreCase("OFF"))
+      setWifi(false);
+    Serial.println("WIFI " + wifiJson());
+  }
   else if (cmd == "ADFON")
   {
     adf.begin();
@@ -1185,7 +1231,109 @@ int pickBestChannel()
   return candidates[best];
 }
 
-void setup()
+// Start the access point (only when the user enabled WiFi, see wifiWanted).
+void wifiStart()
+{
+  Serial.println("Starting WiFi Access Point...");
+  if (IS_WIFI_AP_MODE)
+  {
+    // Pick the least-congested non-overlapping channel (1/6/11) instead of a
+    // blind random channel — see pickBestChannel(). Random 1..11 frequently
+    // landed on an overlapping channel, causing adjacent-channel interference.
+    int wifiChannel = pickBestChannel();
+    Serial.print("Using WiFi channel: ");
+    Serial.println(wifiChannel);
+
+    // Wi-Fi Access Point starting
+    WiFi.mode(WIFI_AP);
+
+    // Try setting WiFi configuration first
+    WiFi.softAPConfig(
+        IPAddress(192, 168, 4, 1),  // IP address of the AP
+        IPAddress(192, 168, 4, 1),  // Gateway
+        IPAddress(255, 255, 255, 0) // Subnet mask
+    );
+
+    // Start the Access Point with channel parameter (P1 #7)
+    bool apResult = WiFi.softAP(apSSID.c_str(), PASSWORD, wifiChannel, 0, 4);
+
+    if (apResult)
+    {
+      Serial.print("Access Point started successfully with SSID: ");
+      Serial.println(apSSID);
+      Serial.print("AP IP address: ");
+      Serial.println(WiFi.softAPIP());
+      Serial.print("AP WiFi channel: ");
+      Serial.println(wifiChannel);
+    }
+    else
+    {
+      Serial.println("Failed to start Access Point!");
+      Serial.println("Trying alternative configuration with channel 1...");
+
+      // Try with channel 1 as fallback
+      apResult = WiFi.softAP(apSSID.c_str(), PASSWORD, 1, 0, 4);
+      if (apResult)
+      {
+        Serial.println("Access Point started with alternative config");
+        Serial.print("AP IP address: ");
+        Serial.println(WiFi.softAPIP());
+      }
+      else
+      {
+        Serial.println("Access Point startup failed completely!");
+      }
+    }
+
+    // Start DNS server for captive portal
+    // This will redirect all DNS requests to our IP (192.168.4.1)
+    dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
+    Serial.println("DNS Server started for captive portal");
+  }
+  else
+  {
+    // use ssid/password mode instead  (SSID: openUC2; Password: Wifi So You Can See Too)
+    // connect to the available network
+    WiFi.mode(WIFI_STA);
+    Serial.println("Connecting to WiFi network...");
+    WiFi.begin("openUC2", "Wifi So You Can See Too");
+    // Wait for connection
+    while (WiFi.status() != WL_CONNECTED)
+    {
+      delay(500);
+      Serial.print(".");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected.");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+  }
+  wifiOn = true;
+}
+
+void wifiStop()
+{
+  dnsServer.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_OFF);
+  wifiOn = false;
+  Serial.println("WiFi off");
+}
+
+String wifiJson()
+{
+  return String("{\"enabled\":") + (wifiWanted ? "true" : "false") +
+         ",\"active\":" + (wifiOn ? "true" : "false") +
+         ",\"ssid\":\"" + apSSID + "\",\"clients\":" + (wifiOn ? WiFi.softAPgetStationNum() : 0) + "}";
+}
+
+void setWifi(bool on)
+{
+  wifiWanted = on;
+  prefs.putBool("wifi", on);
+}
+
+void setup()
 {
 
 // only for esp32s3
@@ -1226,87 +1374,14 @@ void setup()
   WiFi.mode(WIFI_OFF);
   delay(1000);
 
-#ifdef SERIAL_ONLY_MODE
-  // Serial-only firmware build: keep the radio off entirely. The full command
-  // set is still available over USB-CDC serial (see processSerialLine()).
-  WiFi.mode(WIFI_OFF);
-  Serial.println("SERIAL_ONLY_MODE: WiFi disabled — serial command interface only");
-#else
-  Serial.println("Starting WiFi Access Point...");
-  if (IS_WIFI_AP_MODE)
-  {
-    // Pick the least-congested non-overlapping channel (1/6/11) instead of a
-    // blind random channel — see pickBestChannel(). Random 1..11 frequently
-    // landed on an overlapping channel, causing adjacent-channel interference.
-    int wifiChannel = pickBestChannel();
-    Serial.print("Using WiFi channel: ");
-    Serial.println(wifiChannel);
+  // WiFi stays off unless the user switched it on (applied in loop()).
+  apSSID = dynamicSSID;
+  prefs.begin("odmr");
+  wifiWanted = prefs.getBool("wifi", false);
+  Serial.printf("WiFi: %s (serial: WIFI ON / WIFI OFF)\n", wifiWanted ? "on" : "off");
 
-    // Wi-Fi Access Point starting
-    WiFi.mode(WIFI_AP);
-
-    // Try setting WiFi configuration first
-    WiFi.softAPConfig(
-        IPAddress(192, 168, 4, 1),  // IP address of the AP
-        IPAddress(192, 168, 4, 1),  // Gateway
-        IPAddress(255, 255, 255, 0) // Subnet mask
-    );
-
-    // Start the Access Point with channel parameter (P1 #7)
-    bool apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, wifiChannel, 0, 4);
-
-    if (apResult)
-    {
-      Serial.print("Access Point started successfully with SSID: ");
-      Serial.println(dynamicSSID);
-      Serial.print("AP IP address: ");
-      Serial.println(WiFi.softAPIP());
-      Serial.print("AP WiFi channel: ");
-      Serial.println(wifiChannel);
-    }
-    else
-    {
-      Serial.println("Failed to start Access Point!");
-      Serial.println("Trying alternative configuration with channel 1...");
-
-      // Try with channel 1 as fallback
-      apResult = WiFi.softAP(dynamicSSID.c_str(), PASSWORD, 1, 0, 4);
-      if (apResult)
-      {
-        Serial.println("Access Point started with alternative config");
-        Serial.print("AP IP address: ");
-        Serial.println(WiFi.softAPIP());
-      }
-      else
-      {
-        Serial.println("Access Point startup failed completely!");
-      }
-    }
-
-    // Start DNS server for captive portal
-    // This will redirect all DNS requests to our IP (192.168.4.1)
-    dnsServer.start(DNS_PORT, "*", IPAddress(192, 168, 4, 1));
-    Serial.println("DNS Server started for captive portal");
-  }
-  else
-  {
-    // use ssid/password mode instead  (SSID: openUC2; Password: Wifi So You Can See Too)
-    // connect to the available network
-    WiFi.mode(WIFI_STA);
-    Serial.println("Connecting to WiFi network...");
-    WiFi.begin("openUC2", "Wifi So You Can See Too");
-    // Wait for connection
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(500);
-      Serial.print(".");
-    }
-    Serial.println("");
-    Serial.println("WiFi connected.");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-  }
-#endif // SERIAL_ONLY_MODE
+  // USB network next to USB serial (ESP32-S3): http://192.168.7.1 over the cable.
+  usbNetBegin();
 
   // Mount SPIFFS filesystem (holds all web assets)
   if (!SPIFFS.begin(true))
@@ -1328,7 +1403,7 @@ void setup()
 
   // Detect whether the web UI was actually uploaded (pio run -t uploadfs).
   // If not, all routes fall back to a helpful "upload the filesystem" page.
-  webAssetsPresent = SPIFFS.exists("/index.html") || SPIFFS.exists("/index.html.gz");
+  webAssetsPresent = SPIFFS.exists("/a/index.html.gz");
   if (!webAssetsPresent)
     Serial.println("WARNING: web assets not found in SPIFFS — run 'pio run -t uploadfs'");
 
@@ -1343,17 +1418,9 @@ void setup()
   // perform I2C scan to verify TSL2591 is connected
   i2c_scan();
 
-  // TSL2591 init
-  if (!tsl.begin())
-  {
-    tsl_is_initialized = false;
+  // TSL2591 init (re-detected later whenever it is plugged in)
+  if (!tslPresent())
     Serial.println("TSL2591 not found");
-  }
-  else
-  {
-    tsl_is_initialized = true;
-    initialize_tsl();
-  }
 
   // ADF4351 init
   Serial.println("ADF4351 init");
@@ -1394,7 +1461,6 @@ void setup()
   // --- API / data endpoints (registered before serveStatic so they win) -----
   server.on("/measure", HTTP_GET, handleMeasure);
   server.on("/intensity", HTTP_GET, handleIntensity);
-  server.on("/webserial_check", HTTP_GET, handleWebSerialCheck);
   server.on("/tsl/settings", HTTP_GET, handleGetTSLSettings);
   server.on("/tsl/gain", HTTP_POST, handleSetTSLGain);
   server.on("/tsl/integration_time", HTTP_POST, handleSetTSLIntegrationTime);
@@ -1424,6 +1490,46 @@ void setup()
     json += "}";
     request->send(200, "application/json", json);
   });
+
+  // WiFi switch: GET -> state, POST on=1|0 -> switch (applied in loop()).
+  server.on("/wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "application/json", wifiJson());
+  });
+  server.on("/wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
+    setWifi(reqArg(request, "on") == "1");
+    request->send(200, "application/json", wifiJson());
+  });
+
+  // Firmware upload over the USB network (also from an iPad).
+  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (!isUsbNetClient(request->client()->remoteIP()))
+      return request->send(403, "text/plain", "Firmware upload only over the USB cable: http://192.168.7.1/update");
+    request->send(200, "text/html", UPDATE_HTML);
+  });
+  server.on(
+      "/update", HTTP_POST,
+      [](AsyncWebServerRequest *request) {
+        if (!isUsbNetClient(request->client()->remoteIP()))
+          return request->send(403, "text/plain", "Firmware upload only over the USB cable");
+        bool ok = !Update.hasError();
+        request->send(200, "text/plain", ok ? "Done. The board restarts now." : String("Failed: ") + Update.errorString());
+        if (ok)
+          restartAt = millis() + 1000;
+      },
+      [](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!isUsbNetClient(request->client()->remoteIP()))
+          return;
+        if (index == 0)
+        {
+          bool fs = reqArg(request, "target") == "fs";
+          Serial.printf("Update: %s (%s)\n", filename.c_str(), fs ? "web pages" : "program");
+          Update.begin(UPDATE_SIZE_UNKNOWN, fs ? U_SPIFFS : U_FLASH);
+        }
+        if (Update.isRunning() && Update.write(data, len) != len)
+          Update.printError(Serial);
+        if (final && Update.isRunning() && !Update.end(true))
+          Update.printError(Serial);
+      });
 
   // --- Captive portal detection endpoints (P0 #1) ---------------------------
   // Android: return 200 + HTML so the "Sign in to network" notification shows.
@@ -1458,12 +1564,12 @@ void setup()
   // Content-Encoding: gzip (see scripts/gzip_assets.py). Large third-party
   // assets never change -> cache them "forever"; the HTML pages get a short
   // cache so UI updates still show up.
-  server.serveStatic("/bootstrap.min.css", SPIFFS, "/bootstrap.min.css").setCacheControl("max-age=31536000, immutable");
-  server.serveStatic("/bootstrap.bundle.min.js", SPIFFS, "/bootstrap.bundle.min.js").setCacheControl("max-age=31536000, immutable");
-  server.serveStatic("/NVGitter.png", SPIFFS, "/NVGitter.png").setCacheControl("max-age=31536000, immutable");
-  server.serveStatic("/style.css", SPIFFS, "/style.css").setCacheControl("max-age=86400");
-  // Catch-all: every other path (incl. "/") -> SPIFFS, defaulting to index.html.
-  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html").setCacheControl("max-age=3600");
+  // The board serves the same app as https://youseetoo.github.io/odmr
+  // (webserial-app/), talking HTTP instead of Web Serial. Its files are stored
+  // flat under /a/: SPIFFS names are limited to 31 characters.
+  server.serveStatic("/assets/", SPIFFS, "/a/").setCacheControl("max-age=3600");
+  server.on("/app", HTTP_GET, [](AsyncWebServerRequest *request) { request->redirect("/"); }); // old links
+  server.serveStatic("/", SPIFFS, "/a/").setDefaultFile("index.html").setCacheControl("max-age=3600");
 
   // --- Fallback for anything not matched above ------------------------------
   server.onNotFound([](AsyncWebServerRequest *request) {
@@ -1488,11 +1594,11 @@ void setup()
       request->send_P(200, "text/html", FS_MISSING_HTML);
       return;
     }
-    // HTML navigation to an unknown path -> serve the SPA shell (index.html).
+    // HTML navigation to an unknown path (e.g. a bookmark of an old page) -> the app.
     String accept = request->hasHeader("Accept") ? request->getHeader("Accept")->value() : "";
     if (uri.endsWith(".html") || accept.indexOf("text/html") >= 0)
     {
-      request->send(SPIFFS, "/index.html", "text/html");
+      request->send(SPIFFS, "/a/index.html", "text/html");
       return;
     }
     request->send(404, "text/plain", "Not found");
@@ -1504,8 +1610,14 @@ void setup()
 
 void loop()
 {
-  // Process DNS requests for captive portal
-  dnsServer.processNextRequest();
+  if (restartAt && millis() > restartAt)
+    ESP.restart(); // after a firmware upload (/update)
+
+  // Apply the WiFi switch, then serve DNS for the captive portal
+  if (wifiWanted != wifiOn)
+    wifiWanted ? wifiStart() : wifiStop();
+  if (wifiOn)
+    dnsServer.processNextRequest();
 
   // The async web server handles requests on its own task — no handleClient().
   // Drive the non-blocking frequency sweep (streams points over SSE) here.
@@ -1523,7 +1635,7 @@ void loop()
 
   // Determine "connected" state from either a WiFi client or recent serial
   // activity, so the status LEDs work in serial-only operation too.
-  bool hasClient = (WiFi.softAPgetStationNum() > 0) ||
+  bool hasClient = (wifiOn && WiFi.softAPgetStationNum() > 0) || usbNetActive() ||
                    (millis() - lastSerialActivity < SERIAL_ACTIVITY_TIMEOUT);
   if (hasClient)
   {
@@ -1575,4 +1687,6 @@ void loop()
     }
     // Ignore other characters (control characters, etc.)
   }
+
+  delay(1); // let the CPU idle between rounds: less heat, nothing here needs more
 }

@@ -1,65 +1,45 @@
 #
-# PlatformIO pre-build hook: gzip the static web assets in data/ so the
-# firmware can serve them with Content-Encoding: gzip via serveStatic().
+# PlatformIO pre-build hook: gzip the web app (webserial-app/) into data/a/ for
+# the SPIFFS image. The board serves it at / with Content-Encoding: gzip
+# (serveStatic picks <name>.gz), the same app as https://youseetoo.github.io/odmr.
 #
-# For every compressible file in data/ (html/css/js/json/svg/ico/txt/xml/map)
-# a sibling <name>.gz is (re)generated whenever the source is newer. Both the
-# original and the .gz are uploaded to SPIFFS; ESPAsyncWebServer's serveStatic
-# automatically serves the .gz to browsers that accept gzip (all of them) and
-# falls back to the plain file otherwise.
-#
-# Binary assets that are already compressed (png/jpg) are left untouched.
+# The files go flat into data/a/: SPIFFS names are limited to 31 characters.
+# data/ is generated (git-ignored) and rebuilt from scratch on every run, so
+# deleted app files never linger in the image.
 #
 # Wired up in platformio.ini:  extra_scripts = pre:scripts/gzip_assets.py
 #
-import os
 import gzip
+import os
 import shutil
 
 Import("env")  # noqa: F821  (injected by PlatformIO/SCons)
 
-DATA_DIR = os.path.join(env.subst("$PROJECT_DIR"), "data")  # noqa: F821
-SRC_DIR = os.path.join(env.subst("$PROJECT_DIR"), "src/website_html")  # noqa: F821
+PROJECT_DIR = env.subst("$PROJECT_DIR")  # noqa: F821
+APP_DIR = os.path.join(PROJECT_DIR, "webserial-app")
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
+OUT_DIR = os.path.join(DATA_DIR, "a")
 
-COMPRESS_EXT = (".html", ".css", ".js", ".json", ".svg", ".ico", ".txt", ".xml", ".map")
-
-
-def _gzip_one(src, dst):
-    with open(src, "rb") as f_in, gzip.open(dst, "wb", compresslevel=9) as f_out:
-        shutil.copyfileobj(f_in, f_out)
+COMPRESS_EXT = (".html", ".css", ".js", ".json", ".svg", ".ico", ".txt", ".xml")
 
 
-def gzip_assets(*_args, **_kwargs):
-    if not os.path.isdir(DATA_DIR):
-        print("gzip_assets: no data/ directory, skipping")
-        return
+def gzip_assets():
+    shutil.rmtree(DATA_DIR, ignore_errors=True)
+    os.makedirs(OUT_DIR)
+    sources = [os.path.join(APP_DIR, n) for n in sorted(os.listdir(APP_DIR))]
+    sources += [os.path.join(APP_DIR, "assets", n) for n in sorted(os.listdir(os.path.join(APP_DIR, "assets")))]
 
     total_in = total_out = 0
-    for name in sorted(os.listdir(SRC_DIR)):
-        src = os.path.join(SRC_DIR, name)
-        dst = os.path.join(DATA_DIR, name + ".gz")
-        if not os.path.isfile(src) or name.endswith(".gz"):
+    for src in sources:
+        name = os.path.basename(src)
+        if not os.path.isfile(src) or os.path.splitext(name)[1].lower() not in COMPRESS_EXT:
             continue
-        if os.path.splitext(name)[1].lower() not in COMPRESS_EXT:
-            continue
-
-        # Skip if the .gz is already up to date.
-        if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
-            continue
-
-        try:
-            _gzip_one(src, dst)
-        except Exception as exc:  # never break the build over a single asset
-            print("gzip_assets: failed on %s: %s" % (name, exc))
-            continue
-
-        i, o = os.path.getsize(src), os.path.getsize(dst)
-        total_in += i
-        total_out += o
-        print("gzip: %-28s %7d -> %7d bytes (%d%%)" % (name, i, o, 100 - int(100 * o / max(i, 1))))
-
-    if total_in:
-        print("gzip_assets: compressed %d -> %d bytes total" % (total_in, total_out))
+        dst = os.path.join(OUT_DIR, name + ".gz")
+        with open(src, "rb") as f_in, gzip.open(dst, "wb", compresslevel=9) as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        total_in += os.path.getsize(src)
+        total_out += os.path.getsize(dst)
+    print("gzip_assets: webserial-app %d -> %d bytes in data/a/" % (total_in, total_out))
 
 
 gzip_assets()

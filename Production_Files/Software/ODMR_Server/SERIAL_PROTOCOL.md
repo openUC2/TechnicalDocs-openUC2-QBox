@@ -3,9 +3,9 @@
 The ESP32-S3/C3 ODMR firmware exposes a line-based ASCII protocol over USB-CDC
 serial (115200 baud) that mirrors the full HTTP/web API. This lets the device be
 driven entirely over serial — e.g. by the standalone
-[`webserial-app/`](webserial-app/) (browser, or the ODMR tab of the
-[UC2 Control Android app](https://github.com/youseetoo/UC2Control)) — with no
-WiFi connection.
+[`webserial-app/`](webserial-app/) in the browser or the ODMR tab of the
+[UC2 Control Android app](https://github.com/youseetoo/UC2Control)
+(`OdmrDevice.java`) — with no WiFi connection.
 
 - **Host → device:** one command per line, terminated by `\n` (or `\r\n`).
   The command keyword is **case-insensitive**; parameters are space-separated.
@@ -119,11 +119,20 @@ Enable / disable the ADF4351 RF output.
 < OK ADF OFF
 ```
 
+### `WIFI` / `WIFI ON` / `WIFI OFF`
+Read or switch the WiFi access point. Off by default (the device is CE compliant
+with the radio off); the setting is stored and survives restarts. The AP starts
+a moment after the reply (channel scan, ~2 s).
+```
+> WIFI ON
+< WIFI {"enabled":true,"active":false,"ssid":"openUC2_ODMR_A1B2C3","clients":0}
+```
+
 ### `HELP`
 List available commands.
 ```
 > HELP
-< CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF
+< CMDS PING VERSION STATUS MEASURE INTENSITY RATIO SWEEP SWEEPSTOP GAIN INTTIME GETTSL ADFON ADFOFF WIFI
 ```
 
 ---
