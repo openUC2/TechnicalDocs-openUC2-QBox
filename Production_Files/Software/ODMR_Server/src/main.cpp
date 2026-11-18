@@ -354,6 +354,7 @@ void handleMeasure(AsyncWebServerRequest *request)
 
   // Read intensity
   uint32_t intensity = readIR(); // Read IR instead of light for demonstration
+  adf.stop();
 
   // If you have a magnetometer or something, read that too
   float exampleMagVal = 123.0f; // Placeholder
@@ -582,6 +583,7 @@ void handleMeasureRatio(AsyncWebServerRequest *request)
   {
     I3 = measureIntensityAtFrequency(f3, averages);
   }
+  adf.stop();
 
   float r12 = 0.0f;
   if (I1 + I2 > 0)
@@ -1082,6 +1084,7 @@ void processSerialLine(String line)
       uint32_t I1 = measureIntensityAtFrequency(f1, averages);
       uint32_t I2 = measureIntensityAtFrequency(f2, averages);
       uint32_t I3 = hasF3 ? measureIntensityAtFrequency(f3, averages) : 0;
+      adf.stop();
       setLEDStatus(LED_CONNECTED);
 
       float r12 = (I1 + I2 > 0) ? ((float)I1 - (float)I2) / ((float)I1 + (float)I2) : 0.0f;

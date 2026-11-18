@@ -9,8 +9,12 @@ class ADF4351{
     void begin(void);
     void calculateRegisterValues(double RFOUT, uint32_t *reg);
     void updateFrequency(double frequency);
+    // RF off. The board does not wire CE (pin 0 is a dummy), so power down over
+    // SPI: R4 with RF-out disabled, then R2 with the power-down bit set.
+    // updateFrequency() rewrites R4/R2 and turns the output back on.
     void stop(void) {
-        // Disable output by setting CE low
+        WriteRegister(0x009F001C); // R4: RF out enable (bit 5) = 0
+        WriteRegister(0x004E62);   // R2: power-down (bit 5) = 1
         digitalWrite(_ce, LOW);
     }
   
